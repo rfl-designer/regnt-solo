@@ -51,10 +51,10 @@ class DailyPlan extends Model
     public static function getOrCreateForDate(Carbon|string $date): self
     {
         $date = $date instanceof Carbon ? $date : Carbon::parse($date);
+        $dateString = $date->toDateString();
 
-        return static::query()
-            ->whereDate('date', $date)
-            ->first() ?? static::create(['date' => $date->toDateString()]);
+        return static::query()->whereDate('date', $dateString)->first()
+            ?? static::create(['date' => $dateString]);
     }
 
     /**
@@ -62,15 +62,15 @@ class DailyPlan extends Model
      */
     public function completionRate(): float
     {
-        $total = $this->tasks()->count();
+        $tasks = $this->tasks;
 
-        if ($total === 0) {
+        if ($tasks->isEmpty()) {
             return 0;
         }
 
-        $completed = $this->tasks()->wherePivotNotNull('completed_at')->count();
+        $completed = $tasks->filter(fn (Task $task): bool => $task->pivot->completed_at !== null)->count();
 
-        return round(($completed / $total) * 100, 2);
+        return round(($completed / $tasks->count()) * 100, 2);
     }
 
     /**

@@ -121,10 +121,11 @@ class Task extends Model
      */
     public function scopeDoneThisWeek(Builder $query): void
     {
-        $query->whereBetween('completed_at', [
-            Carbon::now()->startOfWeek(),
-            Carbon::now()->endOfWeek(),
-        ]);
+        $query->where('status', TaskStatus::Done)
+            ->whereBetween('completed_at', [
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ]);
     }
 
     /**

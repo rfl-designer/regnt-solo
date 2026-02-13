@@ -4,41 +4,47 @@
         @include('partials.head')
     </head>
     <body class="min-h-screen bg-white dark:bg-zinc-800">
-        <flux:sidebar sticky collapsible="mobile" class="border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
+        <flux:sidebar sticky collapsible class="border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
             <flux:sidebar.header>
                 <x-app-logo :sidebar="true" href="{{ route('dashboard') }}" wire:navigate />
                 <flux:sidebar.collapse class="lg:hidden" />
             </flux:sidebar.header>
 
             <flux:sidebar.nav>
-                <flux:sidebar.group :heading="__('Platform')" class="grid">
-                    <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
-                        {{ __('Dashboard') }}
+                <flux:sidebar.group :heading="__('Menu')" class="grid">
+                    <flux:sidebar.item icon="chart-bar-square" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
+                        Dashboard
+                    </flux:sidebar.item>
+                    <flux:sidebar.item icon="inbox" :href="route('dashboard')" :current="request()->routeIs('inbox')" wire:navigate>
+                        Inbox
+                    </flux:sidebar.item>
+                    <flux:sidebar.item icon="view-columns" :href="route('dashboard')" :current="request()->routeIs('kanban')" wire:navigate>
+                        Kanban
+                    </flux:sidebar.item>
+                    <flux:sidebar.item icon="calendar-days" :href="route('dashboard')" :current="request()->routeIs('daily')" wire:navigate>
+                        Daily
+                    </flux:sidebar.item>
+                    <flux:sidebar.item icon="folder" :href="route('dashboard')" :current="request()->routeIs('projects.*')" wire:navigate>
+                        Projetos
+                    </flux:sidebar.item>
+                    <flux:sidebar.item icon="clock" :href="route('dashboard')" :current="request()->routeIs('time.*')" wire:navigate>
+                        Tempo
                     </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 
             <flux:spacer />
 
-            <flux:sidebar.nav>
-                <flux:sidebar.item icon="folder-git-2" href="https://github.com/laravel/livewire-starter-kit" target="_blank">
-                    {{ __('Repository') }}
-                </flux:sidebar.item>
-
-                <flux:sidebar.item icon="book-open-text" href="https://laravel.com/docs/starter-kits#livewire" target="_blank">
-                    {{ __('Documentation') }}
-                </flux:sidebar.item>
-            </flux:sidebar.nav>
-
             <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
         </flux:sidebar>
-
 
         <!-- Mobile User Menu -->
         <flux:header class="lg:hidden">
             <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
             <flux:spacer />
+
+            {{-- Slot para global-timer --}}
 
             <flux:dropdown position="top" align="end">
                 <flux:profile

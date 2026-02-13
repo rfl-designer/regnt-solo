@@ -2,12 +2,10 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-})->name('home');
+Route::redirect('/', '/dashboard')->name('home');
 
-Route::view('dashboard', 'dashboard')
-    ->middleware(['auth', 'verified'])
+Route::livewire('dashboard', 'pages::dashboard')
+    ->middleware(['auth'])
     ->name('dashboard');
 
 require __DIR__.'/settings.php';

@@ -25,7 +25,7 @@
                     <flux:sidebar.item icon="calendar-days" :href="route('daily')" :current="request()->routeIs('daily')" wire:navigate>
                         Daily
                     </flux:sidebar.item>
-                    <flux:sidebar.item icon="folder" :href="route('dashboard')" :current="request()->routeIs('projects.*')" wire:navigate>
+                    <flux:sidebar.item icon="folder" :href="route('projects')" :current="request()->routeIs('projects') || request()->routeIs('project.*')" wire:navigate>
                         Projetos
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="clock" :href="route('dashboard')" :current="request()->routeIs('time.*')" wire:navigate>
@@ -100,6 +100,7 @@
 
         <livewire:task-quick-add />
         <livewire:task-modal />
+        <livewire:project-form />
         <livewire:timer-notes-modal />
 
         @persist('toast')

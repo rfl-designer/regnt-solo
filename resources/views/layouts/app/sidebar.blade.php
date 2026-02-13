@@ -45,7 +45,7 @@
 
             <flux:spacer />
 
-            {{-- Slot para global-timer --}}
+            <livewire:global-timer />
 
             <flux:dropdown position="top" align="end">
                 <flux:profile
@@ -100,6 +100,7 @@
 
         <livewire:task-quick-add />
         <livewire:task-modal />
+        <livewire:timer-notes-modal />
 
         @persist('toast')
             <flux:toast />

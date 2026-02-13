@@ -22,7 +22,7 @@
                     <flux:sidebar.item icon="view-columns" :href="route('kanban')" :current="request()->routeIs('kanban')" wire:navigate>
                         Kanban
                     </flux:sidebar.item>
-                    <flux:sidebar.item icon="calendar-days" :href="route('dashboard')" :current="request()->routeIs('daily')" wire:navigate>
+                    <flux:sidebar.item icon="calendar-days" :href="route('daily')" :current="request()->routeIs('daily')" wire:navigate>
                         Daily
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="folder" :href="route('dashboard')" :current="request()->routeIs('projects.*')" wire:navigate>

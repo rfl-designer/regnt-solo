@@ -16,4 +16,8 @@ Route::livewire('kanban', 'pages::kanban')
     ->middleware(['auth'])
     ->name('kanban');
 
+Route::livewire('daily', 'pages::daily-planner')
+    ->middleware(['auth'])
+    ->name('daily');
+
 require __DIR__.'/settings.php';

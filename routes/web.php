@@ -28,4 +28,8 @@ Route::livewire('projects/{slug}', 'pages::project-detail')
     ->middleware(['auth'])
     ->name('project.detail');
 
+Route::livewire('time', 'pages::time-report')
+    ->middleware(['auth'])
+    ->name('time');
+
 require __DIR__.'/settings.php';

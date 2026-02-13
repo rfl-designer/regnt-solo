@@ -12,4 +12,8 @@ Route::livewire('inbox', 'pages::inbox')
     ->middleware(['auth'])
     ->name('inbox');
 
+Route::livewire('kanban', 'pages::kanban')
+    ->middleware(['auth'])
+    ->name('kanban');
+
 require __DIR__.'/settings.php';

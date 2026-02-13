@@ -61,6 +61,18 @@ class DailyPlan extends Model
      */
     public function completionRate(): float
     {
+        if ($this->relationLoaded('tasks')) {
+            $total = $this->tasks->count();
+
+            if ($total === 0) {
+                return 0.0;
+            }
+
+            $completed = $this->tasks->filter(fn (Task $t): bool => $t->pivot->completed_at !== null)->count();
+
+            return round(($completed / $total) * 100, 2);
+        }
+
         $total = $this->tasks()->count();
 
         if ($total === 0) {

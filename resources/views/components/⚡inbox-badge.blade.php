@@ -8,11 +8,16 @@ use Livewire\Component;
 new class extends Component
 {
     #[Computed]
-    #[On('task-created')]
-    #[On('task-moved')]
     public function count(): int
     {
         return Task::inbox()->count();
+    }
+
+    #[On('task-created')]
+    #[On('task-moved')]
+    public function refreshCount(): void
+    {
+        unset($this->count);
     }
 }
 

@@ -133,13 +133,12 @@ test('delete task only works for inbox tasks', function () {
 });
 
 test('inbox listens to task-created event', function () {
-    Livewire::test('pages::inbox')
+    $component = Livewire::test('pages::inbox')
         ->assertSee('Nenhuma task no inbox');
 
     Task::factory()->create(['title' => 'Nova task criada']);
 
-    Livewire::test('pages::inbox')
-        ->dispatch('task-created')
+    $component->dispatch('task-created')
         ->assertSee('Nova task criada');
 });
 

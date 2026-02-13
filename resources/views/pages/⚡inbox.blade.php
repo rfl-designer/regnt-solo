@@ -41,9 +41,11 @@ new class extends Component
     {
         $task = Task::inbox()->findOrFail($taskId);
 
-        $task->update([
-            'project_id' => $projectId !== '' ? $projectId : null,
-        ]);
+        $validProjectId = ($projectId !== '' && $projectId !== null)
+            ? Project::findOrFail((int) $projectId)->id
+            : null;
+
+        $task->update(['project_id' => $validProjectId]);
 
         unset($this->tasks);
 

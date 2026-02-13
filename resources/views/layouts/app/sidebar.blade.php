@@ -15,8 +15,9 @@
                     <flux:sidebar.item icon="chart-bar-square" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         Dashboard
                     </flux:sidebar.item>
-                    <flux:sidebar.item icon="inbox" :href="route('dashboard')" :current="request()->routeIs('inbox')" wire:navigate>
+                    <flux:sidebar.item icon="inbox" :href="route('inbox')" :current="request()->routeIs('inbox')" wire:navigate>
                         Inbox
+                        <livewire:inbox-badge />
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="view-columns" :href="route('dashboard')" :current="request()->routeIs('kanban')" wire:navigate>
                         Kanban
@@ -96,6 +97,12 @@
         </flux:header>
 
         {{ $slot }}
+
+        <livewire:task-quick-add />
+
+        @persist('toast')
+            <flux:toast />
+        @endpersist
 
         @fluxScripts
     </body>

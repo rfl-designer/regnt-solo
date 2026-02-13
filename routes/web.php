@@ -8,4 +8,8 @@ Route::livewire('dashboard', 'pages::dashboard')
     ->middleware(['auth'])
     ->name('dashboard');
 
+Route::livewire('inbox', 'pages::inbox')
+    ->middleware(['auth'])
+    ->name('inbox');
+
 require __DIR__.'/settings.php';

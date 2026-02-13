@@ -1,0 +1,85 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\ProjectPriority;
+use App\Enums\ProjectStatus;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Project extends Model
+{
+    /** @use HasFactory<\Database\Factories\ProjectFactory> */
+    use HasFactory;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'name',
+        'slug',
+        'color',
+        'emoji',
+        'status',
+        'priority',
+        'description',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'status' => ProjectStatus::class,
+            'priority' => ProjectPriority::class,
+        ];
+    }
+
+    /**
+     * Get the tasks for this project.
+     */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
+    }
+
+    /**
+     * Scope to only active projects.
+     */
+    public function scopeActive(Builder $query): void
+    {
+        $query->where('status', ProjectStatus::Active);
+    }
+
+    /**
+     * Scope to only paused projects.
+     */
+    public function scopePaused(Builder $query): void
+    {
+        $query->where('status', ProjectStatus::Paused);
+    }
+
+    /**
+     * Scope to only archived projects.
+     */
+    public function scopeArchived(Builder $query): void
+    {
+        $query->where('status', ProjectStatus::Archived);
+    }
+
+    /**
+     * Scope to order by priority (desc) then name (asc).
+     */
+    public function scopeOrdered(Builder $query): void
+    {
+        $query->orderByRaw("CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END")
+            ->orderBy('name');
+    }
+}

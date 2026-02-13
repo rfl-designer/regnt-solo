@@ -70,7 +70,9 @@ class Task extends Model
      */
     public function dailyPlans(): BelongsToMany
     {
-        return $this->belongsToMany(DailyPlan::class);
+        return $this->belongsToMany(DailyPlan::class)
+            ->withPivot('sort_order', 'completed_at')
+            ->withTimestamps();
     }
 
     /**

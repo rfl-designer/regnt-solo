@@ -1,0 +1,208 @@
+{
+  "feature": "epic-2-inbox",
+  "created_at": "2026-02-13",
+  "total_stories": 7,
+  "user_stories": [
+    {
+      "id": "US-000",
+      "title": "Criar Enums de dominio (TaskStatus, TaskPriority, ProjectStatus, ProjectPriority)",
+      "description": "Como desenvolvedor, quero ter Enums PHP nativos para status e prioridade de tasks e projetos, para garantir type-safety nos casts dos Models e validacao consistente em toda a aplicacao",
+      "complexity": "P",
+      "estimated_hours": 1,
+      "criteria": [
+        "app/Enums/TaskStatus.php existe com cases: Inbox, Backlog, Todo, Doing, Done",
+        "Cada case de TaskStatus possui metodos label(): string (PT-BR), color(): string e icon(): string",
+        "app/Enums/TaskPriority.php existe com cases: Urgent, High, Medium, Low",
+        "Cada case de TaskPriority possui metodos label(): string (PT-BR) e color(): string",
+        "app/Enums/ProjectStatus.php existe com cases: Active, Paused, Archived",
+        "Cada case de ProjectStatus possui metodo label(): string (PT-BR)",
+        "app/Enums/ProjectPriority.php existe com cases: High, Medium, Low",
+        "Cada case de ProjectPriority possui metodo label(): string (PT-BR)",
+        "Todos os Enums sao string backed enums com valores lowercase",
+        "Testes unitarios validam que os Enums retornam labels, cores e icones corretos"
+      ],
+      "dependencies": [],
+      "order": 1,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "app/Enums/TaskStatus.php",
+        "app/Enums/TaskPriority.php",
+        "app/Enums/ProjectStatus.php",
+        "app/Enums/ProjectPriority.php",
+        "tests/Unit/Enums/TaskStatusTest.php",
+        "tests/Unit/Enums/TaskPriorityTest.php"
+      ]
+    },
+    {
+      "id": "US-001",
+      "title": "Criar Models Project e Task com relationships e Factories",
+      "description": "Como desenvolvedor, quero ter Models Eloquent para Project e Task com relationships, casts, scopes e Factories, para poder manipular dados de projetos e tasks via Eloquent e criar dados de teste com Factories",
+      "complexity": "M",
+      "estimated_hours": 3,
+      "criteria": [
+        "app/Models/Project.php existe com fillable, casts para enums, scope active(), relationship tasks(): HasMany",
+        "app/Models/Task.php existe com fillable, casts para enums e datas, scope inbox(), scope byStatus(), relationship project(): BelongsTo, helpers isOverdue() e markAsDone()",
+        "database/factories/ProjectFactory.php existe com definition() e states active(), paused(), archived()",
+        "database/factories/TaskFactory.php existe com definition() (status=inbox default) e states inbox(), backlog(), withProject(), overdue(), completed()",
+        "Project->tasks retorna Collection de Task models corretamente",
+        "Task->project retorna o Project model correto",
+        "Task com due_date no passado e nao completada retorna isOverdue() = true",
+        "Task.markAsDone() muda status para Done e preenche completed_at",
+        "Testes Feature validam relationships, scopes, helpers e factories"
+      ],
+      "dependencies": ["US-000"],
+      "order": 2,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "app/Models/Project.php",
+        "app/Models/Task.php",
+        "database/factories/ProjectFactory.php",
+        "database/factories/TaskFactory.php",
+        "tests/Feature/Models/ProjectTest.php",
+        "tests/Feature/Models/TaskTest.php"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Criar Migrations para tabelas projects, tasks e relacionadas",
+      "description": "Como desenvolvedor, quero ter arquivos de migration no filesystem para as tabelas projects, tasks, time_entries, daily_plans e daily_plan_task, para que RefreshDatabase nos testes funcione corretamente e o projeto seja reprodutivel",
+      "complexity": "M",
+      "estimated_hours": 2,
+      "criteria": [
+        "Migration create_projects_table existe com schema identico ao banco atual (incluindo indexes e defaults)",
+        "Migration create_tasks_table existe com schema identico ao banco atual (incluindo FK, indexes e defaults)",
+        "Migration create_time_entries_table existe com schema identico ao banco atual",
+        "Migration create_daily_plans_table existe com schema identico ao banco atual",
+        "Migration create_daily_plan_task_table existe com schema identico ao banco atual",
+        "php artisan migrate em ambiente limpo cria todas as tabelas sem erros",
+        "Testes com RefreshDatabase recriam as tabelas corretamente"
+      ],
+      "dependencies": [],
+      "order": 3,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "database/migrations/2026_02_13_105915_create_projects_table.php",
+        "database/migrations/2026_02_13_110225_create_tasks_table.php",
+        "database/migrations/2026_02_13_110623_create_time_entries_table.php",
+        "database/migrations/2026_02_13_110930_create_daily_plans_table.php",
+        "database/migrations/2026_02_13_110933_create_daily_plan_task_table.php"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "TaskQuickAdd — Criacao basica de task via modal global",
+      "description": "Como usuario, quero abrir um modal de qualquer tela pressionando N e criar uma task digitando o titulo e pressionando Enter, para capturar ideias e tarefas rapidamente sem sair do contexto atual",
+      "complexity": "M",
+      "estimated_hours": 3,
+      "criteria": [
+        "Hotkey N abre o modal flux:modal name=quick-add (ignora quando foco em input/textarea/select/contenteditable)",
+        "Digitar titulo + Enter cria task com status=inbox e priority=medium",
+        "Esc fecha o modal sem criar task",
+        "Toast de confirmacao exibido apos criacao",
+        "Input limpa e modal fecha apos criacao",
+        "Hotkey N nao abre modal quando usuario esta digitando em input de texto",
+        "Componente SFC incluido no layout app.blade.php para disponibilidade global",
+        "Evento task-created disparado apos criacao",
+        "Testes Feature validam criacao, status inbox, validacao de titulo obrigatorio"
+      ],
+      "dependencies": ["US-000", "US-001", "US-002"],
+      "order": 4,
+      "status": "backlog",
+      "type": "both",
+      "files_affected": [
+        "resources/views/components/task-quick-add.blade.php",
+        "resources/views/layouts/app.blade.php",
+        "tests/Feature/TaskQuickAddTest.php"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "TaskQuickAdd — Parsing de sintaxe inline e autocomplete",
+      "description": "Como usuario, quero usar sintaxe inline no input do QuickAdd (#projeto, !prioridade, @data) com autocomplete, para definir projeto, prioridade e data de entrega sem sair do campo de texto",
+      "complexity": "G",
+      "estimated_hours": 5,
+      "criteria": [
+        "Digitar # mostra dropdown autocomplete com projetos ativos (slug e nome)",
+        "Selecionar projeto do autocomplete associa projeto a task",
+        "#slug-inexistente exibe toast aviso e cria task sem projeto",
+        "Digitar ! mostra dropdown autocomplete com prioridades (urgent, high, medium, low)",
+        "Selecionar !urgent cria task com priority=urgent",
+        "Digitar @ mostra dropdown autocomplete com opcoes de data (@hoje, @amanha, @segunda, @proxima-semana)",
+        "@hoje define due_date = data de hoje",
+        "@amanha define due_date = data de amanha",
+        "@segunda define due_date = proxima segunda-feira",
+        "@proxima-semana define due_date = proxima segunda-feira",
+        "Input combinado (ex: Revisar PR #api-integration !high @amanha) parseia corretamente titulo, projeto, prioridade e data",
+        "Tokens de sintaxe sao removidos do titulo final da task",
+        "Testes Feature validam parsing de cada prefixo isolado, combinado, slug inexistente e datas relativas"
+      ],
+      "dependencies": ["US-003"],
+      "order": 5,
+      "status": "backlog",
+      "type": "frontend",
+      "files_affected": [
+        "resources/views/components/task-quick-add.blade.php",
+        "tests/Feature/TaskQuickAddTest.php"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "Pagina Inbox com listagem e acoes de triagem",
+      "description": "Como usuario, quero ver todas as tasks no inbox e poder triaga-las (atribuir projeto, mover para backlog, deletar), para organizar as tasks capturadas e decidir o proximo passo de cada uma",
+      "complexity": "M",
+      "estimated_hours": 4,
+      "criteria": [
+        "GET /inbox exibe lista de tasks com status=inbox ordenadas por latest",
+        "Cada card exibe titulo, tempo desde criacao (diffForHumans PT-BR) e projeto (se tiver, com emoji e nome)",
+        "Select inline permite atribuir projeto a task",
+        "Botao Backlog muda status da task para backlog e remove da lista",
+        "Botao Excluir abre modal de confirmacao flux:modal",
+        "Confirmar exclusao deleta a task e remove da lista",
+        "Empty state exibido quando nao ha tasks no inbox (icone inbox + texto com instrucao de hotkey N)",
+        "Rota /inbox requer autenticacao e tem nome inbox",
+        "Usuario nao autenticado e redirecionado para login",
+        "Evento inbox-updated disparado apos cada acao para atualizar badge",
+        "Tasks carregadas com eager loading de project (sem N+1)",
+        "Testes Feature validam listagem, atribuir projeto, mover para backlog, deletar, empty state e autenticacao"
+      ],
+      "dependencies": ["US-000", "US-001", "US-002"],
+      "order": 6,
+      "status": "backlog",
+      "type": "frontend",
+      "files_affected": [
+        "resources/views/pages/inbox.blade.php",
+        "routes/web.php",
+        "tests/Feature/InboxTest.php"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "Badge reativo do Inbox na sidebar",
+      "description": "Como usuario, quero ver um badge na sidebar mostrando a quantidade de tasks no inbox atualizado em tempo real, para saber rapidamente quantas tasks preciso triar sem abrir a pagina do inbox",
+      "complexity": "P",
+      "estimated_hours": 2,
+      "criteria": [
+        "Item Inbox na sidebar exibe badge numerico com contagem de tasks status=inbox",
+        "Badge exibe numero correto (ex: 5 tasks = badge 5)",
+        "Badge nao e exibido quando contagem e zero",
+        "Badge atualiza automaticamente ao criar task via QuickAdd (evento task-created)",
+        "Badge atualiza automaticamente ao mover/deletar task no Inbox (evento inbox-updated)",
+        "Link do item Inbox na sidebar aponta para route('inbox')",
+        "Badge usa componente Livewire SFC para reatividade via eventos",
+        "Testes Feature validam contagem correta e atualizacao via evento"
+      ],
+      "dependencies": ["US-005"],
+      "order": 7,
+      "status": "backlog",
+      "type": "frontend",
+      "files_affected": [
+        "resources/views/layouts/app/sidebar.blade.php",
+        "resources/views/components/inbox-badge.blade.php",
+        "tests/Feature/InboxBadgeTest.php"
+      ]
+    }
+  ]
+}

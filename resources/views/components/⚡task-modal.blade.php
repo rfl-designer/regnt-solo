@@ -1,0 +1,332 @@
+<?php
+
+use App\Enums\TaskPriority;
+use App\Enums\TaskStatus;
+use App\Models\Project;
+use App\Models\Task;
+use App\Models\TimeEntry;
+use Flux\Flux;
+use Livewire\Attributes\Computed;
+use Livewire\Attributes\On;
+use Livewire\Component;
+
+new class extends Component
+{
+    public bool $showModal = false;
+
+    public bool $showDeleteConfirm = false;
+
+    public ?int $taskId = null;
+
+    public string $title = '';
+
+    public string $description = '';
+
+    public ?string $projectId = null;
+
+    public string $priority = 'medium';
+
+    public string $status = 'inbox';
+
+    public ?string $dueDate = null;
+
+    public ?int $estimatedMinutes = null;
+
+    /** @var array<int, array{id: int, started_at: string, stopped_at: string|null, notes: string|null}> */
+    public array $timeEntries = [];
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, Project>
+     */
+    #[Computed]
+    public function projects(): \Illuminate\Database\Eloquent\Collection
+    {
+        return Project::active()->orderBy('name')->get();
+    }
+
+    #[On('open-task-modal')]
+    public function openTask(int $taskId): void
+    {
+        $task = Task::with('timeEntries')->findOrFail($taskId);
+
+        $this->taskId = $task->id;
+        $this->title = $task->title;
+        $this->description = $task->description ?? '';
+        $this->projectId = $task->project_id ? (string) $task->project_id : null;
+        $this->priority = $task->priority->value;
+        $this->status = $task->status->value;
+        $this->dueDate = $task->due_date?->format('Y-m-d');
+        $this->estimatedMinutes = $task->estimated_minutes;
+
+        $this->timeEntries = $task->timeEntries
+            ->sortByDesc('started_at')
+            ->map(fn (TimeEntry $entry) => [
+                'id' => $entry->id,
+                'started_at' => $entry->started_at->format('Y-m-d\TH:i'),
+                'stopped_at' => $entry->stopped_at?->format('Y-m-d\TH:i') ?? '',
+                'notes' => $entry->notes ?? '',
+                'duration_minutes' => $entry->duration_minutes,
+            ])
+            ->values()
+            ->all();
+
+        $this->showModal = true;
+        $this->showDeleteConfirm = false;
+    }
+
+    public function saveTask(): void
+    {
+        $this->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'projectId' => 'nullable|exists:projects,id',
+            'priority' => 'required|in:'.implode(',', array_column(TaskPriority::cases(), 'value')),
+            'status' => 'required|in:'.implode(',', array_column(TaskStatus::cases(), 'value')),
+            'dueDate' => 'nullable|date',
+            'estimatedMinutes' => 'nullable|integer|min:1',
+        ]);
+
+        $task = Task::findOrFail($this->taskId);
+
+        $newStatus = TaskStatus::from($this->status);
+
+        if ($newStatus === TaskStatus::Done && $task->status !== TaskStatus::Done) {
+            $task->update([
+                'title' => $this->title,
+                'description' => $this->description ?: null,
+                'project_id' => $this->projectId ? (int) $this->projectId : null,
+                'priority' => $this->priority,
+                'due_date' => $this->dueDate ?: null,
+                'estimated_minutes' => $this->estimatedMinutes,
+            ]);
+            $task->markAsDone();
+            $this->status = TaskStatus::Done->value;
+        } else {
+            $task->update([
+                'title' => $this->title,
+                'description' => $this->description ?: null,
+                'project_id' => $this->projectId ? (int) $this->projectId : null,
+                'status' => $this->status,
+                'priority' => $this->priority,
+                'due_date' => $this->dueDate ?: null,
+                'estimated_minutes' => $this->estimatedMinutes,
+                'completed_at' => $newStatus === TaskStatus::Done ? $task->completed_at : null,
+            ]);
+        }
+
+        foreach ($this->timeEntries as $entryData) {
+            $entry = TimeEntry::find($entryData['id']);
+            if ($entry && $entry->task_id === $this->taskId) {
+                $data = [
+                    'started_at' => $entryData['started_at'] ?: null,
+                    'notes' => $entryData['notes'] ?: null,
+                ];
+
+                // Only update stopped_at if user provided a value, to avoid
+                // overwriting values set by markAsDone on running entries
+                if ($entryData['stopped_at'] !== '') {
+                    $data['stopped_at'] = $entryData['stopped_at'];
+                }
+
+                $entry->update($data);
+            }
+        }
+
+        $this->dispatch('task-updated');
+
+        Flux::toast(variant: 'success', heading: 'Task salva', text: $this->title);
+    }
+
+    public function deleteTimeEntry(int $entryId): void
+    {
+        $entry = TimeEntry::where('task_id', $this->taskId)->findOrFail($entryId);
+        $entry->delete();
+
+        $this->timeEntries = collect($this->timeEntries)
+            ->reject(fn (array $e) => $e['id'] === $entryId)
+            ->values()
+            ->all();
+
+        Flux::toast(text: 'Entrada de tempo removida com sucesso.', variant: 'success', heading: 'Entrada removida');
+    }
+
+    public function confirmDelete(): void
+    {
+        $this->showDeleteConfirm = true;
+    }
+
+    public function deleteTask(): void
+    {
+        if ($this->taskId === null) {
+            return;
+        }
+
+        $task = Task::findOrFail($this->taskId);
+        $title = $task->title;
+        $task->delete();
+
+        $this->showDeleteConfirm = false;
+        $this->showModal = false;
+        $this->reset('taskId', 'title', 'description', 'projectId', 'priority', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries');
+
+        $this->dispatch('task-updated');
+
+        Flux::toast(variant: 'success', heading: 'Task excluída', text: $title);
+    }
+};
+
+?>
+
+<div>
+    <flux:modal wire:model.self="showModal" class="md:w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="space-y-6">
+            {{-- Header --}}
+            <div>
+                <flux:heading size="lg">Editar Task</flux:heading>
+                <flux:text class="mt-1">Atualize os detalhes da tarefa.</flux:text>
+            </div>
+
+            {{-- Title --}}
+            <flux:input
+                wire:model="title"
+                label="Título"
+                placeholder="Título da tarefa"
+            />
+
+            {{-- Description (Rich Text Editor) --}}
+            <flux:editor wire:model="description" label="Descrição" placeholder="Descreva a tarefa..." />
+
+            {{-- Two-column grid for selects --}}
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {{-- Project --}}
+                <flux:select wire:model="projectId" label="Projeto" placeholder="Sem projeto">
+                    <flux:select.option value="">Sem projeto</flux:select.option>
+                    @foreach ($this->projects as $project)
+                        <flux:select.option :value="$project->id">
+                            {{ $project->emoji }} {{ $project->name }}
+                        </flux:select.option>
+                    @endforeach
+                </flux:select>
+
+                {{-- Priority --}}
+                <flux:select wire:model="priority" label="Prioridade">
+                    @foreach (TaskPriority::cases() as $p)
+                        <flux:select.option :value="$p->value">
+                            {{ $p->label() }}
+                        </flux:select.option>
+                    @endforeach
+                </flux:select>
+
+                {{-- Status --}}
+                <flux:select wire:model="status" label="Status">
+                    @foreach (TaskStatus::cases() as $s)
+                        <flux:select.option :value="$s->value">
+                            {{ $s->label() }}
+                        </flux:select.option>
+                    @endforeach
+                </flux:select>
+
+                {{-- Due Date --}}
+                <flux:date-picker wire:model="dueDate" label="Prazo" clearable />
+            </div>
+
+            {{-- Estimated Minutes --}}
+            <flux:input
+                wire:model="estimatedMinutes"
+                type="number"
+                label="Estimativa (min)"
+                placeholder="Ex: 60"
+                min="1"
+            />
+
+            {{-- Time Entries Section --}}
+            @if (count($timeEntries) > 0)
+                <div class="space-y-3">
+                    <flux:heading size="sm">Entradas de Tempo</flux:heading>
+
+                    <div class="space-y-2">
+                        @foreach ($timeEntries as $index => $entry)
+                            <div wire:key="entry-{{ $entry['id'] }}" class="flex items-start gap-2 rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
+                                <div class="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
+                                    <flux:input
+                                        wire:model="timeEntries.{{ $index }}.started_at"
+                                        type="datetime-local"
+                                        label="Início"
+                                        size="sm"
+                                    />
+                                    <flux:input
+                                        wire:model="timeEntries.{{ $index }}.stopped_at"
+                                        type="datetime-local"
+                                        label="Fim"
+                                        size="sm"
+                                    />
+                                    <flux:input
+                                        wire:model="timeEntries.{{ $index }}.notes"
+                                        label="Notas"
+                                        placeholder="Notas..."
+                                        size="sm"
+                                        class="sm:col-span-2"
+                                    />
+                                </div>
+                                <div class="flex flex-col items-center gap-1 pt-6">
+                                    <flux:badge size="sm" color="zinc">
+                                        {{ round($entry['duration_minutes']) }}min
+                                    </flux:badge>
+                                    <flux:button
+                                        wire:click="deleteTimeEntry({{ $entry['id'] }})"
+                                        variant="ghost"
+                                        size="xs"
+                                        icon="trash"
+                                        wire:confirm="Remover esta entrada de tempo?"
+                                    />
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            {{-- Footer --}}
+            <div class="flex items-center justify-between border-t border-zinc-700 pt-4">
+                <flux:button
+                    wire:click="confirmDelete"
+                    variant="danger"
+                    size="sm"
+                    icon="trash"
+                >
+                    Excluir
+                </flux:button>
+
+                <flux:button
+                    wire:click="saveTask"
+                    variant="primary"
+                    wire:loading.attr="disabled"
+                >
+                    <span wire:loading.remove wire:target="saveTask">Salvar</span>
+                    <span wire:loading wire:target="saveTask">Salvando...</span>
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
+
+    {{-- Delete Confirmation Modal --}}
+    <flux:modal wire:model.self="showDeleteConfirm" class="md:w-96">
+        <div class="space-y-6">
+            <div>
+                <flux:heading size="lg">Confirmar exclusão</flux:heading>
+                <flux:text class="mt-2">
+                    Tem certeza que deseja excluir a task <strong>{{ $title }}</strong>? Esta ação não pode ser desfeita.
+                </flux:text>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <flux:button wire:click="$set('showDeleteConfirm', false)" variant="ghost">
+                    Cancelar
+                </flux:button>
+                <flux:button wire:click="deleteTask" variant="danger">
+                    Sim, excluir
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
+</div>

@@ -1,0 +1,228 @@
+{
+  "feature": "epic-3-kanban-board",
+  "created_at": "2026-02-13",
+  "total_stories": 8,
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Rota /kanban e pagina SFC basica com 4 colunas",
+      "description": "Como usuario, quero acessar a pagina /kanban e ver 4 colunas de status (Backlog, Todo, Doing, Done), para ter uma visao geral do fluxo de trabalho das minhas tasks",
+      "complexity": "M",
+      "estimated_hours": 3,
+      "criteria": [
+        "Rota GET /kanban existe com middleware auth e nome kanban",
+        "Arquivo resources/views/pages/kanban.blade.php existe como SFC",
+        "Pagina renderiza 4 colunas lado a lado: Backlog, Todo, Doing, Done",
+        "Cada coluna exibe label do status (TaskStatus::label()) e icone (TaskStatus::icon())",
+        "Cada coluna exibe contagem de tasks entre parenteses",
+        "Coluna Done filtra apenas tasks completadas na semana atual via scope doneThisWeek",
+        "Layout responsivo: scroll horizontal no mobile, grid 4 colunas no desktop",
+        "Link Kanban na sidebar aponta para route('kanban')",
+        "Usuario nao autenticado e redirecionado para login",
+        "Teste Feature: rota requer auth, pagina renderiza com 4 colunas, Done filtra por semana"
+      ],
+      "dependencies": [],
+      "order": 1,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "resources/views/pages/kanban.blade.php",
+        "routes/web.php",
+        "resources/views/layouts/app/sidebar.blade.php",
+        "tests/Feature/KanbanTest.php"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Queries por coluna com lazy loading e botao carregar mais",
+      "description": "Como usuario, quero que cada coluna carregue apenas 20 tasks inicialmente com opcao de carregar mais, para ter performance rapida mesmo com muitas tasks no board",
+      "complexity": "P",
+      "estimated_hours": 3,
+      "criteria": [
+        "Cada coluna carrega no maximo 20 tasks inicialmente ordenadas por sort_order asc e created_at desc",
+        "Botao Carregar mais aparece quando existem mais de 20 tasks na coluna",
+        "Clicar Carregar mais carrega proximas 20 tasks e adiciona a lista",
+        "Botao nao aparece quando coluna tem 20 tasks ou menos",
+        "Tasks carregadas com eager loading de project e timeEntries running",
+        "Propriedade de limite gerenciada via array de limites por coluna",
+        "Metodo loadMore(string $status) incrementa limite em 20",
+        "Teste Feature: lazy loading 20, loadMore carrega mais 20, eager loading sem N+1"
+      ],
+      "dependencies": ["US-001"],
+      "order": 2,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "resources/views/pages/kanban.blade.php",
+        "tests/Feature/KanbanTest.php"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Cards com badges, projeto info e timer pulsing",
+      "description": "Como usuario, quero ver cards ricos nas colunas do kanban com badges de prioridade, estimativa, overdue, info do projeto e indicador de timer, para ter contexto visual rapido sobre cada task",
+      "complexity": "G",
+      "estimated_hours": 5,
+      "criteria": [
+        "Cada card exibe titulo da task",
+        "Badge de prioridade com cor e label do enum TaskPriority",
+        "Badge de estimativa quando estimated_minutes preenchido (ex: ~30min, ~2h)",
+        "Badge Atrasada em vermelho quando isOverdue() retorna true",
+        "Info do projeto: borda esquerda com cor, emoji + nome",
+        "Icone pulsing verde quando task tem timer rodando",
+        "Click no card dispara dispatch open-task-modal com taskId",
+        "Tasks sem projeto aparecem em secao Sem projeto separada visualmente",
+        "Secao Sem projeto so aparece se existem tasks sem projeto na coluna",
+        "Teste Feature: badges corretos, secao sem projeto, click dispara evento"
+      ],
+      "dependencies": ["US-002"],
+      "order": 3,
+      "status": "backlog",
+      "type": "frontend",
+      "files_affected": [
+        "resources/views/pages/kanban.blade.php",
+        "tests/Feature/KanbanTest.php"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Filtros por projeto, prioridade e toggle overdue",
+      "description": "Como usuario, quero filtrar as tasks do kanban por projeto, prioridade e toggle de overdue, para focar nas tasks relevantes e encontrar rapidamente tasks atrasadas",
+      "complexity": "M",
+      "estimated_hours": 4,
+      "criteria": [
+        "Barra de filtros acima das colunas com select projeto, select prioridade e toggle overdue",
+        "Select projeto lista projetos ativos + opcao Todos",
+        "Selecionar projeto filtra todas as colunas para aquele projeto",
+        "Select prioridade lista prioridades do enum + opcao Todas",
+        "Selecionar prioridade filtra todas as colunas",
+        "Toggle overdue filtra apenas tasks com isOverdue() = true",
+        "URL com ?overdue=1 ativa toggle automaticamente ao carregar",
+        "Filtros sao combinaveis: projeto + prioridade + overdue",
+        "Filtros atualizam URL via query string",
+        "Contagem de tasks por coluna atualiza ao aplicar filtros",
+        "Teste Feature: filtro projeto, filtro prioridade, toggle overdue, combinados, query param"
+      ],
+      "dependencies": ["US-002"],
+      "order": 4,
+      "status": "backlog",
+      "type": "frontend",
+      "files_affected": [
+        "resources/views/pages/kanban.blade.php",
+        "tests/Feature/KanbanTest.php"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "Drag-and-drop entre colunas com wire:sort:group",
+      "description": "Como usuario, quero arrastar tasks entre colunas do kanban para mudar seu status, para gerenciar o fluxo de trabalho de forma visual e intuitiva",
+      "complexity": "M",
+      "estimated_hours": 5,
+      "criteria": [
+        "Cada coluna usa wire:sort:group=kanban com wire:sort:group-id do status",
+        "Cada card usa wire:sort:item com ID da task",
+        "Arrastar task entre colunas atualiza task.status para o status da coluna destino",
+        "Arrastar task para Done chama markAsDone() (para timer + completed_at + status)",
+        "Arrastar task para Done sincroniza DailyPlan de hoje se task esta no plano",
+        "Arrastar task de Done para outra coluna limpa completed_at e atualiza status",
+        "sort_order recalculado para coluna destino baseado na posicao do drop",
+        "Metodo handleSort($taskId, $position, $statusValue) processa o drag",
+        "Drag funciona para tasks com e sem projeto",
+        "Teste Feature: mover entre colunas, mover para Done chama markAsDone, sort_order recalculado"
+      ],
+      "dependencies": ["US-003"],
+      "order": 5,
+      "status": "backlog",
+      "type": "both",
+      "files_affected": [
+        "resources/views/pages/kanban.blade.php",
+        "tests/Feature/KanbanTest.php"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "Task Modal -- estrutura basica e edicao de campos",
+      "description": "Como usuario, quero abrir um modal ao clicar em um card do kanban e editar todos os campos da task, para gerenciar detalhes da task sem sair do board",
+      "complexity": "G",
+      "estimated_hours": 5,
+      "criteria": [
+        "Componente SFC resources/views/components/task-modal.blade.php criado",
+        "Modal abre ao receber evento open-task-modal com taskId",
+        "flux:input para titulo",
+        "flux:editor para descricao (rich text markdown)",
+        "flux:select para projeto (projetos ativos + Sem projeto)",
+        "flux:select para prioridade (enum TaskPriority)",
+        "flux:select para status (enum TaskStatus)",
+        "flux:date-picker para prazo (due_date)",
+        "flux:input type=number para estimativa em minutos",
+        "Botao Salvar persiste alteracoes SEM fechar modal",
+        "Mudar status para Done via select chama markAsDone()",
+        "Modal fecha com Esc ou clicando fora",
+        "Dispatch task-updated apos salvar para atualizar kanban",
+        "Validacao: titulo obrigatorio, estimativa >= 0",
+        "Teste Feature: abrir via evento, editar campos, salvar persiste sem fechar, validacao"
+      ],
+      "dependencies": ["US-003"],
+      "order": 6,
+      "status": "backlog",
+      "type": "both",
+      "files_affected": [
+        "resources/views/components/task-modal.blade.php",
+        "resources/views/pages/kanban.blade.php",
+        "tests/Feature/TaskModalTest.php"
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "Task Modal -- time entries editaveis inline",
+      "description": "Como usuario, quero ver e editar as time entries de uma task diretamente no modal, para corrigir horarios e adicionar notas sem precisar de outra tela",
+      "complexity": "M",
+      "estimated_hours": 4,
+      "criteria": [
+        "Secao Registros de Tempo lista time entries ordenadas por started_at desc",
+        "Cada entry exibe started_at editavel, stopped_at editavel, duracao calculada readonly, notes editavel",
+        "Campos de horario usam flux:input type=datetime-local",
+        "Campo notes usa flux:input com placeholder Notas...",
+        "Editar started_at e salvar atualiza horario no banco",
+        "Editar notes atualiza notas no banco",
+        "Botao deletar entry individual com confirmacao inline",
+        "Deletar entry remove do banco e da lista",
+        "Entry running (stopped_at null) exibe badge Em andamento",
+        "Validacao: started_at obrigatorio, stopped_at posterior a started_at",
+        "Teste Feature: listar entries, editar entry, deletar entry, validacao"
+      ],
+      "dependencies": ["US-006"],
+      "order": 7,
+      "status": "backlog",
+      "type": "frontend",
+      "files_affected": [
+        "resources/views/components/task-modal.blade.php",
+        "tests/Feature/TaskModalTest.php"
+      ]
+    },
+    {
+      "id": "US-008",
+      "title": "Task Modal -- deletar task com confirmacao",
+      "description": "Como usuario, quero deletar uma task diretamente do modal com confirmacao, para remover tasks que nao sao mais necessarias",
+      "complexity": "P",
+      "estimated_hours": 2,
+      "criteria": [
+        "Footer do modal exibe botao Excluir com variante danger",
+        "Clicar Excluir abre modal de confirmacao aninhado",
+        "Confirmar exclusao deleta task do banco, fecha modal e exibe toast",
+        "Cancelar exclusao fecha modal de confirmacao e mantem modal principal aberto",
+        "Dispatch task-deleted apos deletar para atualizar kanban",
+        "Deletar task remove time entries em cascade (FK no banco)",
+        "Teste Feature: deletar com confirmacao, task removida, time entries removidas"
+      ],
+      "dependencies": ["US-006"],
+      "order": 8,
+      "status": "backlog",
+      "type": "frontend",
+      "files_affected": [
+        "resources/views/components/task-modal.blade.php",
+        "tests/Feature/TaskModalTest.php"
+      ]
+    }
+  ]
+}

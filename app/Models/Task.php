@@ -144,6 +144,10 @@ class Task extends Model
      */
     public function isRunning(): bool
     {
+        if ($this->relationLoaded('timeEntries')) {
+            return $this->timeEntries->contains(fn (TimeEntry $entry): bool => $entry->stopped_at === null);
+        }
+
         return $this->timeEntries()->running()->exists();
     }
 

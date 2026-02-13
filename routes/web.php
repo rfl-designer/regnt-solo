@@ -20,4 +20,12 @@ Route::livewire('daily', 'pages::daily-planner')
     ->middleware(['auth'])
     ->name('daily');
 
+Route::livewire('projects', 'pages::projects')
+    ->middleware(['auth'])
+    ->name('projects');
+
+Route::livewire('projects/{slug}', 'pages::project-detail')
+    ->middleware(['auth'])
+    ->name('project.detail');
+
 require __DIR__.'/settings.php';

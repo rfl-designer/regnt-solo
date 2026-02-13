@@ -2,8 +2,18 @@
 
 namespace Database\Seeders;
 
+use App\Enums\ProjectPriority;
+use App\Enums\ProjectStatus;
+use App\Enums\TaskPriority;
+use App\Enums\TaskStatus;
+use App\Models\DailyPlan;
+use App\Models\Project;
+use App\Models\Task;
+use App\Models\TimeEntry;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -12,10 +22,256 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::factory()->create([
+        $user = User::factory()->create([
             'name' => 'Solo Admin',
             'email' => config('solo.user_email', 'admin@soloboard.local'),
-            'password' => bcrypt(config('solo.user_password', 'password')),
+            'password' => Hash::make(config('solo.user_password', 'password')),
         ]);
+
+        $projects = $this->createProjects();
+        $tasks = $this->createTasks($projects);
+        $this->createTimeEntries($tasks);
+        $this->createDailyPlan($tasks);
+        $this->createRunningTimer($tasks);
+    }
+
+    /**
+     * Create the 6 realistic projects.
+     *
+     * @return array<string, Project>
+     */
+    private function createProjects(): array
+    {
+        /** @var array<string, array{name: string, slug: string, emoji: string, color: string, status: ProjectStatus, priority: ProjectPriority, description: string}> $definitions */
+        $definitions = [
+            'api' => [
+                'name' => 'API Gateway',
+                'slug' => 'api-gateway',
+                'emoji' => '🔧',
+                'color' => '#3B82F6',
+                'status' => ProjectStatus::Active,
+                'priority' => ProjectPriority::High,
+                'description' => 'Gateway centralizado para microserviços',
+            ],
+            'landing' => [
+                'name' => 'Landing Page v2',
+                'slug' => 'landing-page-v2',
+                'emoji' => '🚀',
+                'color' => '#8B5CF6',
+                'status' => ProjectStatus::Active,
+                'priority' => ProjectPriority::High,
+                'description' => 'Redesign da landing page principal',
+            ],
+            'mobile' => [
+                'name' => 'Mobile App',
+                'slug' => 'mobile-app',
+                'emoji' => '📱',
+                'color' => '#10B981',
+                'status' => ProjectStatus::Active,
+                'priority' => ProjectPriority::Medium,
+                'description' => 'Aplicativo mobile React Native',
+            ],
+            'admin' => [
+                'name' => 'Admin Dashboard',
+                'slug' => 'admin-dashboard',
+                'emoji' => '📊',
+                'color' => '#F59E0B',
+                'status' => ProjectStatus::Active,
+                'priority' => ProjectPriority::Medium,
+                'description' => 'Painel administrativo interno',
+            ],
+            'design' => [
+                'name' => 'Design System',
+                'slug' => 'design-system',
+                'emoji' => '🎨',
+                'color' => '#EC4899',
+                'status' => ProjectStatus::Paused,
+                'priority' => ProjectPriority::Low,
+                'description' => 'Biblioteca de componentes compartilhados',
+            ],
+            'blog' => [
+                'name' => 'Blog Pessoal',
+                'slug' => 'blog-pessoal',
+                'emoji' => '📝',
+                'color' => '#6366F1',
+                'status' => ProjectStatus::Active,
+                'priority' => ProjectPriority::Low,
+                'description' => 'Blog pessoal com artigos técnicos',
+            ],
+        ];
+
+        $projects = [];
+
+        foreach ($definitions as $key => $data) {
+            $projects[$key] = Project::create($data);
+        }
+
+        return $projects;
+    }
+
+    /**
+     * Create 35 realistic tasks distributed across projects and statuses.
+     *
+     * @param  array<string, Project>  $projects
+     * @return \Illuminate\Support\Collection<int, Task>
+     */
+    private function createTasks(array $projects): \Illuminate\Support\Collection
+    {
+        /** @var array<int, array{title: string, project: string|null, status: TaskStatus, priority: TaskPriority, estimated_minutes: int|null, due_date: string|null, completed_at: Carbon|null}> $taskDefinitions */
+        $taskDefinitions = [
+            // API Gateway tasks
+            ['title' => 'Configurar rate limiting por endpoint', 'project' => 'api', 'status' => TaskStatus::Done, 'priority' => TaskPriority::High, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => now()->subDays(3)],
+            ['title' => 'Implementar circuit breaker pattern', 'project' => 'api', 'status' => TaskStatus::Doing, 'priority' => TaskPriority::Urgent, 'estimated_minutes' => 180, 'due_date' => now()->addDays(2)->toDateString(), 'completed_at' => null],
+            ['title' => 'Adicionar health check endpoints', 'project' => 'api', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::High, 'estimated_minutes' => 60, 'due_date' => now()->addDays(5)->toDateString(), 'completed_at' => null],
+            ['title' => 'Documentar API com OpenAPI 3.0', 'project' => 'api', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 240, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Configurar cache de respostas', 'project' => 'api', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(7)->toDateString(), 'completed_at' => null],
+            ['title' => 'Implementar autenticação JWT', 'project' => 'api', 'status' => TaskStatus::Done, 'priority' => TaskPriority::Urgent, 'estimated_minutes' => 150, 'due_date' => null, 'completed_at' => now()->subDays(5)],
+
+            // Landing Page v2 tasks
+            ['title' => 'Criar hero section com animações', 'project' => 'landing', 'status' => TaskStatus::Doing, 'priority' => TaskPriority::High, 'estimated_minutes' => 120, 'due_date' => now()->addDay()->toDateString(), 'completed_at' => null],
+            ['title' => 'Implementar seção de depoimentos', 'project' => 'landing', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(4)->toDateString(), 'completed_at' => null],
+            ['title' => 'Otimizar imagens para web', 'project' => 'landing', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Low, 'estimated_minutes' => 45, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Configurar analytics e tracking', 'project' => 'landing', 'status' => TaskStatus::Done, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 60, 'due_date' => null, 'completed_at' => now()->subDays(2)],
+            ['title' => 'Criar formulário de contato', 'project' => 'landing', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::High, 'estimated_minutes' => 75, 'due_date' => now()->addDays(3)->toDateString(), 'completed_at' => null],
+
+            // Mobile App tasks
+            ['title' => 'Setup projeto React Native', 'project' => 'mobile', 'status' => TaskStatus::Done, 'priority' => TaskPriority::High, 'estimated_minutes' => 180, 'due_date' => null, 'completed_at' => now()->subDays(7)],
+            ['title' => 'Implementar tela de login', 'project' => 'mobile', 'status' => TaskStatus::Doing, 'priority' => TaskPriority::High, 'estimated_minutes' => 120, 'due_date' => now()->addDays(2)->toDateString(), 'completed_at' => null],
+            ['title' => 'Criar navegação bottom tabs', 'project' => 'mobile', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(6)->toDateString(), 'completed_at' => null],
+            ['title' => 'Integrar push notifications', 'project' => 'mobile', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Low, 'estimated_minutes' => 150, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Configurar CI/CD para builds', 'project' => 'mobile', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => null],
+
+            // Admin Dashboard tasks
+            ['title' => 'Criar dashboard com gráficos', 'project' => 'admin', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::High, 'estimated_minutes' => 180, 'due_date' => now()->addDays(5)->toDateString(), 'completed_at' => null],
+            ['title' => 'Implementar CRUD de usuários', 'project' => 'admin', 'status' => TaskStatus::Done, 'priority' => TaskPriority::High, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => now()->subDays(4)],
+            ['title' => 'Adicionar filtros avançados na listagem', 'project' => 'admin', 'status' => TaskStatus::Doing, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(3)->toDateString(), 'completed_at' => null],
+            ['title' => 'Exportar relatórios em PDF', 'project' => 'admin', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Low, 'estimated_minutes' => 150, 'due_date' => null, 'completed_at' => null],
+
+            // Design System tasks
+            ['title' => 'Definir tokens de design (cores, tipografia)', 'project' => 'design', 'status' => TaskStatus::Done, 'priority' => TaskPriority::High, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => now()->subDays(10)],
+            ['title' => 'Criar componente Button com variantes', 'project' => 'design', 'status' => TaskStatus::Done, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 90, 'due_date' => null, 'completed_at' => now()->subDays(8)],
+            ['title' => 'Documentar componentes no Storybook', 'project' => 'design', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Low, 'estimated_minutes' => 180, 'due_date' => null, 'completed_at' => null],
+
+            // Blog Pessoal tasks
+            ['title' => 'Escrever artigo sobre Laravel 12', 'project' => 'blog', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 120, 'due_date' => now()->addDays(7)->toDateString(), 'completed_at' => null],
+            ['title' => 'Configurar SEO e meta tags', 'project' => 'blog', 'status' => TaskStatus::Done, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 45, 'due_date' => null, 'completed_at' => now()->subDays(6)],
+            ['title' => 'Implementar sistema de comentários', 'project' => 'blog', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Low, 'estimated_minutes' => 150, 'due_date' => null, 'completed_at' => null],
+
+            // Inbox tasks (no project)
+            ['title' => 'Revisar PR do colega', 'project' => null, 'status' => TaskStatus::Inbox, 'priority' => TaskPriority::High, 'estimated_minutes' => 30, 'due_date' => now()->toDateString(), 'completed_at' => null],
+            ['title' => 'Atualizar dependências do projeto', 'project' => null, 'status' => TaskStatus::Inbox, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 45, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Pesquisar sobre WebSockets', 'project' => null, 'status' => TaskStatus::Inbox, 'priority' => TaskPriority::Low, 'estimated_minutes' => null, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Responder email do cliente', 'project' => null, 'status' => TaskStatus::Inbox, 'priority' => TaskPriority::Urgent, 'estimated_minutes' => 15, 'due_date' => now()->toDateString(), 'completed_at' => null],
+            ['title' => 'Agendar reunião de sprint planning', 'project' => null, 'status' => TaskStatus::Inbox, 'priority' => TaskPriority::Medium, 'estimated_minutes' => null, 'due_date' => now()->addDays(2)->toDateString(), 'completed_at' => null],
+
+            // Extra tasks with overdue dates
+            ['title' => 'Corrigir bug no upload de arquivos', 'project' => 'api', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Urgent, 'estimated_minutes' => 60, 'due_date' => now()->subDays(2)->toDateString(), 'completed_at' => null],
+            ['title' => 'Refatorar módulo de pagamentos', 'project' => 'admin', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::High, 'estimated_minutes' => 240, 'due_date' => now()->subDay()->toDateString(), 'completed_at' => null],
+            ['title' => 'Melhorar performance da listagem', 'project' => 'mobile', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(4)->toDateString(), 'completed_at' => null],
+            ['title' => 'Configurar testes E2E com Cypress', 'project' => 'landing', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => null],
+        ];
+
+        $allTasks = collect();
+
+        foreach ($taskDefinitions as $index => $def) {
+            $task = Task::create([
+                'title' => $def['title'],
+                'project_id' => $def['project'] !== null ? $projects[$def['project']]->id : null,
+                'status' => $def['status'],
+                'priority' => $def['priority'],
+                'estimated_minutes' => $def['estimated_minutes'],
+                'due_date' => $def['due_date'],
+                'completed_at' => $def['completed_at'],
+                'sort_order' => $index,
+            ]);
+
+            $allTasks->push($task);
+        }
+
+        return $allTasks;
+    }
+
+    /**
+     * Create time entries for the last 14 days.
+     *
+     * @param  \Illuminate\Support\Collection<int, Task>  $tasks
+     */
+    private function createTimeEntries(\Illuminate\Support\Collection $tasks): void
+    {
+        $workTasks = $tasks->filter(fn (Task $t) => $t->status !== TaskStatus::Inbox);
+
+        for ($day = 13; $day >= 0; $day--) {
+            $date = Carbon::today()->subDays($day);
+
+            if ($date->isWeekend()) {
+                continue;
+            }
+
+            $sessionsPerDay = rand(2, 5);
+            $startHour = 9;
+
+            for ($session = 0; $session < $sessionsPerDay; $session++) {
+                $task = $workTasks->random();
+                $durationMinutes = rand(30, 120);
+
+                $startedAt = $date->copy()->setHour($startHour)->setMinute(rand(0, 30));
+                $stoppedAt = $startedAt->copy()->addMinutes($durationMinutes);
+
+                if ($stoppedAt->hour >= 18) {
+                    break;
+                }
+
+                TimeEntry::create([
+                    'task_id' => $task->id,
+                    'started_at' => $startedAt,
+                    'stopped_at' => $stoppedAt,
+                    'notes' => fake()->optional(0.4)->sentence(),
+                ]);
+
+                $startHour = $stoppedAt->hour + (rand(0, 1) ? 1 : 0);
+            }
+        }
+    }
+
+    /**
+     * Create a daily plan for today with 5 tasks.
+     *
+     * @param  \Illuminate\Support\Collection<int, Task>  $tasks
+     */
+    private function createDailyPlan(\Illuminate\Support\Collection $tasks): void
+    {
+        $plan = DailyPlan::create([
+            'date' => Carbon::today()->toDateString(),
+            'notes' => 'Foco: finalizar circuit breaker e hero section da landing.',
+        ]);
+
+        $planTasks = $tasks
+            ->filter(fn (Task $t) => in_array($t->status, [TaskStatus::Doing, TaskStatus::Todo], true))
+            ->take(5);
+
+        foreach ($planTasks->values() as $index => $task) {
+            $plan->tasks()->attach($task->id, [
+                'sort_order' => $index,
+                'completed_at' => null,
+            ]);
+        }
+    }
+
+    /**
+     * Create a running timer on a "doing" task.
+     *
+     * @param  \Illuminate\Support\Collection<int, Task>  $tasks
+     */
+    private function createRunningTimer(\Illuminate\Support\Collection $tasks): void
+    {
+        $doingTask = $tasks->first(fn (Task $t) => $t->status === TaskStatus::Doing);
+
+        if ($doingTask) {
+            TimeEntry::create([
+                'task_id' => $doingTask->id,
+                'started_at' => now()->subMinutes(rand(15, 45)),
+                'stopped_at' => null,
+            ]);
+        }
     }
 }

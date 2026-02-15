@@ -32,6 +32,9 @@ class SoloBoardServer extends Server
         \App\Mcp\Tools\CreateTaskTool::class,
         \App\Mcp\Tools\UpdateTaskTool::class,
         \App\Mcp\Tools\DeleteTaskTool::class,
+        \App\Mcp\Tools\StartTimerTool::class,
+        \App\Mcp\Tools\StopTimerTool::class,
+        \App\Mcp\Tools\TimerStatusTool::class,
     ];
 
     /**

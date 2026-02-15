@@ -6,6 +6,7 @@ use App\Models\Project;
 use App\Models\Task;
 use Carbon\Carbon;
 use Flux\Flux;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;

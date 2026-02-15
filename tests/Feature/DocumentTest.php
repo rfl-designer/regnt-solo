@@ -35,7 +35,7 @@ test('document slug is unique within same project', function () {
         ->and($doc2->slug)->toBe('my-doc-1');
 });
 
-test('document slug can be same across different projects', function () {
+test('document slug is globally unique across different projects', function () {
     $project1 = Project::factory()->create();
     $project2 = Project::factory()->create();
 
@@ -43,7 +43,7 @@ test('document slug can be same across different projects', function () {
     $doc2 = Document::factory()->forProject($project2)->create(['title' => 'My Doc']);
 
     expect($doc1->slug)->toBe('my-doc')
-        ->and($doc2->slug)->toBe('my-doc');
+        ->and($doc2->slug)->toBe('my-doc-1');
 });
 
 test('document casts type to enum', function () {

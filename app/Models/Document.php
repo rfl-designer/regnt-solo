@@ -61,9 +61,9 @@ class Document extends Model
     }
 
     /**
-     * Generate a unique slug scoped by project_id.
+     * Generate a globally unique slug.
      */
-    public static function generateUniqueSlug(string $title, ?int $projectId, ?int $excludeId = null): string
+    public static function generateUniqueSlug(string $title, ?int $projectId = null, ?int $excludeId = null): string
     {
         $slug = Str::slug($title);
         $originalSlug = $slug;
@@ -71,7 +71,6 @@ class Document extends Model
 
         while (static::query()
             ->where('slug', $slug)
-            ->where('project_id', $projectId)
             ->when($excludeId, fn (Builder $q) => $q->where('id', '!=', $excludeId))
             ->exists()
         ) {
@@ -95,7 +94,7 @@ class Document extends Model
      */
     public function excerpt(int $length = 200): string
     {
-        return Str::limit(strip_tags(Str::markdown($this->content ?? '')), $length);
+        return \App\Support\Markdown::excerpt($this->content ?? '', $length);
     }
 
     /**

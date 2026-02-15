@@ -40,6 +40,12 @@ new class extends Component
             $this->projectId = $document->project_id ? (string) $document->project_id : null;
             $this->isPinned = $document->is_pinned;
             $this->lastSavedAt = $document->updated_at->format('d/m/Y H:i');
+        } else {
+            // Pre-select project from query parameter (e.g., from Project Detail page)
+            $projectParam = request()->query('project');
+            if ($projectParam) {
+                $this->projectId = (string) $projectParam;
+            }
         }
     }
 
@@ -74,6 +80,8 @@ new class extends Component
     {
         $this->validate();
 
+        $isCreating = ! $this->isEditing;
+
         $data = [
             'title' => $this->title,
             'content' => $this->content,
@@ -82,7 +90,7 @@ new class extends Component
             'is_pinned' => $this->isPinned,
         ];
 
-        if ($this->isEditing) {
+        if (! $isCreating) {
             $document = Document::findOrFail($this->documentId);
             $document->update($data);
         } else {
@@ -97,7 +105,7 @@ new class extends Component
         Flux::toast(variant: 'success', heading: 'Documento salvo', text: $this->title);
 
         // If creating, redirect to edit mode with the new slug
-        if (! $this->isEditing) {
+        if ($isCreating) {
             $this->redirect(route('document.edit', $document->slug), navigate: true);
         }
     }

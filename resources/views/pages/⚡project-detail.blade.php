@@ -39,12 +39,17 @@ new class extends Component
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, \App\Models\Document>
+     * @return \Illuminate\Support\Collection<int, \App\Models\Document>
      */
     #[Computed]
-    public function projectDocuments(): \Illuminate\Database\Eloquent\Collection
+    public function projectDocuments(): \Illuminate\Support\Collection
     {
-        return $this->project->documents->sortByDesc('is_pinned')->sortBy('sort_order');
+        return $this->project->documents
+            ->sortBy([
+                ['is_pinned', 'desc'],
+                ['sort_order', 'asc'],
+                ['title', 'asc'],
+            ]);
     }
 
     /**

@@ -22,7 +22,7 @@ return new class extends Migration
             $table->integer('sort_order')->default(0);
             $table->timestamps();
 
-            $table->unique(['project_id', 'slug']);
+            $table->unique('slug');
             $table->index('type');
             $table->index('is_pinned');
         });

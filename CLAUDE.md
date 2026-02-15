@@ -39,7 +39,7 @@
 
 ## Models & Enums
 
-- Models: `App\Models\` — Project, Task, TimeEntry, DailyPlan, TaskStatusChange
+- Models: `App\Models\` — Project, Task, TimeEntry, DailyPlan, TaskStatusChange, WeeklyReview
 - Enums: `App\Enums\` (PHP native enums) — cada enum implementa `label()` (PT-BR), `color()`, `icon()`
 - `Task.completed_at`: preenchido ao marcar done
 - `Task.sort_order`: por coluna (por status)
@@ -76,6 +76,26 @@ Rastreamento automático de quanto tempo cada task passa em cada status (Inbox �
 - **Dashboard**: métricas de tempo médio por status (últimos 30 dias, tasks concluídas)
 - **MCP GetTaskTool**: retorna `status_timeline`, `time_in_status`, `current_status_duration_minutes`
 - **Testes**: 18 testes Feature (8 backend + 10 frontend/MCP)
+
+## Weekly Review (Epic 12)
+
+Revisão semanal automática com métricas computadas, reflexão pessoal e histórico navegável. Página acessível via sidebar "Review".
+
+- **Model**: `WeeklyReview` — `week_start`, `week_end`, `notes`, `reflection`, `generated_at`
+  - Scope `forWeek(CarbonInterface $date)`: busca review da semana contendo a data
+  - `getOrCreateForWeek(CarbonInterface $date)`: get-or-create por semana
+  - 6 computed methods: `completedTasks()`, `totalHours()`, `hoursByProject()`, `staleTasks()`, `statusTimeAverages()`, `tasksCreatedVsCompleted()`
+- **Artisan Command**: `soloboard:weekly-review` — gera/recupera review da semana atual ou especificada
+  - `--week=YYYY-MM-DD`: data opcional para gerar review de semana específica
+- **Página SFC**: `resources/views/pages/⚡weekly-review.blade.php`
+  - Navegação entre semanas (anterior/próxima) com URL sync via `#[Url]`
+  - Cards de resumo: tasks completadas, horas totais, projetos trabalhados, criadas vs completadas
+  - Horas por projeto com barras de progresso coloridas
+  - Lista de tasks completadas com projeto, prioridade e tempo
+  - Atenção necessária: tasks ativas sem mudança de status na semana (stale tasks)
+  - Reflexão: textarea com auto-save (`wire:model.blur`)
+  - Histórico: últimas 4 semanas anteriores, clicáveis para navegação
+- **Sidebar**: item "Review" com ícone `clipboard-document-check`
 
 ## Keyboard Shortcuts
 

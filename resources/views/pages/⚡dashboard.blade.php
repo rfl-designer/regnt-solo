@@ -1,15 +1,32 @@
 <?php
 
 use App\Enums\TaskStatus;
+use App\Models\DailyPlan;
+use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
+use App\Services\AiAssistantService;
 use Carbon\Carbon;
+use Flux\Flux;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
 new class extends Component
 {
+    /** @var array<int, array{type: string, message: string, severity: string, action_url: string|null, action_label: string|null}> */
+    public array $aiInsights = [];
+
+    public bool $insightsLoading = false;
+
+    public function mount(): void
+    {
+        if ($this->isAiEnabled()) {
+            $this->loadInsights();
+        }
+    }
+
     /**
      * Get total deep work minutes for today.
      */
@@ -104,6 +121,210 @@ new class extends Component
         return "{$mins}m";
     }
 
+    /**
+     * Check if AI features are enabled and configured.
+     */
+    public function isAiEnabled(): bool
+    {
+        return config('soloboard.ai_enabled') === true
+            && ! empty(config('soloboard.ai_api_key'));
+    }
+
+    /**
+     * Load AI insights from cache or generate new ones.
+     */
+    public function loadInsights(): void
+    {
+        if (! $this->isAiEnabled()) {
+            return;
+        }
+
+        $this->insightsLoading = true;
+
+        try {
+            $userId = auth()->id() ?? 'guest';
+            $cacheKey = 'ai_insights_'.$userId;
+
+            $cached = Cache::get($cacheKey);
+
+            if ($cached !== null) {
+                $this->aiInsights = $this->filterDismissedInsights($cached, $userId);
+
+                return;
+            }
+
+            $weeklyData = $this->buildWeeklyData();
+
+            if (empty($weeklyData)) {
+                $this->aiInsights = [];
+
+                return;
+            }
+
+            $service = app(AiAssistantService::class);
+            $result = $service->detectPatterns($weeklyData);
+
+            Cache::put(
+                $cacheKey,
+                $result,
+                now()->addHours(config('soloboard.ai_insights_cache_hours', 24))
+            );
+
+            $this->aiInsights = $this->filterDismissedInsights($result, $userId);
+        } catch (\Throwable $e) {
+            $this->aiInsights = [];
+        } finally {
+            $this->insightsLoading = false;
+        }
+    }
+
+    /**
+     * Dismiss an insight and hide it for 7 days.
+     */
+    public function dismissInsight(int $index): void
+    {
+        if (! isset($this->aiInsights[$index])) {
+            return;
+        }
+
+        $insight = $this->aiInsights[$index];
+        $userId = auth()->id() ?? 'guest';
+        $dismissKey = 'ai_insight_dismissed_'.$userId.'_'.md5($insight['message']);
+
+        Cache::put($dismissKey, true, now()->addDays(7));
+
+        unset($this->aiInsights[$index]);
+        $this->aiInsights = array_values($this->aiInsights);
+    }
+
+    /**
+     * Refresh insights by clearing cache and reloading.
+     */
+    public function refreshInsights(): void
+    {
+        if (! $this->isAiEnabled()) {
+            return;
+        }
+
+        $userId = auth()->id() ?? 'guest';
+        $rateLimitKey = 'ai_insights_refresh_'.$userId;
+
+        if (Cache::has($rateLimitKey)) {
+            Flux::toast(variant: 'warning', heading: 'Aguarde', text: 'Aguarde 1 hora antes de atualizar os insights novamente.');
+
+            return;
+        }
+
+        $cacheKey = 'ai_insights_'.$userId;
+        Cache::forget($cacheKey);
+
+        $this->loadInsights();
+
+        Cache::put($rateLimitKey, true, now()->addHour());
+    }
+
+    /**
+     * Build weekly data from the database for pattern detection.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildWeeklyData(): array
+    {
+        $weekAgo = Carbon::now()->subDays(7);
+
+        $tasksByStatus = [];
+        foreach (TaskStatus::cases() as $status) {
+            $tasksByStatus[$status->value] = Task::query()
+                ->where('status', $status)
+                ->count();
+        }
+
+        $projects = Project::query()
+            ->active()
+            ->withMax('tasks', 'updated_at')
+            ->get()
+            ->map(fn (Project $project): array => [
+                'name' => $project->name,
+                'last_activity' => $project->tasks_max_updated_at,
+            ])
+            ->toArray();
+
+        $hoursPerDay = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = Carbon::today()->subDays($i);
+            $minutes = TimeEntry::query()
+                ->whereNotNull('stopped_at')
+                ->whereDate('started_at', $date)
+                ->get()
+                ->sum('duration_minutes');
+
+            $hoursPerDay[$date->toDateString()] = round($minutes / 60, 2);
+        }
+
+        $staleBacklogTasks = Task::query()
+            ->where('status', TaskStatus::Backlog)
+            ->where('created_at', '<', Carbon::now()->subDays(14))
+            ->count();
+
+        $completionRates = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = Carbon::today()->subDays($i);
+            $plan = DailyPlan::query()->whereDate('date', $date->toDateString())->first();
+
+            $completionRates[$date->toDateString()] = $plan?->completionRate() ?? 0;
+        }
+
+        return [
+            'tasks_by_status' => $tasksByStatus,
+            'projects' => $projects,
+            'hours_per_day' => $hoursPerDay,
+            'stale_backlog_count' => $staleBacklogTasks,
+            'completion_rates' => $completionRates,
+        ];
+    }
+
+    /**
+     * Filter out insights that have been dismissed by the user.
+     *
+     * @param  array<int, array{type: string, message: string, severity: string, action_url: string|null, action_label: string|null}>  $insights
+     * @return array<int, array{type: string, message: string, severity: string, action_url: string|null, action_label: string|null}>
+     */
+    private function filterDismissedInsights(array $insights, int|string $userId): array
+    {
+        return array_values(array_filter($insights, function (array $insight) use ($userId): bool {
+            $dismissKey = 'ai_insight_dismissed_'.$userId.'_'.md5($insight['message']);
+
+            return ! Cache::has($dismissKey);
+        }));
+    }
+
+    /**
+     * Get the icon name for an insight type.
+     */
+    public function insightIcon(string $type): string
+    {
+        return match ($type) {
+            'abandoned_project', 'project_abandoned' => 'archive-box-x-mark',
+            'over_commitment', 'backlog_overload' => 'inbox-stack',
+            'productive_hours', 'no_deep_work' => 'clock',
+            'blocker' => 'exclamation-triangle',
+            'positive_trend' => 'arrow-trending-up',
+            default => 'light-bulb',
+        };
+    }
+
+    /**
+     * Get the callout variant for an insight severity.
+     */
+    public function insightVariant(string $severity): string
+    {
+        return match ($severity) {
+            'warning' => 'warning',
+            'critical', 'danger' => 'danger',
+            default => 'secondary',
+        };
+    }
+
     #[On('task-updated')]
     public function refreshMetrics(): void
     {
@@ -115,6 +336,67 @@ new class extends Component
 
 <div class="flex h-full w-full flex-1 flex-col gap-6 p-6">
     <flux:heading size="xl">Dashboard</flux:heading>
+
+    {{-- AI Insights Section --}}
+    @if ($this->isAiEnabled())
+        @if ($insightsLoading)
+            <div class="space-y-3">
+                @for ($i = 0; $i < 2; $i++)
+                    <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-4">
+                        <div class="flex items-start gap-3">
+                            <flux:skeleton class="size-5 shrink-0 rounded" />
+                            <div class="flex-1 space-y-2">
+                                <flux:skeleton class="h-4 w-3/4" />
+                                <flux:skeleton class="h-3 w-full" />
+                            </div>
+                        </div>
+                    </div>
+                @endfor
+            </div>
+        @elseif (count($aiInsights) > 0)
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <flux:icon name="sparkles" class="size-5 text-purple-400" />
+                        <flux:heading size="sm">AI Insights</flux:heading>
+                    </div>
+                    <flux:button
+                        variant="ghost"
+                        size="sm"
+                        icon="arrow-path"
+                        wire:click="refreshInsights"
+                        wire:loading.attr="disabled"
+                        wire:target="refreshInsights"
+                    >
+                        <span wire:loading.remove wire:target="refreshInsights">Atualizar</span>
+                        <span wire:loading wire:target="refreshInsights">Atualizando...</span>
+                    </flux:button>
+                </div>
+
+                @foreach ($aiInsights as $index => $insight)
+                    <flux:callout
+                        wire:key="insight-{{ $index }}"
+                        :icon="$this->insightIcon($insight['type'] ?? '')"
+                        :variant="$this->insightVariant($insight['severity'] ?? 'info')"
+                        inline
+                    >
+                        <flux:callout.text>{{ $insight['message'] }}</flux:callout.text>
+
+                        <x-slot name="actions">
+                            @if (! empty($insight['action_url']))
+                                <flux:button variant="subtle" size="sm" :href="$insight['action_url']">
+                                    {{ $insight['action_label'] ?? 'Ver' }}
+                                </flux:button>
+                            @endif
+                            <flux:button variant="ghost" size="sm" wire:click="dismissInsight({{ $index }})">
+                                Ignorar
+                            </flux:button>
+                        </x-slot>
+                    </flux:callout>
+                @endforeach
+            </div>
+        @endif
+    @endif
 
     <div class="grid auto-rows-min gap-4 md:grid-cols-3">
         <div class="relative aspect-video overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800/50">

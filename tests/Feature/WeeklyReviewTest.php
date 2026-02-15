@@ -1,5 +1,10 @@
 <?php
 
+use App\Enums\TaskStatus;
+use App\Models\Project;
+use App\Models\Task;
+use App\Models\TaskStatusChange;
+use App\Models\TimeEntry;
 use App\Models\WeeklyReview;
 use Carbon\CarbonInterface;
 
@@ -105,4 +110,299 @@ test('casts are correctly applied to weekly review attributes', function () {
     expect($review->week_start)->toBeInstanceOf(CarbonInterface::class)
         ->and($review->week_end)->toBeInstanceOf(CarbonInterface::class)
         ->and($review->generated_at)->toBeInstanceOf(CarbonInterface::class);
+});
+
+// ─── US-002: Computed Methods ────────────────────────────────────────
+
+test('completedTasks returns tasks completed during the week', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    $project = Project::factory()->create();
+    $doneTask = Task::withoutEvents(fn () => Task::factory()->done()->create([
+        'project_id' => $project->id,
+        'completed_at' => now()->startOfWeek()->addDay(),
+    ]));
+
+    // Task completed outside the week — should NOT appear
+    Task::withoutEvents(fn () => Task::factory()->done()->create([
+        'completed_at' => now()->subWeeks(2),
+    ]));
+
+    // Active task — should NOT appear
+    Task::withoutEvents(fn () => Task::factory()->doing()->create());
+
+    $tasks = $review->completedTasks();
+
+    expect($tasks)->toHaveCount(1)
+        ->and($tasks->first()->id)->toBe($doneTask->id)
+        ->and($tasks->first()->relationLoaded('project'))->toBeTrue();
+});
+
+test('completedTasks returns empty collection when no tasks completed', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    expect($review->completedTasks())->toBeEmpty();
+});
+
+test('completedTasks orders by completed_at descending', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    $first = Task::withoutEvents(fn () => Task::factory()->done()->create([
+        'completed_at' => now()->startOfWeek()->addDay(),
+    ]));
+    $second = Task::withoutEvents(fn () => Task::factory()->done()->create([
+        'completed_at' => now()->startOfWeek()->addDays(3),
+    ]));
+
+    $tasks = $review->completedTasks();
+
+    expect($tasks)->toHaveCount(2)
+        ->and($tasks->first()->id)->toBe($second->id)
+        ->and($tasks->last()->id)->toBe($first->id);
+});
+
+test('totalHours returns sum of tracked hours during the week', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    $task = Task::withoutEvents(fn () => Task::factory()->create());
+
+    // 2 hours in the week
+    TimeEntry::factory()->create([
+        'task_id' => $task->id,
+        'started_at' => now()->startOfWeek()->addHours(9),
+        'stopped_at' => now()->startOfWeek()->addHours(11),
+    ]);
+
+    // 1 hour in the week
+    TimeEntry::factory()->create([
+        'task_id' => $task->id,
+        'started_at' => now()->startOfWeek()->addDays(1)->addHours(9),
+        'stopped_at' => now()->startOfWeek()->addDays(1)->addHours(10),
+    ]);
+
+    // Outside the week — should NOT count
+    TimeEntry::factory()->create([
+        'task_id' => $task->id,
+        'started_at' => now()->subWeeks(2),
+        'stopped_at' => now()->subWeeks(2)->addHour(),
+    ]);
+
+    $hours = $review->totalHours();
+
+    expect($hours)->toBeGreaterThanOrEqual(2.9)
+        ->and($hours)->toBeLessThanOrEqual(3.1);
+});
+
+test('totalHours returns zero when no time entries exist', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    expect($review->totalHours())->toBe(0.0);
+});
+
+test('totalHours ignores running time entries', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    $task = Task::withoutEvents(fn () => Task::factory()->create());
+
+    // Running entry — should NOT count
+    TimeEntry::factory()->running()->create([
+        'task_id' => $task->id,
+        'started_at' => now()->startOfWeek()->addHours(9),
+    ]);
+
+    expect($review->totalHours())->toBe(0.0);
+});
+
+test('hoursByProject groups hours by project', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    $projectA = Project::factory()->create(['name' => 'Project A']);
+    $projectB = Project::factory()->create(['name' => 'Project B']);
+
+    $taskA = Task::withoutEvents(fn () => Task::factory()->create(['project_id' => $projectA->id]));
+    $taskB = Task::withoutEvents(fn () => Task::factory()->create(['project_id' => $projectB->id]));
+
+    // 2 hours for Project A
+    TimeEntry::factory()->create([
+        'task_id' => $taskA->id,
+        'started_at' => now()->startOfWeek()->addHours(9),
+        'stopped_at' => now()->startOfWeek()->addHours(11),
+    ]);
+
+    // 1 hour for Project B
+    TimeEntry::factory()->create([
+        'task_id' => $taskB->id,
+        'started_at' => now()->startOfWeek()->addHours(14),
+        'stopped_at' => now()->startOfWeek()->addHours(15),
+    ]);
+
+    $result = $review->hoursByProject();
+
+    expect($result)->toHaveCount(2)
+        ->and($result->first()['project']->id)->toBe($projectA->id)
+        ->and($result->first()['minutes'])->toBeGreaterThanOrEqual(119)
+        ->and($result->last()['project']->id)->toBe($projectB->id)
+        ->and($result->last()['minutes'])->toBeGreaterThanOrEqual(59);
+});
+
+test('hoursByProject handles tasks without project', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    $task = Task::withoutEvents(fn () => Task::factory()->create(['project_id' => null]));
+
+    TimeEntry::factory()->create([
+        'task_id' => $task->id,
+        'started_at' => now()->startOfWeek()->addHours(9),
+        'stopped_at' => now()->startOfWeek()->addHours(10),
+    ]);
+
+    $result = $review->hoursByProject();
+
+    expect($result)->toHaveCount(1)
+        ->and($result->first()['project'])->toBeNull();
+});
+
+test('hoursByProject returns empty when no time entries exist', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    expect($review->hoursByProject())->toBeEmpty();
+});
+
+test('staleTasks returns active tasks without status changes in the week', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    // Active task with NO status change in the week — should appear
+    $staleTask = Task::withoutEvents(fn () => Task::factory()->todo()->create());
+
+    // Active task WITH status change in the week — should NOT appear
+    $activeTask = Task::withoutEvents(fn () => Task::factory()->doing()->create());
+    TaskStatusChange::factory()->create([
+        'task_id' => $activeTask->id,
+        'from_status' => TaskStatus::Todo,
+        'to_status' => TaskStatus::Doing,
+        'changed_at' => now()->startOfWeek()->addDay(),
+    ]);
+
+    // Done task — should NOT appear (not active)
+    Task::withoutEvents(fn () => Task::factory()->done()->create([
+        'completed_at' => now()->startOfWeek()->addDay(),
+    ]));
+
+    // Inbox task — should NOT appear (excluded per spec)
+    Task::withoutEvents(fn () => Task::factory()->create(['status' => TaskStatus::Inbox]));
+
+    $stale = $review->staleTasks();
+
+    expect($stale)->toHaveCount(1)
+        ->and($stale->first()->id)->toBe($staleTask->id)
+        ->and($stale->first()->relationLoaded('project'))->toBeTrue();
+});
+
+test('staleTasks returns empty when all tasks had progress', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    $task = Task::withoutEvents(fn () => Task::factory()->todo()->create());
+    TaskStatusChange::factory()->create([
+        'task_id' => $task->id,
+        'from_status' => TaskStatus::Backlog,
+        'to_status' => TaskStatus::Todo,
+        'changed_at' => now()->startOfWeek()->addDay(),
+    ]);
+
+    expect($review->staleTasks())->toBeEmpty();
+});
+
+test('statusTimeAverages returns average time per status for completed tasks', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    $baseTime = now()->startOfWeek()->addHours(9);
+
+    $task = Task::withoutEvents(fn () => Task::factory()->done()->create([
+        'completed_at' => $baseTime->copy()->addMinutes(180),
+    ]));
+
+    TaskStatusChange::create([
+        'task_id' => $task->id,
+        'from_status' => null,
+        'to_status' => TaskStatus::Inbox,
+        'changed_at' => $baseTime,
+    ]);
+
+    TaskStatusChange::create([
+        'task_id' => $task->id,
+        'from_status' => TaskStatus::Inbox,
+        'to_status' => TaskStatus::Doing,
+        'changed_at' => $baseTime->copy()->addMinutes(60),
+    ]);
+
+    TaskStatusChange::create([
+        'task_id' => $task->id,
+        'from_status' => TaskStatus::Doing,
+        'to_status' => TaskStatus::Done,
+        'changed_at' => $baseTime->copy()->addMinutes(180),
+    ]);
+
+    $averages = $review->statusTimeAverages();
+
+    expect($averages)->toHaveKey('inbox')
+        ->and($averages)->toHaveKey('doing')
+        ->and($averages['inbox'])->toBeGreaterThanOrEqual(59)
+        ->and($averages['inbox'])->toBeLessThanOrEqual(61)
+        ->and($averages['doing'])->toBeGreaterThanOrEqual(119)
+        ->and($averages['doing'])->toBeLessThanOrEqual(121);
+});
+
+test('statusTimeAverages returns empty array when no completed tasks', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    expect($review->statusTimeAverages())->toBe([]);
+});
+
+test('tasksCreatedVsCompleted returns correct counts', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    // 3 tasks created this week
+    Task::withoutEvents(fn () => Task::factory()->count(3)->create([
+        'created_at' => now()->startOfWeek()->addDay(),
+    ]));
+
+    // 2 tasks completed this week
+    Task::withoutEvents(fn () => Task::factory()->count(2)->done()->create([
+        'created_at' => now()->subWeeks(2),
+        'completed_at' => now()->startOfWeek()->addDays(2),
+    ]));
+
+    $result = $review->tasksCreatedVsCompleted();
+
+    expect($result['created'])->toBe(3)
+        ->and($result['completed'])->toBe(2);
+});
+
+test('tasksCreatedVsCompleted returns zeros when no tasks exist', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    $result = $review->tasksCreatedVsCompleted();
+
+    expect($result['created'])->toBe(0)
+        ->and($result['completed'])->toBe(0);
+});
+
+test('tasksCreatedVsCompleted does not count tasks outside the week', function () {
+    $review = WeeklyReview::factory()->thisWeek()->create();
+
+    // Task created outside the week
+    Task::withoutEvents(fn () => Task::factory()->create([
+        'created_at' => now()->subWeeks(3),
+    ]));
+
+    // Task completed outside the week
+    Task::withoutEvents(fn () => Task::factory()->done()->create([
+        'created_at' => now()->subWeeks(3),
+        'completed_at' => now()->subWeeks(2),
+    ]));
+
+    $result = $review->tasksCreatedVsCompleted();
+
+    expect($result['created'])->toBe(0)
+        ->and($result['completed'])->toBe(0);
 });

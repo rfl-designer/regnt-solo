@@ -22,6 +22,7 @@ class StartTimerTool extends Tool
     {
         $validated = $request->validate([
             'task_id' => 'required|integer|exists:tasks,id',
+            'focus' => 'nullable|boolean',
         ], [
             'task_id.required' => 'You must provide a task_id. Use list-tasks to find available task IDs.',
             'task_id.exists' => 'Task not found. Use list-tasks to find available task IDs.',
@@ -31,9 +32,12 @@ class StartTimerTool extends Tool
 
         TimeEntry::stopAllRunning();
 
+        $isFocus = $validated['focus'] ?? false;
+
         $entry = TimeEntry::create([
             'task_id' => $task->id,
             'started_at' => now(),
+            'is_focus_session' => $isFocus,
         ]);
 
         $data = [
@@ -41,7 +45,10 @@ class StartTimerTool extends Tool
             'task_title' => $task->title,
             'entry_id' => $entry->id,
             'started_at' => $entry->started_at->toDateTimeString(),
-            'message' => "Timer started for task: {$task->title}",
+            'is_focus_session' => $isFocus,
+            'message' => $isFocus
+                ? "Focus session started for task: {$task->title}"
+                : "Timer started for task: {$task->title}",
         ];
 
         return Response::text(json_encode($data, JSON_PRETTY_PRINT));
@@ -56,6 +63,7 @@ class StartTimerTool extends Tool
     {
         return [
             'task_id' => $schema->integer()->description('The ID of the task to start a timer for.')->required(),
+            'focus' => $schema->boolean()->description('Start as a focus/deep work session. Default: false.'),
         ];
     }
 }

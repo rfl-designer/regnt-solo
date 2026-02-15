@@ -124,3 +124,97 @@ test('renders elapsed time display when running', function () {
     Livewire::test('timer', ['taskId' => $task->id])
         ->assertSeeHtml('x-text="elapsed"');
 });
+
+test('isFocusSession is false when no running entry exists', function () {
+    $task = Task::factory()->create();
+
+    Livewire::test('timer', ['taskId' => $task->id])
+        ->assertSet('isFocusSession', false);
+});
+
+test('isFocusSession is true when running entry is a focus session', function () {
+    $task = Task::factory()->create();
+    TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+
+    Livewire::test('timer', ['taskId' => $task->id])
+        ->assertSet('isFocusSession', true);
+});
+
+test('isFocusSession is false when running entry is not a focus session', function () {
+    $task = Task::factory()->create();
+    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+
+    Livewire::test('timer', ['taskId' => $task->id])
+        ->assertSet('isFocusSession', false);
+});
+
+test('startFocus creates a focus session time entry', function () {
+    $task = Task::factory()->create();
+
+    Livewire::test('timer', ['taskId' => $task->id])
+        ->call('startFocus')
+        ->assertDispatched('timer-updated');
+
+    $entry = TimeEntry::query()->where('task_id', $task->id)->running()->first();
+
+    expect($entry)->not->toBeNull()
+        ->and($entry->is_focus_session)->toBeTrue()
+        ->and($entry->started_at)->not->toBeNull()
+        ->and($entry->stopped_at)->toBeNull();
+});
+
+test('startFocus stops all other running timers', function () {
+    $task = Task::factory()->create();
+    $otherTask = Task::factory()->create();
+    $runningEntry = TimeEntry::factory()->running()->create(['task_id' => $otherTask->id]);
+
+    Livewire::test('timer', ['taskId' => $task->id])
+        ->call('startFocus');
+
+    expect($runningEntry->fresh()->stopped_at)->not->toBeNull();
+    expect(TimeEntry::query()->running()->count())->toBe(1);
+
+    $newEntry = TimeEntry::query()->where('task_id', $task->id)->running()->first();
+    expect($newEntry->is_focus_session)->toBeTrue();
+});
+
+test('start creates a non-focus session time entry', function () {
+    $task = Task::factory()->create();
+
+    Livewire::test('timer', ['taskId' => $task->id])
+        ->call('start');
+
+    $entry = TimeEntry::query()->where('task_id', $task->id)->running()->first();
+
+    expect($entry)->not->toBeNull()
+        ->and($entry->is_focus_session)->toBeFalse();
+});
+
+test('renders focus emoji when running a focus session', function () {
+    $task = Task::factory()->create();
+    TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+
+    Livewire::test('timer', ['taskId' => $task->id])
+        ->assertSee('🎯');
+});
+
+test('renders focus start button when not running', function () {
+    $task = Task::factory()->create();
+
+    Livewire::test('timer', ['taskId' => $task->id])
+        ->assertSeeHtml('Iniciar modo foco');
+});
+
+test('refreshState clears isFocusSession computed', function () {
+    $task = Task::factory()->create();
+    TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+
+    $component = Livewire::test('timer', ['taskId' => $task->id])
+        ->assertSet('isFocusSession', true);
+
+    // Stop the entry externally
+    TimeEntry::query()->running()->update(['stopped_at' => now()]);
+
+    $component->dispatch('timer-updated')
+        ->assertSet('isFocusSession', false);
+});

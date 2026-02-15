@@ -71,3 +71,37 @@ test('renders stop button when timer is active', function () {
     Livewire::test('global-timer')
         ->assertSeeHtml('data-flux-button');
 });
+
+test('shows focus emoji when running a focus session', function () {
+    $task = Task::factory()->create(['title' => 'Focus Task']);
+    TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+
+    Livewire::test('global-timer')
+        ->assertSee('🎯')
+        ->assertSee('Focus Task');
+});
+
+test('shows timer emoji when running a normal session', function () {
+    $task = Task::factory()->create(['title' => 'Normal Task']);
+    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+
+    Livewire::test('global-timer')
+        ->assertSee('⏱')
+        ->assertSee('Normal Task');
+});
+
+test('applies amber styling for focus session task title', function () {
+    $task = Task::factory()->create();
+    TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+
+    Livewire::test('global-timer')
+        ->assertSeeHtml('text-amber-400');
+});
+
+test('does not apply amber styling for normal session', function () {
+    $task = Task::factory()->create();
+    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+
+    Livewire::test('global-timer')
+        ->assertDontSeeHtml('text-amber-400');
+});

@@ -2,6 +2,7 @@
 
 use App\Enums\TaskStatus;
 use App\Models\Task;
+use App\Models\TimeEntry;
 use Carbon\Carbon;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
@@ -9,6 +10,15 @@ use Livewire\Component;
 
 new class extends Component
 {
+    /**
+     * Get total deep work minutes for today.
+     */
+    #[Computed]
+    public function deepWorkToday(): float
+    {
+        return TimeEntry::focusDurationMinutes(Carbon::today());
+    }
+
     /**
      * Calculate average time in each status for tasks completed in the last 30 days.
      *
@@ -97,7 +107,7 @@ new class extends Component
     #[On('task-updated')]
     public function refreshMetrics(): void
     {
-        unset($this->averageTimeByStatus);
+        unset($this->averageTimeByStatus, $this->deepWorkToday);
     }
 }
 
@@ -117,9 +127,15 @@ new class extends Component
                 <flux:icon name="inbox" class="size-8" />
             </div>
         </div>
-        <div class="relative aspect-video overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800/50">
-            <div class="flex h-full items-center justify-center text-zinc-500">
-                <flux:icon name="clock" class="size-8" />
+        <div class="relative overflow-hidden rounded-xl border border-amber-500/20 bg-zinc-800/50 p-5">
+            <div class="flex items-center gap-3">
+                <div class="flex size-10 items-center justify-center rounded-lg bg-amber-500/10">
+                    <span class="text-lg">🎯</span>
+                </div>
+                <div>
+                    <flux:text class="text-xs text-zinc-400">Deep Work hoje</flux:text>
+                    <flux:heading size="lg">{{ $this->formatDuration($this->deepWorkToday) }}</flux:heading>
+                </div>
             </div>
         </div>
     </div>

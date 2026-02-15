@@ -74,6 +74,8 @@ new class extends Component
                 'stopped_at' => $entry->stopped_at?->format('Y-m-d\TH:i') ?? '',
                 'notes' => $entry->notes ?? '',
                 'duration_minutes' => $entry->duration_minutes,
+                'is_focus_session' => (bool) $entry->is_focus_session,
+                'focus_rating' => $entry->focus_rating,
             ])
             ->values()
             ->all();
@@ -364,6 +366,14 @@ new class extends Component
                                     <flux:badge size="sm" color="zinc">
                                         {{ round($entry['duration_minutes']) }}min
                                     </flux:badge>
+                                    @if ($entry['is_focus_session'])
+                                        <flux:badge size="sm" color="amber">
+                                            🎯
+                                        </flux:badge>
+                                        @if ($entry['focus_rating'])
+                                            <span class="text-xs text-amber-400">{{ $entry['focus_rating'] }}⭐</span>
+                                        @endif
+                                    @endif
                                     <flux:button
                                         wire:click="deleteTimeEntry({{ $entry['id'] }})"
                                         variant="ghost"

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\TimeEntry;
 use App\Models\WeeklyReview;
 use Carbon\Carbon;
 use Livewire\Attributes\Computed;
@@ -97,6 +98,79 @@ new class extends Component
     }
 
     /**
+     * Get total focus hours for this week.
+     */
+    #[Computed]
+    public function focusHours(): float
+    {
+        $range = $this->review->weekRange();
+
+        return TimeEntry::query()
+            ->focusSessions()
+            ->whereNotNull('stopped_at')
+            ->whereBetween('started_at', $range)
+            ->get()
+            ->sum('duration_minutes') / 60;
+    }
+
+    /**
+     * Get the focus ratio (% of tracked time that was deep work).
+     */
+    #[Computed]
+    public function focusRatio(): float
+    {
+        $totalHours = $this->totalHours;
+
+        if ($totalHours <= 0) {
+            return 0;
+        }
+
+        return round(($this->focusHours / $totalHours) * 100, 1);
+    }
+
+    /**
+     * Get the average focus rating for this week.
+     */
+    #[Computed]
+    public function averageFocusRating(): ?float
+    {
+        $range = $this->review->weekRange();
+
+        $avg = TimeEntry::query()
+            ->focusSessions()
+            ->whereNotNull('stopped_at')
+            ->whereNotNull('focus_rating')
+            ->whereBetween('started_at', $range)
+            ->avg('focus_rating');
+
+        return $avg !== null ? round((float) $avg, 1) : null;
+    }
+
+    /**
+     * Get the focus streak (consecutive days with 2+ hours of deep work in last 28 days).
+     */
+    #[Computed]
+    public function focusStreak(): int
+    {
+        $streak = 0;
+        $date = Carbon::today();
+
+        for ($i = 0; $i < 28; $i++) {
+            $minutes = TimeEntry::focusDurationMinutes($date);
+
+            if ($minutes >= 120) {
+                $streak++;
+            } else {
+                break;
+            }
+
+            $date = $date->subDay();
+        }
+
+        return $streak;
+    }
+
+    /**
      * Get previous reviews with pre-calculated summary data.
      *
      * @return \Illuminate\Support\Collection<int, array{review: WeeklyReview, completed_count: int, total_hours: float}>
@@ -182,6 +256,10 @@ new class extends Component
             $this->staleTasks,
             $this->tasksCreatedVsCompleted,
             $this->previousReviews,
+            $this->focusHours,
+            $this->focusRatio,
+            $this->averageFocusRating,
+            $this->focusStreak,
         );
 
         $this->reflection = $this->review->reflection ?? '';
@@ -269,6 +347,52 @@ new class extends Component
                 <span class="text-zinc-500">/</span>
                 <span class="{{ $ratioColor }}">{{ $ratio['completed'] }}</span>
             </flux:heading>
+        </div>
+    </div>
+
+    {{-- Deep Work Section --}}
+    <div class="rounded-xl border border-amber-500/20 bg-zinc-800/50 p-5">
+        <div class="mb-4 flex items-center gap-2">
+            <span class="text-lg">🎯</span>
+            <flux:heading size="sm">Deep Work</flux:heading>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {{-- Focus Hours --}}
+            <div class="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
+                <flux:text class="mb-1 text-xs text-zinc-400">Horas de foco</flux:text>
+                <flux:heading size="lg">{{ $this->formatDuration($this->focusHours * 60) }}</flux:heading>
+            </div>
+
+            {{-- Focus Ratio --}}
+            <div class="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
+                <flux:text class="mb-1 text-xs text-zinc-400">Focus ratio</flux:text>
+                <flux:heading size="lg">{{ $this->focusRatio }}%</flux:heading>
+            </div>
+
+            {{-- Average Rating --}}
+            <div class="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
+                <flux:text class="mb-1 text-xs text-zinc-400">Rating médio</flux:text>
+                <flux:heading size="lg">
+                    @if ($this->averageFocusRating !== null)
+                        {{ $this->averageFocusRating }} ⭐
+                    @else
+                        -
+                    @endif
+                </flux:heading>
+            </div>
+
+            {{-- Streak --}}
+            <div class="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
+                <flux:text class="mb-1 text-xs text-zinc-400">Streak (+2h/dia)</flux:text>
+                <flux:heading size="lg">
+                    @if ($this->focusStreak > 0)
+                        🔥 {{ $this->focusStreak }} {{ $this->focusStreak === 1 ? 'dia' : 'dias' }}
+                    @else
+                        0 dias
+                    @endif
+                </flux:heading>
+            </div>
         </div>
     </div>
 

@@ -21,6 +21,9 @@ new class extends Component
     #[Url]
     public string $project = '';
 
+    #[Url]
+    public bool $focusOnly = false;
+
     public function mount(): void
     {
         $this->range = $this->resolveRangeFromPeriod($this->period);
@@ -61,6 +64,11 @@ new class extends Component
         unset($this->entries, $this->entriesByDate, $this->totalMinutes);
     }
 
+    public function updatedFocusOnly(): void
+    {
+        unset($this->entries, $this->entriesByDate, $this->totalMinutes);
+    }
+
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Project>
      */
@@ -84,6 +92,9 @@ new class extends Component
             ])
             ->when($this->project !== '', function ($query): void {
                 $query->whereRelation('task', 'project_id', (int) $this->project);
+            })
+            ->when($this->focusOnly, function ($query): void {
+                $query->where('is_focus_session', true);
             })
             ->with('task.project')
             ->orderBy('started_at', 'desc')
@@ -146,8 +157,8 @@ new class extends Component
     public function generateMarkdown(): string
     {
         $lines = [];
-        $lines[] = '| Data | Task | Projeto | Duração | Notas |';
-        $lines[] = '|------|------|---------|---------|-------|';
+        $lines[] = '| Data | Task | Projeto | Duração | Focus | Notas |';
+        $lines[] = '|------|------|---------|---------|-------|-------|';
 
         foreach ($this->entriesByDate as $date => $entries) {
             $dateFormatted = Carbon::parse($date)->format('d/m/Y');
@@ -156,18 +167,19 @@ new class extends Component
                 $task = $entry->task?->title ?? '-';
                 $project = $entry->task?->project?->name ?? '-';
                 $duration = $this->formatDuration($entry->duration_minutes);
+                $focus = $entry->is_focus_session ? '🎯' : '';
                 $notes = $entry->notes ?? '-';
                 $notes = str_replace('|', '\\|', $notes);
 
-                $lines[] = "| {$dateFormatted} | {$task} | {$project} | {$duration} | {$notes} |";
+                $lines[] = "| {$dateFormatted} | {$task} | {$project} | {$duration} | {$focus} | {$notes} |";
             }
 
             $dayTotal = $this->formatDuration($this->getDayTotal($entries));
-            $lines[] = "| | | **Subtotal** | **{$dayTotal}** | |";
+            $lines[] = "| | | **Subtotal** | **{$dayTotal}** | | |";
         }
 
         $total = $this->formatDuration($this->totalMinutes);
-        $lines[] = "| | | **TOTAL** | **{$total}** | |";
+        $lines[] = "| | | **TOTAL** | **{$total}** | | |";
 
         return implode("\n", $lines);
     }
@@ -231,6 +243,11 @@ new class extends Component
                 </flux:select.option>
             @endforeach
         </flux:select>
+
+        <flux:checkbox
+            wire:model.live="focusOnly"
+            label="Apenas Focus"
+        />
     </div>
 
     {{-- Summary --}}
@@ -266,6 +283,7 @@ new class extends Component
                 <flux:table.column>Task</flux:table.column>
                 <flux:table.column>Projeto</flux:table.column>
                 <flux:table.column>Duração</flux:table.column>
+                <flux:table.column>Focus</flux:table.column>
                 <flux:table.column>Notas</flux:table.column>
             </flux:table.columns>
 
@@ -307,6 +325,17 @@ new class extends Component
                             </flux:table.cell>
 
                             <flux:table.cell>
+                                @if ($entry->is_focus_session)
+                                    <flux:badge size="sm" color="amber">
+                                        🎯 Focus
+                                        @if ($entry->focus_rating)
+                                            <span class="ml-1">{{ $entry->focus_rating }}⭐</span>
+                                        @endif
+                                    </flux:badge>
+                                @endif
+                            </flux:table.cell>
+
+                            <flux:table.cell>
                                 <flux:text class="max-w-xs truncate text-xs text-zinc-400">
                                     {{ $entry->notes ?? '-' }}
                                 </flux:text>
@@ -327,6 +356,7 @@ new class extends Component
                             </flux:badge>
                         </flux:table.cell>
                         <flux:table.cell></flux:table.cell>
+                        <flux:table.cell></flux:table.cell>
                     </flux:table.row>
                 @endforeach
 
@@ -342,6 +372,7 @@ new class extends Component
                             {{ $this->formatDuration($this->totalMinutes) }}
                         </flux:badge>
                     </flux:table.cell>
+                    <flux:table.cell></flux:table.cell>
                     <flux:table.cell></flux:table.cell>
                 </flux:table.row>
             </flux:table.rows>

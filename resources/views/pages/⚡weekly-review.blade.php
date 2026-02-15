@@ -97,16 +97,23 @@ new class extends Component
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, WeeklyReview>
+     * Get previous reviews with pre-calculated summary data.
+     *
+     * @return \Illuminate\Support\Collection<int, array{review: WeeklyReview, completed_count: int, total_hours: float}>
      */
     #[Computed]
-    public function previousReviews(): \Illuminate\Database\Eloquent\Collection
+    public function previousReviews(): \Illuminate\Support\Collection
     {
         return WeeklyReview::query()
             ->where('week_start', '<', $this->weekStart->toDateString())
             ->orderByDesc('week_start')
             ->limit(4)
-            ->get();
+            ->get()
+            ->map(fn (WeeklyReview $review): array => [
+                'review' => $review,
+                'completed_count' => $review->completedTasks()->count(),
+                'total_hours' => $review->totalHours(),
+            ]);
     }
 
     public function previousWeek(): void
@@ -353,9 +360,8 @@ new class extends Component
                                     @endif
 
                                     @php
-                                        $taskMinutes = $task->timeEntries()
+                                        $taskMinutes = $task->timeEntries
                                             ->whereNotNull('stopped_at')
-                                            ->get()
                                             ->sum('duration_minutes');
                                     @endphp
                                     @if ($taskMinutes > 0)
@@ -453,7 +459,8 @@ new class extends Component
 
         @if ($this->previousReviews->isNotEmpty())
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                @foreach ($this->previousReviews as $prevReview)
+                @foreach ($this->previousReviews as $entry)
+                    @php($prevReview = $entry['review'])
                     <button
                         wire:key="history-{{ $prevReview->id }}"
                         wire:click="goToWeek('{{ $prevReview->week_start->toDateString() }}')"
@@ -464,10 +471,10 @@ new class extends Component
                         </flux:text>
                         <div class="mt-1 flex items-center gap-3">
                             <flux:text class="text-xs text-zinc-400">
-                                {{ $prevReview->completedTasks()->count() }} tasks
+                                {{ $entry['completed_count'] }} tasks
                             </flux:text>
                             <flux:text class="text-xs text-zinc-400">
-                                {{ $this->formatDuration($prevReview->totalHours() * 60) }}
+                                {{ $this->formatDuration($entry['total_hours'] * 60) }}
                             </flux:text>
                         </div>
                     </button>

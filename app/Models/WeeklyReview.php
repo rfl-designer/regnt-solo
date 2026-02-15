@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection as SupportCollection;
 
 class WeeklyReview extends Model
 {
@@ -67,7 +68,20 @@ class WeeklyReview extends Model
     }
 
     /**
-     * Get tasks completed during this week, with project eager loaded.
+     * Get the date range boundaries for this week.
+     *
+     * @return array{Carbon, Carbon}
+     */
+    public function weekRange(): array
+    {
+        return [
+            $this->week_start->copy()->startOfDay(),
+            $this->week_end->copy()->endOfDay(),
+        ];
+    }
+
+    /**
+     * Get tasks completed during this week, with project and time entries eager loaded.
      *
      * @return Collection<int, Task>
      */
@@ -75,11 +89,8 @@ class WeeklyReview extends Model
     {
         return Task::query()
             ->where('status', TaskStatus::Done)
-            ->whereBetween('completed_at', [
-                $this->week_start->startOfDay(),
-                Carbon::parse($this->week_end)->endOfDay(),
-            ])
-            ->with('project')
+            ->whereBetween('completed_at', $this->weekRange())
+            ->with(['project', 'timeEntries'])
             ->orderByDesc('completed_at')
             ->get();
     }
@@ -91,10 +102,7 @@ class WeeklyReview extends Model
     {
         return TimeEntry::query()
             ->whereNotNull('stopped_at')
-            ->whereBetween('started_at', [
-                $this->week_start->startOfDay(),
-                Carbon::parse($this->week_end)->endOfDay(),
-            ])
+            ->whereBetween('started_at', $this->weekRange())
             ->get()
             ->sum('duration_minutes') / 60;
     }
@@ -102,20 +110,17 @@ class WeeklyReview extends Model
     /**
      * Get hours grouped by project for this week.
      *
-     * @return \Illuminate\Support\Collection<int, array{project: Project|null, minutes: float}>
+     * @return SupportCollection<int, array{project: Project|null, minutes: float}>
      */
-    public function hoursByProject(): \Illuminate\Support\Collection
+    public function hoursByProject(): SupportCollection
     {
         return TimeEntry::query()
             ->whereNotNull('stopped_at')
-            ->whereBetween('started_at', [
-                $this->week_start->startOfDay(),
-                Carbon::parse($this->week_end)->endOfDay(),
-            ])
+            ->whereBetween('started_at', $this->weekRange())
             ->with('task.project')
             ->get()
             ->groupBy(fn (TimeEntry $entry): int => $entry->task?->project_id ?? 0)
-            ->map(fn (\Illuminate\Support\Collection $entries, int $projectId): array => [
+            ->map(fn (SupportCollection $entries, int $projectId): array => [
                 'project' => $entries->first()->task?->project,
                 'minutes' => $entries->sum('duration_minutes'),
             ])
@@ -130,13 +135,12 @@ class WeeklyReview extends Model
      */
     public function staleTasks(): Collection
     {
+        $range = $this->weekRange();
+
         return Task::query()
             ->active()
             ->where('status', '!=', TaskStatus::Inbox)
-            ->whereDoesntHave('statusChanges', fn (Builder $query) => $query->whereBetween('changed_at', [
-                $this->week_start->startOfDay(),
-                Carbon::parse($this->week_end)->endOfDay(),
-            ]))
+            ->whereDoesntHave('statusChanges', fn (Builder $query) => $query->whereBetween('changed_at', $range))
             ->with('project')
             ->get();
     }
@@ -150,10 +154,7 @@ class WeeklyReview extends Model
     {
         $doneTasks = Task::query()
             ->where('status', TaskStatus::Done)
-            ->whereBetween('completed_at', [
-                $this->week_start->startOfDay(),
-                Carbon::parse($this->week_end)->endOfDay(),
-            ])
+            ->whereBetween('completed_at', $this->weekRange())
             ->with('statusChanges')
             ->get();
 
@@ -188,19 +189,15 @@ class WeeklyReview extends Model
      */
     public function tasksCreatedVsCompleted(): array
     {
+        $range = $this->weekRange();
+
         return [
             'created' => Task::query()
-                ->whereBetween('created_at', [
-                    $this->week_start->startOfDay(),
-                    Carbon::parse($this->week_end)->endOfDay(),
-                ])
+                ->whereBetween('created_at', $range)
                 ->count(),
             'completed' => Task::query()
                 ->where('status', TaskStatus::Done)
-                ->whereBetween('completed_at', [
-                    $this->week_start->startOfDay(),
-                    Carbon::parse($this->week_end)->endOfDay(),
-                ])
+                ->whereBetween('completed_at', $range)
                 ->count(),
         ];
     }

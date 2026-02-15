@@ -1,0 +1,163 @@
+{
+  "feature": "epic-10-mcp-server",
+  "created_at": "2026-02-15",
+  "total_stories": 5,
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Configuracao base do MCP Server com autenticacao por API key",
+      "description": "Como desenvolvedor, quero ter o MCP Server configurado com rota, server class, middleware de autenticacao por API key e config dedicada, para que clientes AI possam se conectar ao SoloBoard de forma segura via protocolo MCP",
+      "complexity": "M",
+      "estimated_hours": 3,
+      "criteria": [
+        "routes/ai.php existe e esta publicado",
+        "routes/ai.php registra server via Mcp::web com middleware mcp.auth",
+        "bootstrap/app.php atualizado com rota ai.php e alias do middleware",
+        "app/Mcp/Servers/SoloBoardServer.php existe e extende Laravel\\Mcp\\Server",
+        "SoloBoardServer define name, version e instructions",
+        "app/Http/Middleware/McpAuth.php valida Authorization: Bearer contra config('soloboard.mcp_key')",
+        "McpAuth retorna 401 JSON quando key ausente ou invalida",
+        "config/soloboard.php existe com chave mcp_key via env",
+        ".env.example atualizado com SOLOBOARD_MCP_KEY",
+        "Request sem key retorna 401",
+        "Request com key valida retorna 200",
+        "Request com key invalida retorna 401",
+        "Teste Feature: autenticacao MCP com cenarios de sucesso e falha"
+      ],
+      "dependencies": [],
+      "order": 1,
+      "status": "done",
+      "type": "core",
+      "files_affected": [
+        "routes/ai.php",
+        "app/Mcp/Servers/SoloBoardServer.php",
+        "app/Http/Middleware/McpAuth.php",
+        "config/soloboard.php",
+        "bootstrap/app.php",
+        ".env.example",
+        "tests/Feature/Mcp/McpAuthTest.php"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "MCP Tools para CRUD completo de Tasks",
+      "description": "Como cliente AI, quero listar, buscar, criar, atualizar e deletar tasks via MCP tools, para gerenciar tasks do SoloBoard diretamente a partir de um assistente AI",
+      "complexity": "G",
+      "estimated_hours": 5,
+      "criteria": [
+        "ListTasksTool com filtros por status, project_slug e limit, anotado com IsReadOnly e IsIdempotent",
+        "ListTasksTool retorna lista com id, title, status, priority, project, due_date, is_overdue, is_running",
+        "GetTaskTool retorna task completa com project, timeEntries e dailyPlans",
+        "GetTaskTool retorna erro quando task nao encontrada",
+        "CreateTaskTool cria task com status=inbox padrao, resolve project_slug para project_id",
+        "CreateTaskTool valida titulo obrigatorio e slug invalido",
+        "UpdateTaskTool chama markAsDone() ao mover para done, limpa completed_at ao sair de done",
+        "UpdateTaskTool retorna erro quando task nao encontrada",
+        "DeleteTaskTool deleta task com cascade de time entries, anotado com IsDestructive",
+        "Todas as 5 tools registradas no SoloBoardServer",
+        "Testes: CRUD completo com cenarios de sucesso, erro e validacao"
+      ],
+      "dependencies": ["US-001"],
+      "order": 2,
+      "status": "done",
+      "type": "core",
+      "files_affected": [
+        "app/Mcp/Tools/ListTasksTool.php",
+        "app/Mcp/Tools/GetTaskTool.php",
+        "app/Mcp/Tools/CreateTaskTool.php",
+        "app/Mcp/Tools/UpdateTaskTool.php",
+        "app/Mcp/Tools/DeleteTaskTool.php",
+        "app/Mcp/Servers/SoloBoardServer.php",
+        "tests/Feature/Mcp/TaskToolsTest.php"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "MCP Tools para controle de Timer (start/stop/status)",
+      "description": "Como cliente AI, quero iniciar, parar e consultar o status do timer via MCP tools, para controlar o rastreamento de tempo das tasks sem sair do assistente AI",
+      "complexity": "M",
+      "estimated_hours": 3,
+      "criteria": [
+        "StartTimerTool para todos timers rodando antes de iniciar novo via TimeEntry::stopAllRunning()",
+        "StartTimerTool cria TimeEntry com started_at=now(), stopped_at=null, task_id e notes",
+        "StartTimerTool retorna erro quando task nao encontrada",
+        "StopTimerTool encontra timer rodando e atualiza stopped_at=now() com notes opcionais",
+        "StopTimerTool retorna mensagem informativa quando nao ha timer rodando",
+        "TimerStatusTool retorna info do timer ativo ou mensagem de nenhum timer ativo",
+        "TimerStatusTool anotado com IsReadOnly e IsIdempotent",
+        "Todas as 3 tools registradas no SoloBoardServer",
+        "Testes: start, status ativo, stop com notas, status sem timer, start com task inexistente"
+      ],
+      "dependencies": ["US-001"],
+      "order": 3,
+      "status": "done",
+      "type": "core",
+      "files_affected": [
+        "app/Mcp/Tools/StartTimerTool.php",
+        "app/Mcp/Tools/StopTimerTool.php",
+        "app/Mcp/Tools/TimerStatusTool.php",
+        "app/Mcp/Servers/SoloBoardServer.php",
+        "tests/Feature/Mcp/TimerToolsTest.php"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "MCP Tools para Daily Plan e Projects",
+      "description": "Como cliente AI, quero consultar o plano do dia, sugerir tasks prioritarias, adicionar tasks ao plano e listar projetos via MCP tools, para ajudar no planejamento diario e na organizacao de projetos",
+      "complexity": "M",
+      "estimated_hours": 4,
+      "criteria": [
+        "TodayPlanTool retorna plano de hoje com tasks, completion_rate e notes (cria se nao existe)",
+        "TodayPlanTool usa eager loading de tasks.project para evitar N+1",
+        "SuggestTasksTool retorna tasks prioritarias: overdue > doing > todo, com limit configuravel",
+        "SuggestTasksTool exclui tasks inbox e done",
+        "AddToPlanTool adiciona task ao plano de hoje com sort_order sequencial",
+        "AddToPlanTool retorna erro se task ja esta no plano ou nao encontrada",
+        "ListProjectsTool retorna projetos filtrados por status com task_count, ordenados por prioridade",
+        "ListProjectsTool anotado com IsReadOnly e IsIdempotent",
+        "Todas as 4 tools registradas no SoloBoardServer",
+        "Testes: plano de hoje, sugestao de tasks, adicionar ao plano, listar projetos"
+      ],
+      "dependencies": ["US-001"],
+      "order": 4,
+      "status": "done",
+      "type": "core",
+      "files_affected": [
+        "app/Mcp/Tools/TodayPlanTool.php",
+        "app/Mcp/Tools/SuggestTasksTool.php",
+        "app/Mcp/Tools/AddToPlanTool.php",
+        "app/Mcp/Tools/ListProjectsTool.php",
+        "app/Mcp/Servers/SoloBoardServer.php",
+        "tests/Feature/Mcp/DailyPlanToolsTest.php",
+        "tests/Feature/Mcp/ProjectToolsTest.php"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "MCP Resource ProjectOverview, Prompt DailyPlanning e documentacao CLAUDE.md",
+      "description": "Como cliente AI, quero acessar um resource com overview do estado atual do SoloBoard e um prompt para planejamento diario, para ter contexto completo e orientacao estruturada",
+      "complexity": "P",
+      "estimated_hours": 2,
+      "criteria": [
+        "ProjectOverviewResource retorna resumo textual com totais por status, overdue, timer ativo, plano de hoje e projetos ativos",
+        "ProjectOverviewResource usa queries eficientes com aggregates",
+        "DailyPlanningPrompt retorna mensagens de sistema e usuario com contexto real do banco",
+        "Resource e Prompt registrados no SoloBoardServer",
+        "CLAUDE.md atualizado com secao MCP Server: endpoint, API key, tools, exemplo de config",
+        "Teste: resource retorna overview com dados corretos",
+        "Teste: prompt retorna mensagens com contexto real"
+      ],
+      "dependencies": ["US-002", "US-003", "US-004"],
+      "order": 5,
+      "status": "done",
+      "type": "core",
+      "files_affected": [
+        "app/Mcp/Resources/ProjectOverviewResource.php",
+        "app/Mcp/Prompts/DailyPlanningPrompt.php",
+        "app/Mcp/Servers/SoloBoardServer.php",
+        "CLAUDE.md",
+        "tests/Feature/Mcp/ResourceAndPromptTest.php"
+      ]
+    }
+  ]
+}

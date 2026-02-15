@@ -29,7 +29,7 @@ class GetTaskTool extends Tool
         ]);
 
         $task = Task::query()
-            ->with(['project', 'timeEntries', 'dailyPlans'])
+            ->with(['project', 'timeEntries', 'dailyPlans', 'statusChanges'])
             ->findOrFail($validated['task_id']);
 
         $data = [
@@ -59,10 +59,40 @@ class GetTaskTool extends Tool
                 'id' => $plan->id,
                 'date' => $plan->date->toDateString(),
             ])->all(),
+            'status_timeline' => $this->buildStatusTimeline($task),
+            'time_in_status' => $task->time_in_status,
+            'current_status_duration_minutes' => $task->current_status_duration,
             'created_at' => $task->created_at->toDateTimeString(),
         ];
 
         return Response::text(json_encode($data, JSON_PRETTY_PRINT));
+    }
+
+    /**
+     * Build the status timeline array from the task's status changes.
+     *
+     * @return array<int, array{from_status: string|null, to_status: string, changed_at: string, duration_minutes: float}>
+     */
+    private function buildStatusTimeline(Task $task): array
+    {
+        $changes = $task->statusChanges->sortBy('changed_at')->values();
+
+        return $changes->map(function ($change, int $index) use ($changes): array {
+            $start = $change->changed_at;
+
+            if ($index + 1 < $changes->count()) {
+                $end = $changes[$index + 1]->changed_at;
+            } else {
+                $end = now();
+            }
+
+            return [
+                'from_status' => $change->from_status?->value,
+                'to_status' => $change->to_status->value,
+                'changed_at' => $change->changed_at->toDateTimeString(),
+                'duration_minutes' => round($start->diffInMinutes($end), 2),
+            ];
+        })->all();
     }
 
     /**

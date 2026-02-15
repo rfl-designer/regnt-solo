@@ -1,10 +1,104 @@
 <?php
 
+use App\Enums\TaskStatus;
+use App\Models\Task;
+use Carbon\Carbon;
+use Livewire\Attributes\Computed;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 new class extends Component
 {
-    //
+    /**
+     * Calculate average time in each status for tasks completed in the last 30 days.
+     *
+     * @return array<string, array{label: string, avg_minutes: float, formatted: string, color: string, hex_color: string}>
+     */
+    #[Computed]
+    public function averageTimeByStatus(): array
+    {
+        $doneTasks = Task::query()
+            ->where('status', TaskStatus::Done)
+            ->where('completed_at', '>=', Carbon::now()->subDays(30))
+            ->with('statusChanges')
+            ->get();
+
+        if ($doneTasks->isEmpty()) {
+            return [];
+        }
+
+        $totals = [];
+        $counts = [];
+
+        foreach (TaskStatus::cases() as $status) {
+            $totals[$status->value] = 0.0;
+            $counts[$status->value] = 0;
+        }
+
+        foreach ($doneTasks as $task) {
+            $timeInStatus = $task->time_in_status;
+
+            foreach ($timeInStatus as $statusValue => $minutes) {
+                if ($minutes > 0) {
+                    $totals[$statusValue] += $minutes;
+                    $counts[$statusValue]++;
+                }
+            }
+        }
+
+        $averages = [];
+
+        foreach (TaskStatus::cases() as $status) {
+            $count = $counts[$status->value];
+
+            if ($count === 0) {
+                continue;
+            }
+
+            $avgMinutes = $totals[$status->value] / $count;
+
+            $averages[$status->value] = [
+                'label' => $status->label(),
+                'avg_minutes' => round($avgMinutes, 1),
+                'formatted' => $this->formatDuration($avgMinutes),
+                'color' => $status->color(),
+                'hex_color' => $status->hexColor(),
+            ];
+        }
+
+        return $averages;
+    }
+
+    /**
+     * Format minutes into a human-readable duration string.
+     */
+    public function formatDuration(float $minutes): string
+    {
+        if ($minutes <= 0) {
+            return '0m';
+        }
+
+        $totalMinutes = (int) round($minutes);
+        $days = intdiv($totalMinutes, 1440);
+        $hours = intdiv($totalMinutes % 1440, 60);
+        $mins = $totalMinutes % 60;
+
+        if ($days > 0) {
+            return "{$days}d {$hours}h {$mins}m";
+        }
+
+        if ($hours > 0) {
+            return "{$hours}h {$mins}m";
+        }
+
+        return "{$mins}m";
+    }
+
+    #[On('task-updated')]
+    public function refreshMetrics(): void
+    {
+        unset($this->averageTimeByStatus);
+    }
 }
 
 ?>
@@ -30,10 +124,41 @@ new class extends Component
         </div>
     </div>
 
+    {{-- Average Time by Status Section --}}
+    <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-5">
+        <div class="mb-4 flex items-center gap-2">
+            <flux:icon name="chart-bar" class="size-5 text-zinc-400" />
+            <flux:heading size="sm">Tempo médio por status</flux:heading>
+            <flux:text class="text-xs text-zinc-500">(últimos 30 dias)</flux:text>
+        </div>
+
+        @if (count($this->averageTimeByStatus) > 0)
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+                @foreach ($this->averageTimeByStatus as $statusValue => $data)
+                    <div class="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
+                        <div class="mb-1 flex items-center gap-1.5">
+                            <div class="size-2.5 rounded-full" style="background-color: {{ $data['hex_color'] }};"></div>
+                            <flux:text class="text-xs text-zinc-400">{{ $data['label'] }}</flux:text>
+                        </div>
+                        <flux:heading size="sm">{{ $data['formatted'] }}</flux:heading>
+                    </div>
+                @endforeach
+            </div>
+        @else
+            <div class="flex items-center justify-center py-6 text-center">
+                <div>
+                    <flux:icon name="clock" class="mx-auto mb-2 size-8 text-zinc-600" />
+                    <flux:text class="text-sm text-zinc-500">Sem dados suficientes</flux:text>
+                    <flux:text class="text-xs text-zinc-600">Conclua tasks para ver métricas de tempo.</flux:text>
+                </div>
+            </div>
+        @endif
+    </div>
+
     <div class="relative h-full flex-1 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800/50">
         <div class="flex h-full min-h-48 items-center justify-center text-zinc-500">
             <div class="text-center">
-                <flux:icon name="squares-2x2" class="mx-auto size-12 mb-3" />
+                <flux:icon name="squares-2x2" class="mx-auto mb-3 size-12" />
                 <flux:heading size="lg">Bem-vindo ao SoloBoard</flux:heading>
                 <flux:text class="mt-1">Seu painel de gestão pessoal de projetos.</flux:text>
             </div>

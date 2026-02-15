@@ -39,6 +39,20 @@ enum TaskStatus: string
     }
 
     /**
+     * Get the hex color for inline styles (e.g., segmented bars).
+     */
+    public function hexColor(): string
+    {
+        return match ($this) {
+            self::Inbox => '#a1a1aa',   // zinc-400
+            self::Backlog => '#94a3b8', // slate-400
+            self::Todo => '#60a5fa',    // blue-400
+            self::Doing => '#fbbf24',   // amber-400
+            self::Done => '#34d399',    // emerald-400
+        };
+    }
+
+    /**
      * Get the icon associated with this status.
      */
     public function icon(): string

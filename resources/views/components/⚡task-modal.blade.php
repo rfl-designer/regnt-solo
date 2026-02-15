@@ -35,6 +35,9 @@ new class extends Component
     /** @var array<int, array{id: int, started_at: string, stopped_at: string|null, notes: string|null}> */
     public array $timeEntries = [];
 
+    /** @var array<string, array{label: string, minutes: float, color: string, hex_color: string, percentage: float}> */
+    public array $statusTimeSegments = [];
+
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Project>
      */
@@ -47,7 +50,7 @@ new class extends Component
     #[On('open-task-modal')]
     public function openTask(int $taskId): void
     {
-        $task = Task::with('timeEntries')->findOrFail($taskId);
+        $task = Task::with(['timeEntries', 'statusChanges'])->findOrFail($taskId);
 
         $this->taskId = $task->id;
         $this->title = $task->title;
@@ -70,8 +73,74 @@ new class extends Component
             ->values()
             ->all();
 
+        $this->statusTimeSegments = $this->buildStatusTimeSegments($task);
+
         $this->showModal = true;
         $this->showDeleteConfirm = false;
+    }
+
+    /**
+     * Build the segmented bar data from the task's time_in_status accessor.
+     *
+     * @return array<string, array{label: string, minutes: float, color: string, hex_color: string, percentage: float}>
+     */
+    private function buildStatusTimeSegments(Task $task): array
+    {
+        if ($task->statusChanges->count() <= 1) {
+            return [];
+        }
+
+        $timeInStatus = $task->time_in_status;
+        $totalMinutes = array_sum($timeInStatus);
+
+        if ($totalMinutes <= 0) {
+            return [];
+        }
+
+        $segments = [];
+
+        foreach (TaskStatus::cases() as $status) {
+            $minutes = $timeInStatus[$status->value] ?? 0.0;
+
+            if ($minutes <= 0) {
+                continue;
+            }
+
+            $segments[$status->value] = [
+                'label' => $status->label(),
+                'minutes' => $minutes,
+                'color' => $status->color(),
+                'hex_color' => $status->hexColor(),
+                'percentage' => round(($minutes / $totalMinutes) * 100, 1),
+            ];
+        }
+
+        return $segments;
+    }
+
+    /**
+     * Format minutes into a human-readable duration string (Xd Xh Xm).
+     */
+    public static function formatDuration(float $minutes): string
+    {
+        if ($minutes <= 0) {
+            return '0m';
+        }
+
+        $totalMinutes = (int) round($minutes);
+        $days = intdiv($totalMinutes, 1440);
+        $hours = intdiv($totalMinutes % 1440, 60);
+        $mins = $totalMinutes % 60;
+
+        if ($days > 0) {
+            return "{$days}d {$hours}h {$mins}m";
+        }
+
+        if ($hours > 0) {
+            return "{$hours}h {$mins}m";
+        }
+
+        return "{$mins}m";
     }
 
     public function saveTask(): void
@@ -280,6 +349,41 @@ new class extends Component
                                         wire:confirm="Remover esta entrada de tempo?"
                                     />
                                 </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            {{-- Status Time Section --}}
+            @if (count($statusTimeSegments) > 0)
+                <div class="space-y-3">
+                    <flux:heading size="sm">Tempo por Status</flux:heading>
+
+                    {{-- Segmented Bar --}}
+                    <div class="flex h-6 w-full overflow-hidden rounded-lg">
+                        @foreach ($statusTimeSegments as $statusValue => $segment)
+                            <flux:tooltip :content="$segment['label'] . ': ' . static::formatDuration($segment['minutes'])" position="top">
+                                <div
+                                    class="flex h-full items-center justify-center text-[10px] font-medium text-white transition-all"
+                                    style="width: {{ $segment['percentage'] }}%; background-color: {{ $segment['hex_color'] }}; min-width: {{ $segment['percentage'] >= 5 ? '0' : '12' }}px;"
+                                >
+                                    @if ($segment['percentage'] >= 10)
+                                        {{ round($segment['percentage']) }}%
+                                    @endif
+                                </div>
+                            </flux:tooltip>
+                        @endforeach
+                    </div>
+
+                    {{-- Legend --}}
+                    <div class="flex flex-wrap gap-3">
+                        @foreach ($statusTimeSegments as $statusValue => $segment)
+                            <div class="flex items-center gap-1.5">
+                                <div class="size-2.5 rounded-full" style="background-color: {{ $segment['hex_color'] }};"></div>
+                                <flux:text class="text-xs">
+                                    {{ $segment['label'] }}: {{ static::formatDuration($segment['minutes']) }}
+                                </flux:text>
                             </div>
                         @endforeach
                     </div>

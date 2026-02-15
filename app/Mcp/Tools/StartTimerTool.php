@@ -29,10 +29,8 @@ class StartTimerTool extends Tool
 
         $task = Task::findOrFail($validated['task_id']);
 
-        // Stop all running timers first
         TimeEntry::stopAllRunning();
 
-        // Create new time entry
         $entry = TimeEntry::create([
             'task_id' => $task->id,
             'started_at' => now(),
@@ -52,7 +50,7 @@ class StartTimerTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\JsonSchema\Types\Type>
+     * @return array<string, \Illuminate\Contracts\JsonSchema\JsonSchema>
      */
     public function schema(JsonSchema $schema): array
     {

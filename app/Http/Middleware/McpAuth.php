@@ -16,9 +16,9 @@ class McpAuth
             abort(403, 'MCP API key not configured.');
         }
 
-        $token = $request->bearerToken();
+        $token = $request->bearerToken() ?? '';
 
-        if ($token !== $key) {
+        if (! hash_equals($key, $token)) {
             abort(401, 'Invalid MCP API key.');
         }
 

@@ -31,7 +31,6 @@ class AddToPlanTool extends Tool
         $task = Task::findOrFail($validated['task_id']);
         $plan = DailyPlan::getOrCreateForDate(Carbon::today());
 
-        // Check if task is already in the plan
         if ($plan->tasks()->where('tasks.id', $task->id)->exists()) {
             return Response::text(json_encode([
                 'added' => false,
@@ -61,7 +60,7 @@ class AddToPlanTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\Contracts\JsonSchema\JsonSchema>
+     * @return array<string, \Illuminate\JsonSchema\Types\Type>
      */
     public function schema(JsonSchema $schema): array
     {

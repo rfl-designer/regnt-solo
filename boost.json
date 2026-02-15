@@ -12,6 +12,7 @@
     ],
     "sail": false,
     "skills": [
+        "mcp-development",
         "fluxui-development",
         "livewire-development",
         "pest-testing",

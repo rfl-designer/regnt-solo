@@ -24,14 +24,20 @@ class ProjectOverviewResource extends Resource
      */
     public function handle(Request $request): Response
     {
+        $withCounts = [];
+        foreach (TaskStatus::cases() as $status) {
+            $withCounts["tasks as tasks_{$status->value}_count"] = fn ($q) => $q->where('status', $status);
+        }
+
         $projects = Project::query()
             ->active()
             ->ordered()
+            ->withCount($withCounts)
             ->get()
             ->map(function (Project $project) {
                 $taskCounts = [];
                 foreach (TaskStatus::cases() as $status) {
-                    $count = $project->tasks()->where('status', $status)->count();
+                    $count = (int) $project->{"tasks_{$status->value}_count"};
                     if ($count > 0) {
                         $taskCounts[$status->value] = $count;
                     }

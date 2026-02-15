@@ -42,7 +42,6 @@ class UpdateTaskTool extends Tool
 
         $task = Task::findOrFail($validated['task_id']);
 
-        // If status is being changed to done, use markAsDone()
         if (isset($validated['status']) && $validated['status'] === TaskStatus::Done->value && $task->status !== TaskStatus::Done) {
             $task->markAsDone();
             $task->refresh();
@@ -104,7 +103,7 @@ class UpdateTaskTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\JsonSchema\Types\Type>
+     * @return array<string, \Illuminate\Contracts\JsonSchema\JsonSchema>
      */
     public function schema(JsonSchema $schema): array
     {

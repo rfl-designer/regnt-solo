@@ -31,6 +31,9 @@
                     <flux:sidebar.item icon="clock" :href="route('time')" :current="request()->routeIs('time')" wire:navigate>
                         Tempo
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="clipboard-document-check" :href="route('review')" :current="request()->routeIs('review')" wire:navigate>
+                        Review
+                    </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 

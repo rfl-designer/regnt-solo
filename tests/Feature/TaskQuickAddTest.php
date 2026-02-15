@@ -151,3 +151,48 @@ test('can create task with priority urgent', function () {
     $task = Task::first();
     expect($task->priority)->toBe(TaskPriority::Urgent);
 });
+
+test('quick add creates session task with > prefix', function () {
+    Livewire::test('task-quick-add')
+        ->set('rawInput', '>Implementar autenticação com OAuth')
+        ->call('createTask');
+
+    expect(Task::count())->toBe(1);
+
+    $task = Task::first();
+    expect($task->session_prompt)->toBe('Implementar autenticação com OAuth');
+    expect($task->title)->toBe('Implementar autenticação com OAuth');
+});
+
+test('quick add creates session task via checkbox mode', function () {
+    Livewire::test('task-quick-add')
+        ->set('rawInput', 'Refatorar módulo de pagamentos')
+        ->set('isSessionMode', true)
+        ->set('sessionPromptInput', 'Refatorar o módulo de pagamentos para usar Stripe SDK v3')
+        ->call('createTask');
+
+    expect(Task::count())->toBe(1);
+
+    $task = Task::first();
+    expect($task->session_prompt)->toBe('Refatorar o módulo de pagamentos para usar Stripe SDK v3');
+    expect($task->title)->toBe('Refatorar módulo de pagamentos');
+});
+
+test('quick add resets session fields after creating task', function () {
+    Livewire::test('task-quick-add')
+        ->set('rawInput', 'Tarefa normal')
+        ->set('isSessionMode', true)
+        ->set('sessionPromptInput', 'Some prompt')
+        ->call('createTask')
+        ->assertSet('isSessionMode', false)
+        ->assertSet('sessionPromptInput', '');
+});
+
+test('quick add creates normal task without > prefix', function () {
+    Livewire::test('task-quick-add')
+        ->set('rawInput', 'Tarefa normal sem sessão')
+        ->call('createTask');
+
+    $task = Task::first();
+    expect($task->session_prompt)->toBeNull();
+});

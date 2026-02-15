@@ -19,6 +19,10 @@ new class extends Component
 
     public ?string $selectedDueDate = null;
 
+    public bool $isSessionMode = false;
+
+    public string $sessionPromptInput = '';
+
     public string $activePrefix = '';
 
     public string $prefixSearch = '';
@@ -116,6 +120,18 @@ new class extends Component
 
         $title = trim(preg_replace('/[#!@]\S+/', '', $input));
 
+        // Detectar session prompt (prefixo >)
+        $sessionPrompt = null;
+        if (str_starts_with($title, '>')) {
+            $sessionPrompt = trim(substr($title, 1));
+            $title = Str::limit($sessionPrompt, 80);
+        }
+
+        // Ou via checkbox mode
+        if ($this->isSessionMode && $this->sessionPromptInput) {
+            $sessionPrompt = $this->sessionPromptInput;
+        }
+
         if ($title === '') {
             return;
         }
@@ -143,13 +159,14 @@ new class extends Component
             'status' => TaskStatus::Inbox,
             'priority' => $taskPriority ?? TaskPriority::Medium,
             'due_date' => $dueDate,
+            'session_prompt' => $sessionPrompt,
         ]);
 
         Flux::toast(variant: 'success', heading: 'Task criada', text: $title);
 
         $this->dispatch('task-created');
 
-        $this->reset('rawInput', 'selectedProjectId', 'selectedPriority', 'selectedDueDate', 'activePrefix', 'prefixSearch');
+        $this->reset('rawInput', 'selectedProjectId', 'selectedPriority', 'selectedDueDate', 'activePrefix', 'prefixSearch', 'isSessionMode', 'sessionPromptInput');
 
         Flux::modal('quick-add')->close();
     }
@@ -287,6 +304,20 @@ new class extends Component
                         <flux:badge size="sm" color="emerald" icon="calendar-days">{{ $m[1] }}</flux:badge>
                     @endif
                 </div>
+            @endif
+
+            {{-- Sessão de Dev --}}
+            <div class="flex items-center gap-2">
+                <flux:checkbox wire:model.live="isSessionMode" />
+                <flux:text size="sm" class="text-zinc-400">Sessão de Dev</flux:text>
+            </div>
+
+            @if ($isSessionMode)
+                <flux:textarea
+                    wire:model="sessionPromptInput"
+                    rows="3"
+                    placeholder="Descreva o que o AI deve implementar..."
+                />
             @endif
 
             <div class="flex justify-end gap-2">

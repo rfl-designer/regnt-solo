@@ -302,22 +302,29 @@ new class extends Component
                                             </flux:badge>
                                         @endif
 
-                                        {{-- Commits Badge --}}
-                                        @if ($task->commits_count > 0)
-                                            <flux:badge size="sm" color="zinc" icon="code-bracket">
-                                                {{ $task->commits_count }} {{ $task->commits_count === 1 ? 'commit' : 'commits' }}
-                                            </flux:badge>
-                                        @endif
-                                    </div>
-                                </div>
-                            </li>
-                        @empty
-                            @if ($unassignedTasks->isEmpty())
-                                <li class="py-8 text-center text-sm text-zinc-600">
-                                    Nenhuma task
-                                </li>
-                            @endif
-                        @endforelse
+                                                    {{-- Commits Badge --}}
+                                                        @if ($task->commits_count > 0)
+                                                            <flux:badge size="sm" color="zinc" icon="code-bracket">
+                                                                {{ $task->commits_count }} {{ $task->commits_count === 1 ? 'commit' : 'commits' }}
+                                                            </flux:badge>
+                                                        @endif
+
+                                                        {{-- Session Badge --}}
+                                                        @if ($task->isSessionTask())
+                                                            <flux:badge size="sm" color="violet" class="gap-1">
+                                                                🤖 Sessão
+                                                            </flux:badge>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        @empty
+                                            @if ($unassignedTasks->isEmpty())
+                                                <li class="py-8 text-center text-sm text-zinc-600">
+                                                    Nenhuma task
+                                                </li>
+                                            @endif
+                                        @endforelse
                     </ul>
 
                     {{-- Unassigned Tasks Section --}}
@@ -379,6 +386,13 @@ new class extends Component
                                                 @if ($task->commits_count > 0)
                                                     <flux:badge size="sm" color="zinc" icon="code-bracket">
                                                         {{ $task->commits_count }} {{ $task->commits_count === 1 ? 'commit' : 'commits' }}
+                                                    </flux:badge>
+                                                @endif
+
+                                                {{-- Session Badge --}}
+                                                @if ($task->isSessionTask())
+                                                    <flux:badge size="sm" color="violet" class="gap-1">
+                                                        🤖 Sessão
                                                     </flux:badge>
                                                 @endif
                                             </div>

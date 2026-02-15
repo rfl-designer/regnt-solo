@@ -15,6 +15,10 @@ new class extends Component
 
     public string $taskName = '';
 
+    public bool $isFocusSession = false;
+
+    public ?int $focusRating = null;
+
     /**
      * Open the modal and load the time entry data.
      */
@@ -26,6 +30,8 @@ new class extends Component
         $this->entryId = $entry->id;
         $this->taskName = $entry->task->title ?? '';
         $this->notes = '';
+        $this->isFocusSession = (bool) $entry->is_focus_session;
+        $this->focusRating = null;
         $this->showModal = true;
     }
 
@@ -36,10 +42,16 @@ new class extends Component
     {
         $entry = TimeEntry::findOrFail($this->entryId);
 
-        $entry->update([
+        $data = [
             'stopped_at' => now(),
             'notes' => $this->notes,
-        ]);
+        ];
+
+        if ($this->isFocusSession && $this->focusRating !== null) {
+            $data['focus_rating'] = $this->focusRating;
+        }
+
+        $entry->update($data);
 
         $this->showModal = false;
 
@@ -55,9 +67,13 @@ new class extends Component
     {
         $entry = TimeEntry::findOrFail($this->entryId);
 
-        $entry->update([
-            'stopped_at' => now(),
-        ]);
+        $data = ['stopped_at' => now()];
+
+        if ($this->isFocusSession && $this->focusRating !== null) {
+            $data['focus_rating'] = $this->focusRating;
+        }
+
+        $entry->update($data);
 
         $this->showModal = false;
 
@@ -74,8 +90,31 @@ new class extends Component
         <div class="space-y-6">
             <div>
                 <flux:heading size="lg">Notas do Timer</flux:heading>
-                <flux:text class="mt-1">{{ $taskName }}</flux:text>
+                <flux:text class="mt-1">
+                    @if ($isFocusSession)
+                        <span class="mr-1">🎯</span>
+                    @endif
+                    {{ $taskName }}
+                </flux:text>
             </div>
+
+            {{-- Focus Rating --}}
+            @if ($isFocusSession)
+                <div class="space-y-2">
+                    <flux:text class="text-sm font-medium text-zinc-300">Como foi a sessão?</flux:text>
+                    <div class="flex items-center gap-1">
+                        @for ($i = 1; $i <= 5; $i++)
+                            <button
+                                type="button"
+                                wire:click="$set('focusRating', {{ $i }})"
+                                class="text-2xl transition-transform hover:scale-110 {{ $focusRating !== null && $focusRating >= $i ? 'opacity-100' : 'opacity-30' }}"
+                            >
+                                ⭐
+                            </button>
+                        @endfor
+                    </div>
+                </div>
+            @endif
 
             <flux:textarea
                 wire:model="notes"

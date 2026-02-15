@@ -24,6 +24,8 @@ class TimeEntry extends Model
         'started_at',
         'stopped_at',
         'notes',
+        'is_focus_session',
+        'focus_rating',
     ];
 
     /**
@@ -36,6 +38,8 @@ class TimeEntry extends Model
         return [
             'started_at' => 'datetime',
             'stopped_at' => 'datetime',
+            'is_focus_session' => 'boolean',
+            'focus_rating' => 'integer',
         ];
     }
 
@@ -84,6 +88,49 @@ class TimeEntry extends Model
             Carbon::now()->startOfWeek(),
             Carbon::now()->endOfWeek(),
         ]);
+    }
+
+    /**
+     * Scope to only focus sessions.
+     */
+    public function scopeFocusSessions(Builder $query): void
+    {
+        $query->where('is_focus_session', true);
+    }
+
+    /**
+     * Scope to focus sessions for a specific date.
+     */
+    public function scopeFocusForDate(Builder $query, Carbon $date): void
+    {
+        $query->focusSessions()->whereDate('started_at', $date);
+    }
+
+    /**
+     * Scope to focus sessions for the current week.
+     */
+    public function scopeFocusForWeek(Builder $query): void
+    {
+        $query->focusSessions()->whereBetween('started_at', [
+            Carbon::now()->startOfWeek(),
+            Carbon::now()->endOfWeek(),
+        ]);
+    }
+
+    /**
+     * Get the total focus duration in minutes for a query scope.
+     */
+    public static function focusDurationMinutes(?Carbon $date = null): float
+    {
+        $query = static::query()
+            ->focusSessions()
+            ->whereNotNull('stopped_at');
+
+        if ($date !== null) {
+            $query->whereDate('started_at', $date);
+        }
+
+        return $query->get()->sum('duration_minutes');
     }
 
     /**

@@ -252,6 +252,25 @@ class Task extends Model
     }
 
     /**
+     * Get the total focus minutes for this task.
+     */
+    public function totalFocusMinutes(): float
+    {
+        if ($this->relationLoaded('timeEntries')) {
+            return $this->timeEntries
+                ->where('is_focus_session', true)
+                ->whereNotNull('stopped_at')
+                ->sum('duration_minutes');
+        }
+
+        return $this->timeEntries()
+            ->focusSessions()
+            ->whereNotNull('stopped_at')
+            ->get()
+            ->sum('duration_minutes');
+    }
+
+    /**
      * Mark the task as done.
      */
     public function markAsDone(): void

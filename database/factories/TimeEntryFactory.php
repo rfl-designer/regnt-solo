@@ -40,4 +40,25 @@ class TimeEntryFactory extends Factory
             'stopped_at' => null,
         ]);
     }
+
+    /**
+     * Indicate that the time entry is a focus session.
+     */
+    public function focus(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_focus_session' => true,
+        ]);
+    }
+
+    /**
+     * Indicate that the time entry is a focus session with a rating.
+     */
+    public function focusWithRating(int $rating = 4): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_focus_session' => true,
+            'focus_rating' => $rating,
+        ]);
+    }
 }

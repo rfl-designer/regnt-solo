@@ -47,7 +47,7 @@ class SoloBoardServer extends Server
      * @var array<int, class-string<\Laravel\Mcp\Server\Resource>>
      */
     protected array $resources = [
-        //
+        \App\Mcp\Resources\ProjectOverviewResource::class,
     ];
 
     /**
@@ -56,6 +56,6 @@ class SoloBoardServer extends Server
      * @var array<int, class-string<\Laravel\Mcp\Server\Prompt>>
      */
     protected array $prompts = [
-        //
+        \App\Mcp\Prompts\DailyPlanningPrompt::class,
     ];
 }

@@ -81,6 +81,28 @@ Ignorar quando foco em `input`/`textarea`/`select`/`[contenteditable]`.
 - Empty states com ícone + texto + CTA + dica de atalho
 - Deletar sempre com confirmação via `<flux:modal>`
 
+## MCP Server
+
+O SoloBoard expõe um MCP Server para integração com AI clients (Claude Code, Cursor, etc.).
+
+- **Configurar**: `claude mcp add --transport http soloboard http://regnt.test/mcp`
+- **Header**: `Authorization: Bearer {SOLOBOARD_MCP_KEY}` (definido no `.env`)
+- **Tools disponíveis**:
+  - `list-tasks` — Lista tasks com filtros (project_slug, status, limit)
+  - `get-task` — Detalhes completos de uma task
+  - `create-task` — Cria nova task (default: inbox/medium)
+  - `update-task` — Atualiza task (markAsDone ao mudar para done)
+  - `delete-task` — Deleta task e time entries
+  - `start-timer` — Inicia timer (para outros automaticamente)
+  - `stop-timer` — Para timer com notas opcionais
+  - `timer-status` — Mostra timer ativo
+  - `today-plan` — Plano do dia (auto-cria)
+  - `suggest-tasks` — Sugere tasks prioritárias
+  - `add-to-plan` — Adiciona task ao plano do dia
+  - `list-projects` — Lista projetos por status
+- **Resource**: `soloboard://overview` — Resumo geral do estado
+- **Prompt**: `daily-planning` — Ajuda a planejar o dia
+
 <laravel-boost-guidelines>
 === foundation rules ===
 
@@ -95,12 +117,12 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - php - 8.4.17
 - laravel/fortify (FORTIFY) - v1
 - laravel/framework (LARAVEL) - v12
+- laravel/mcp (MCP) - v0
 - laravel/prompts (PROMPTS) - v0
 - livewire/flux (FLUXUI_FREE) - v2
 - livewire/flux-pro (FLUXUI_PRO) - v2
 - livewire/livewire (LIVEWIRE) - v4
 - laravel/boost (BOOST) - v2
-- laravel/mcp (MCP) - v0
 - laravel/pail (PAIL) - v1
 - laravel/pint (PINT) - v1
 - laravel/sail (SAIL) - v1
@@ -112,6 +134,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 
 This project has domain-specific skills available. You MUST activate the relevant skill whenever you work in that domain—don't wait until you're stuck.
 
+- `mcp-development` — Develops MCP servers, tools, resources, and prompts. Activates when creating MCP tools, resources, or prompts; setting up AI integrations; debugging MCP connections; working with routes/ai.php; or when the user mentions MCP, Model Context Protocol, AI tools, AI server, or building tools for AI assistants.
 - `fluxui-development` — Develops UIs with Flux UI Pro components. Activates when creating buttons, forms, modals, inputs, tables, charts, date pickers, or UI components; replacing HTML elements with Flux; working with flux: components; or when the user mentions Flux, component library, UI components, form fields, or asks about available Flux components.
 - `livewire-development` — Develops reactive Livewire 4 components. Activates when creating, updating, or modifying Livewire components; working with wire:model, wire:click, wire:loading, or any wire: directives; adding real-time updates, loading states, or reactivity; debugging component behavior; writing Livewire tests; or when the user mentions Livewire, component, counter, or reactive UI.
 - `pest-testing` — Tests applications using the Pest 4 PHP framework. Activates when writing tests, creating unit or feature tests, adding assertions, testing Livewire components, browser testing, debugging test failures, working with datasets or mocking; or when the user mentions test, spec, TDD, expects, assertion, coverage, or needs to verify functionality works.
@@ -315,6 +338,14 @@ protected function isAccessible(User $user, ?string $path = null): bool
 ### Models
 
 - Casts can and likely should be set in a `casts()` method on a model rather than the `$casts` property. Follow existing conventions from other models.
+
+=== mcp/core rules ===
+
+# Laravel MCP
+
+- Laravel MCP allows you to rapidly build MCP servers for your Laravel applications.
+- IMPORTANT: laravel/mcp is very new. Always use the `search-docs` tool for authoritative documentation on writing and testing Laravel MCP servers, tools, resources, and prompts.
+- IMPORTANT: Activate `mcp-development` every time you're working with an MCP-related task.
 
 === fluxui-pro/core rules ===
 

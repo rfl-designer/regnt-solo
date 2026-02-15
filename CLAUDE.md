@@ -39,11 +39,12 @@
 
 ## Models & Enums
 
-- Models: `App\Models\` — Project, Task, TimeEntry, DailyPlan
+- Models: `App\Models\` — Project, Task, TimeEntry, DailyPlan, TaskStatusChange
 - Enums: `App\Enums\` (PHP native enums) — cada enum implementa `label()` (PT-BR), `color()`, `icon()`
 - `Task.completed_at`: preenchido ao marcar done
 - `Task.sort_order`: por coluna (por status)
 - `TimeEntry`: cascade delete com Task
+- `TaskStatusChange`: cascade delete com Task — registra automaticamente cada mudança de status
 - Sem subtasks — tasks são flat, descrição markdown via `<flux:editor>`
 
 ## Decisões de Design
@@ -53,11 +54,28 @@
 - **Kanban**: lazy loading 20 por coluna, seção "Sem projeto" separada
 - **Daily Planner**: checkbox muda status GLOBAL para done, carry-over banner para tasks de ontem
 - **Timer**: apenas 1 ativo por vez, mini modal de notas ao parar (bloqueia)
-- **Task Modal**: NÃO fecha ao salvar (reativa), TimeEntries editáveis inline
+- **Task Modal**: NÃO fecha ao salvar (reativa), TimeEntries editáveis inline, barra de tempo por status
 - **Quick-Add**: modal overlay (hotkey `N`), sempre cria inbox, autocomplete `#projeto` `!prioridade` `@data`
 - **Command Palette** (`Cmd+K`): busca + 6 comandos com prefixo `>`
-- **Dashboard cards**: clicáveis, navegam para páginas filtradas
+- **Dashboard cards**: clicáveis, navegam para páginas filtradas + métricas de tempo médio por status
 - **Empty states**: ícone + texto + CTA + dica de atalho
+
+## Status Time Tracking (Epic 11)
+
+Rastreamento automático de quanto tempo cada task passa em cada status (Inbox → Backlog → Todo → Doing → Done). Inspirado no Linear — sem ação do usuário.
+
+- **Observer**: `TaskObserver` registrado via `#[ObservedBy]` no Task model
+  - `created`: registra status inicial da task
+  - `updating`: detecta mudança de `status` e registra novo `TaskStatusChange`
+  - Captura mudanças de qualquer origem (Kanban, Task Modal, Command Palette, Daily Planner, MCP)
+- **Model**: `TaskStatusChange` — `task_id`, `status` (cast TaskStatus), `changed_at`, `from_status`, `to_status`
+- **Accessors no Task**:
+  - `time_in_status`: array associativo `[status => minutos]` — tempo acumulado em cada status
+  - `current_status_duration`: minutos no status atual
+- **Task Modal**: barra horizontal segmentada mostrando tempo proporcional em cada status com cores e tooltips
+- **Dashboard**: métricas de tempo médio por status (últimos 30 dias, tasks concluídas)
+- **MCP GetTaskTool**: retorna `status_timeline`, `time_in_status`, `current_status_duration_minutes`
+- **Testes**: 18 testes Feature (8 backend + 10 frontend/MCP)
 
 ## Keyboard Shortcuts
 
@@ -89,7 +107,7 @@ O SoloBoard expõe um MCP Server para integração com AI clients (Claude Code, 
 - **Header**: `Authorization: Bearer {SOLOBOARD_MCP_KEY}` (definido no `.env`)
 - **Tools disponíveis**:
   - `list-tasks` — Lista tasks com filtros (project_slug, status, limit)
-  - `get-task` — Detalhes completos de uma task
+  - `get-task` — Detalhes completos de uma task (inclui status_timeline, time_in_status, current_status_duration_minutes)
   - `create-task` — Cria nova task (default: inbox/medium)
   - `update-task` — Atualiza task (markAsDone ao mudar para done)
   - `delete-task` — Deleta task e time entries

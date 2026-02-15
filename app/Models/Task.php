@@ -4,14 +4,18 @@ namespace App\Models;
 
 use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
+use App\Observers\TaskObserver;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+#[ObservedBy([TaskObserver::class])]
 class Task extends Model
 {
     /** @use HasFactory<\Database\Factories\TaskFactory> */
@@ -66,6 +70,14 @@ class Task extends Model
     }
 
     /**
+     * Get the status changes for this task, ordered chronologically.
+     */
+    public function statusChanges(): HasMany
+    {
+        return $this->hasMany(TaskStatusChange::class)->orderBy('changed_at');
+    }
+
+    /**
      * Get the daily plans this task belongs to.
      */
     public function dailyPlans(): BelongsToMany
@@ -73,6 +85,61 @@ class Task extends Model
         return $this->belongsToMany(DailyPlan::class)
             ->withPivot('sort_order', 'completed_at')
             ->withTimestamps();
+    }
+
+    /**
+     * Get the accumulated time in each status (in minutes).
+     *
+     * @return array<string, float>
+     */
+    protected function timeInStatus(): Attribute
+    {
+        return Attribute::get(function (): array {
+            $changes = $this->relationLoaded('statusChanges')
+                ? $this->statusChanges->sortBy('changed_at')->values()
+                : $this->statusChanges()->orderBy('changed_at')->get();
+
+            $times = [];
+            foreach (TaskStatus::cases() as $status) {
+                $times[$status->value] = 0.0;
+            }
+
+            if ($changes->isEmpty()) {
+                return $times;
+            }
+
+            for ($i = 0; $i < $changes->count(); $i++) {
+                $change = $changes[$i];
+                $statusValue = $change->to_status->value;
+                $start = $change->changed_at;
+
+                $end = $i + 1 < $changes->count()
+                    ? $changes[$i + 1]->changed_at
+                    : now();
+
+                $times[$statusValue] += round($start->diffInMinutes($end), 2);
+            }
+
+            return $times;
+        });
+    }
+
+    /**
+     * Get the duration (in minutes) the task has been in its current status.
+     */
+    protected function currentStatusDuration(): Attribute
+    {
+        return Attribute::get(function (): float {
+            $lastChange = $this->relationLoaded('statusChanges')
+                ? $this->statusChanges->sortByDesc('changed_at')->first()
+                : $this->statusChanges()->orderByDesc('changed_at')->first();
+
+            if ($lastChange === null) {
+                return 0.0;
+            }
+
+            return round($lastChange->changed_at->diffInMinutes(now()), 2);
+        });
     }
 
     /**

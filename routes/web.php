@@ -32,4 +32,8 @@ Route::livewire('time', 'pages::time-report')
     ->middleware(['auth'])
     ->name('time');
 
+Route::livewire('review', 'pages::weekly-review')
+    ->middleware(['auth'])
+    ->name('review');
+
 require __DIR__.'/settings.php';

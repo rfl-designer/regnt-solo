@@ -27,7 +27,11 @@ class SoloBoardServer extends Server
      * @var array<int, class-string<\Laravel\Mcp\Server\Tool>>
      */
     protected array $tools = [
-        //
+        \App\Mcp\Tools\ListTasksTool::class,
+        \App\Mcp\Tools\GetTaskTool::class,
+        \App\Mcp\Tools\CreateTaskTool::class,
+        \App\Mcp\Tools\UpdateTaskTool::class,
+        \App\Mcp\Tools\DeleteTaskTool::class,
     ];
 
     /**

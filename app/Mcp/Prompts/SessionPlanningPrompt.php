@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Prompts;
 
+use App\Enums\TaskStatus;
 use App\Models\Task;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -73,7 +74,7 @@ class SessionPlanningPrompt extends Prompt
             $relatedTasks = Task::query()
                 ->where('project_id', $task->project_id)
                 ->where('id', '!=', $task->id)
-                ->whereIn('status', ['doing', 'todo'])
+                ->whereIn('status', [TaskStatus::Doing, TaskStatus::Todo])
                 ->limit(5)
                 ->get();
 

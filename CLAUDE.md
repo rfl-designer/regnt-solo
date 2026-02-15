@@ -119,6 +119,71 @@ Modela tasks como sessões de AI coding: 1 task = 1 sessão = 1 PR. Primeira fer
 - **Quick-Add**: prefixo `>` no título cria session task automaticamente + checkbox "Sessão de Dev" para textarea extra
 - **Kanban**: badge 🤖 Sessão (violet) identifica session tasks nos cards
 
+## AI Assistant (Epic 16)
+
+Coach de produtividade com IA integrada via API Anthropic (Claude). Feature totalmente opcional — o SoloBoard funciona perfeitamente sem AI (feature flag off).
+
+### Configuração
+
+```env
+SOLOBOARD_AI_ENABLED=true          # false por padrão — tudo funciona sem AI
+ANTHROPIC_API_KEY=sk-ant-...       # chave da API Anthropic
+SOLOBOARD_AI_MODEL=claude-sonnet-4-20250514  # modelo utilizado
+```
+
+- Config em `config/soloboard.php`: `ai_enabled`, `ai_api_key`, `ai_model`, `ai_insights_cache_hours`
+- Quando `ai_enabled=false`: botões AI não aparecem, métodos retornam `[]`, sem chamadas à API
+
+### Serviço: `AiAssistantService`
+
+- **Arquivo**: `app/Services/AiAssistantService.php`
+- **API**: Anthropic Messages API (`v1/messages`) com timeout de 30s
+- **System prompt**: "You are a productivity coach for a solo developer..."
+- **Métodos**:
+  - `isEnabled(): bool` — verifica feature flag + API key configurada
+  - `suggestDailyPlan(Collection $tasks, array $history): array` — sugere tasks para o plano do dia com razão e score (1-100)
+  - `analyzeBacklog(Collection $tasks): array` — analisa inbox/backlog e sugere ações (arquivar, priorizar, estimar)
+  - `detectPatterns(array $weeklyData): array` — detecta padrões de produtividade (projetos abandonados, over-commitment, falta de deep work)
+- **Graceful degradation**: todos os métodos retornam `[]` se desabilitado, sem tasks, ou em caso de erro da API
+
+### AI no Daily Planner
+
+- Botão "✨ Sugerir plano" (só aparece se `ai_enabled=true`)
+- Chama `suggestDailyPlan()` via Livewire com loading state
+- Modal com lista de sugestões: task + razão + score de prioridade
+- Ações: "Adicionar ao plano" individual ou "Adicionar todas"
+- Rate limiting: 1 chamada por minuto
+
+### AI no Inbox
+
+- Botão "✨ Analisar backlog" (só aparece se `ai_enabled=true`)
+- Chama `analyzeBacklog()` via Livewire com loading state
+- Modal com sugestões por task:
+  - Priorizar: "Sugerir prioridade: high (motivo: vencendo em 2 dias)"
+  - Arquivar: "Sugerir arquivar (motivo: criada há 30 dias, sem atividade)"
+  - Estimar: "Sugerir estimativa de tempo"
+- Ações: "Aplicar" ou "Ignorar" por sugestão
+- Rate limiting: 1 chamada por minuto
+
+### AI Insights no Dashboard
+
+- Seção proativa de insights (só se `ai_enabled=true`)
+- Chama `detectPatterns()` com dados semanais do usuário
+- Tipos de insight detectados:
+  - `abandoned_project` — projeto sem atividade recente
+  - `over_commitment` — muitas tasks em progresso simultâneo
+  - `productive_hours` / `positive_trend` — padrões positivos
+  - `blocker` — bloqueios recorrentes
+- Severidade: `info`, `warning`, `critical`
+- Ações por insight: navegar para contexto ("Ver projeto", "Abrir inbox") ou "Ignorar" (esconde por 7 dias)
+- Cache de 24h (`ai_insights_cache_hours`) para evitar chamadas excessivas à API
+
+### Testes
+
+- `tests/Feature/AiAssistantTest.php` — testes do serviço (mock da API Anthropic)
+- `tests/Feature/AiIntegrationTest.php` — testes de integração no Daily Planner e Inbox
+- `tests/Feature/AiInsightsTest.php` — testes dos insights no Dashboard
+
 ## Keyboard Shortcuts
 
 | Atalho  | Ação                        |

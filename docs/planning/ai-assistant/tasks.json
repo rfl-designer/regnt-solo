@@ -1,0 +1,378 @@
+{
+  "feature": "ai-assistant",
+  "created_at": "2026-02-15",
+  "total_stories": 15,
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Configuração AI no config/soloboard.php e variáveis de ambiente",
+      "description": "Como desenvolvedor do SoloBoard, quero ter as configurações de AI centralizadas em config/soloboard.php com variáveis de ambiente correspondentes, para que a feature AI possa ser habilitada/desabilitada e configurada sem alterar código",
+      "complexity": "P",
+      "estimated_hours": 0.5,
+      "criteria": [
+        "config/soloboard.php contém as chaves: ai_enabled, ai_api_key, ai_model, ai_insights_cache_hours",
+        "Cada chave lê de variável de ambiente correspondente",
+        ".env.example contém as 3 variáveis novas com valores padrão documentados",
+        ".env é atualizado com as mesmas variáveis",
+        "config('soloboard.ai_enabled') retorna false por padrão",
+        "A chave mcp_key existente permanece inalterada"
+      ],
+      "dependencies": [],
+      "order": 1,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "config/soloboard.php",
+        ".env",
+        ".env.example"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Criar AiAssistantService com integração à API Anthropic",
+      "description": "Como desenvolvedor do SoloBoard, quero um Service AiAssistantService registrado no container com método privado callApi que se comunica com a API Anthropic, para que os métodos públicos possam reutilizar a lógica de chamada HTTP de forma consistente",
+      "complexity": "M",
+      "estimated_hours": 2,
+      "criteria": [
+        "Arquivo app/Services/AiAssistantService.php criado com namespace App\\Services",
+        "Constructor usa PHP 8 property promotion com private readonly",
+        "Método público isEnabled(): bool retorna o valor de $this->enabled",
+        "Método privado callApi faz POST para API Anthropic com headers corretos",
+        "callApi usa Http::withHeaders()->timeout(30)->post()",
+        "Método privado parseJsonResponse extrai JSON com fallback para array vazio",
+        "Quando isEnabled() retorna false, métodos públicos retornam arrays vazios",
+        "Service registrado como singleton no AppServiceProvider::register()",
+        "API key nunca é exposta como propriedade pública",
+        "Todos os métodos têm PHPDoc blocks"
+      ],
+      "dependencies": ["US-001"],
+      "order": 2,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "app/Services/AiAssistantService.php",
+        "app/Providers/AppServiceProvider.php"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Método suggestDailyPlan no AiAssistantService",
+      "description": "Como usuário do SoloBoard, quero que o AI analise minhas tasks disponíveis e histórico de conclusão para sugerir um plano diário, para que eu comece o dia com foco nas tasks mais relevantes",
+      "complexity": "M",
+      "estimated_hours": 2,
+      "criteria": [
+        "Método público suggestDailyPlan(Collection $tasks, array $history): array implementado",
+        "System prompt contextualiza o AI como productivity coach e instrui formato JSON",
+        "User message inclui lista de tasks e histórico de completionRate",
+        "Retorna array com chave suggestions contendo task_id, reason, order",
+        "Quando isEnabled() é false, retorna ['suggestions' => []]",
+        "Quando a API falha, retorna ['suggestions' => []] sem lançar exceção",
+        "Método privado buildDailyPlanPrompt monta system prompt e user message"
+      ],
+      "dependencies": ["US-002"],
+      "order": 3,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "app/Services/AiAssistantService.php"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Método analyzeBacklog no AiAssistantService",
+      "description": "Como usuário do SoloBoard, quero que o AI analise meu backlog/inbox e sugira ações concretas por task, para que eu mantenha meu backlog organizado sem gastar tempo triando manualmente",
+      "complexity": "M",
+      "estimated_hours": 2,
+      "criteria": [
+        "Método público analyzeBacklog(Collection $tasks): array implementado",
+        "System prompt instrui o AI a sugerir ações: prioritize, archive, estimate",
+        "User message inclui lista de tasks inbox/backlog com dados relevantes",
+        "Retorna array com chave analysis contendo task_id, action, reason e campos opcionais",
+        "Quando isEnabled() é false, retorna ['analysis' => []]",
+        "Quando a API falha, retorna ['analysis' => []] sem lançar exceção",
+        "Método privado buildBacklogPrompt monta system prompt e user message"
+      ],
+      "dependencies": ["US-002"],
+      "order": 4,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "app/Services/AiAssistantService.php"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "Método detectPatterns no AiAssistantService",
+      "description": "Como usuário do SoloBoard, quero que o AI detecte padrões negativos na minha produtividade, para que eu receba alertas proativos antes que problemas se agravem",
+      "complexity": "M",
+      "estimated_hours": 2,
+      "criteria": [
+        "Método público detectPatterns(array $weeklyData): array implementado",
+        "System prompt instrui o AI a detectar padrões negativos",
+        "User message inclui projetos, tasks por status, horas de deep work, completionRate",
+        "Retorna array com chave insights contendo type, severity, message, action_label, action_route, action_params",
+        "Quando isEnabled() é false, retorna ['insights' => []]",
+        "Quando a API falha, retorna ['insights' => []] sem lançar exceção",
+        "Método privado buildPatternsPrompt monta system prompt e user message"
+      ],
+      "dependencies": ["US-002"],
+      "order": 5,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "app/Services/AiAssistantService.php"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "Testes Feature do AiAssistantService",
+      "description": "Como desenvolvedor do SoloBoard, quero testes Feature completos para o AiAssistantService com mock HTTP, para garantir que o serviço funciona corretamente sem depender da API real",
+      "complexity": "M",
+      "estimated_hours": 3,
+      "criteria": [
+        "Arquivo tests/Feature/AiAssistantTest.php criado com Pest",
+        "Teste: isEnabled() retorna false quando ai_enabled=false",
+        "Teste: isEnabled() retorna true quando ai_enabled=true",
+        "Teste: métodos retornam array vazio quando desabilitado",
+        "Teste: suggestDailyPlan chama API e retorna sugestões parseadas com Http::fake()",
+        "Teste: analyzeBacklog chama API e retorna análise parseada",
+        "Teste: detectPatterns chama API e retorna insights parseados",
+        "Teste: métodos retornam array vazio quando API retorna erro",
+        "Teste: API é chamada com headers e model corretos",
+        "Todos os testes passam"
+      ],
+      "dependencies": ["US-003", "US-004", "US-005"],
+      "order": 6,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "tests/Feature/AiAssistantTest.php"
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "Botão 'Sugerir plano' no Daily Planner",
+      "description": "Como usuário do SoloBoard, quero ver um botão 'Sugerir plano' no Daily Planner quando AI está habilitada, para que eu possa solicitar sugestões do AI com um clique",
+      "complexity": "M",
+      "estimated_hours": 2,
+      "criteria": [
+        "Botão 'Sugerir plano' aparece no header do Daily Planner com ícone sparkles",
+        "Botão usa componente <flux:button>",
+        "Botão só é renderizado quando config('soloboard.ai_enabled') é true",
+        "Ao clicar, chama action Livewire suggestPlan()",
+        "Action chama AiAssistantService::suggestDailyPlan() e armazena resultado",
+        "Propriedades $aiLoading e $aiSuggestions adicionadas ao componente",
+        "Durante loading, botão mostra estado desabilitado",
+        "Service é injetado via app() dentro da action"
+      ],
+      "dependencies": ["US-003"],
+      "order": 7,
+      "status": "backlog",
+      "type": "both",
+      "files_affected": [
+        "resources/views/pages/⚡daily-planner.blade.php"
+      ]
+    },
+    {
+      "id": "US-008",
+      "title": "Modal de sugestões do Daily Planner",
+      "description": "Como usuário do SoloBoard, quero ver as sugestões do AI em um modal com opções de adicionar tasks ao plano, para que eu possa revisar e aceitar sugestões de forma prática",
+      "complexity": "M",
+      "estimated_hours": 2.5,
+      "criteria": [
+        "Modal <flux:modal> abre quando $aiSuggestions tem itens",
+        "Modal lista cada sugestão com nome da task, razão e botão 'Adicionar ao plano'",
+        "Cada sugestão mostra prioridade e projeto com <flux:badge>",
+        "Botão 'Adicionar todas' no footer adiciona todas as tasks ao plano",
+        "Sugestão adicionada é removida da lista",
+        "Ao adicionar todas, modal fecha e mostra toast de sucesso",
+        "Se AI não sugeriu nada, mostra toast informativo",
+        "Loading state com <flux:skeleton>",
+        "Modal pode ser fechado sem aplicar sugestões"
+      ],
+      "dependencies": ["US-007"],
+      "order": 8,
+      "status": "backlog",
+      "type": "both",
+      "files_affected": [
+        "resources/views/pages/⚡daily-planner.blade.php"
+      ]
+    },
+    {
+      "id": "US-009",
+      "title": "Botão 'Analisar backlog' no Inbox",
+      "description": "Como usuário do SoloBoard, quero ver um botão 'Analisar backlog' no Inbox quando AI está habilitada, para que eu possa solicitar análise inteligente das minhas tasks inbox",
+      "complexity": "M",
+      "estimated_hours": 2,
+      "criteria": [
+        "Botão 'Analisar backlog' aparece no header do Inbox com ícone sparkles",
+        "Botão usa componente <flux:button>",
+        "Botão só é renderizado quando config('soloboard.ai_enabled') é true",
+        "Ao clicar, chama action Livewire analyzeBacklog()",
+        "Action chama AiAssistantService::analyzeBacklog() com tasks inbox",
+        "Propriedades $aiLoading e $aiAnalysis adicionadas ao componente",
+        "Durante loading, botão mostra estado desabilitado",
+        "Service é injetado via app() dentro da action"
+      ],
+      "dependencies": ["US-004"],
+      "order": 9,
+      "status": "backlog",
+      "type": "both",
+      "files_affected": [
+        "resources/views/pages/⚡inbox.blade.php"
+      ]
+    },
+    {
+      "id": "US-010",
+      "title": "Sugestões inline no Inbox",
+      "description": "Como usuário do SoloBoard, quero ver sugestões do AI exibidas inline junto a cada task no Inbox com botões de ação, para que eu possa aplicar sugestões diretamente sem sair do contexto",
+      "complexity": "G",
+      "estimated_hours": 3.5,
+      "criteria": [
+        "Tasks com sugestão mostram banner/callout abaixo delas",
+        "Sugestão de priorizar mostra prioridade sugerida com botão 'Aplicar'",
+        "Sugestão de arquivar mostra razão com botão 'Arquivar'",
+        "Sugestão de estimar mostra minutos sugeridos com botão 'Aplicar'",
+        "Botão 'Aplicar' atualiza a task e remove sugestão da lista",
+        "Após aplicar, unset($this->tasks) para invalidar computed",
+        "Botão 'Ignorar' remove sugestão sem aplicar ação",
+        "Se nenhuma task tem sugestão, mostra toast informativo",
+        "Estilização segue dark mode do projeto"
+      ],
+      "dependencies": ["US-009"],
+      "order": 10,
+      "status": "backlog",
+      "type": "both",
+      "files_affected": [
+        "resources/views/pages/⚡inbox.blade.php"
+      ]
+    },
+    {
+      "id": "US-011",
+      "title": "Rate limiting e error handling nas integrações AI",
+      "description": "Como usuário do SoloBoard, quero que as chamadas AI tenham rate limiting e tratamento de erros gracioso, para que eu não gaste créditos excessivos da API e a aplicação nunca quebre por falha do AI",
+      "complexity": "M",
+      "estimated_hours": 2,
+      "criteria": [
+        "Rate limit de 1 chamada por minuto por feature com Cache",
+        "Quando rate limit é atingido, mostra toast de aviso",
+        "Quando API retorna erro HTTP, mostra toast de erro",
+        "Quando API dá timeout, mostra toast de erro sem crash",
+        "Quando JSON é malformado, mostra toast de erro sem crash",
+        "Em todos os cenários de erro, $aiLoading volta para false",
+        "Nenhum erro do AI impede o uso normal das páginas"
+      ],
+      "dependencies": ["US-007", "US-009"],
+      "order": 11,
+      "status": "backlog",
+      "type": "both",
+      "files_affected": [
+        "resources/views/pages/⚡daily-planner.blade.php",
+        "resources/views/pages/⚡inbox.blade.php"
+      ]
+    },
+    {
+      "id": "US-012",
+      "title": "Testes de integração AI no Daily Planner e Inbox",
+      "description": "Como desenvolvedor do SoloBoard, quero testes Feature que verificam a integração do AI nos componentes Livewire, para garantir que botões, modals, sugestões e error handling funcionam corretamente",
+      "complexity": "G",
+      "estimated_hours": 4,
+      "criteria": [
+        "Arquivo tests/Feature/AiIntegrationTest.php criado com Pest",
+        "Teste: botão AI não aparece quando ai_enabled=false",
+        "Teste: botão AI aparece quando ai_enabled=true",
+        "Teste: action suggestPlan chama Service e popula $aiSuggestions",
+        "Teste: 'Adicionar ao plano' adiciona task ao DailyPlan",
+        "Teste: action analyzeBacklog chama Service e popula $aiAnalysis",
+        "Teste: 'Aplicar' sugestão de prioridade atualiza task no banco",
+        "Teste: rate limit impede segunda chamada dentro de 1 minuto",
+        "Teste: erro do Service mostra toast e não quebra componente",
+        "Todos os testes passam"
+      ],
+      "dependencies": ["US-008", "US-010", "US-011"],
+      "order": 12,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "tests/Feature/AiIntegrationTest.php"
+      ]
+    },
+    {
+      "id": "US-013",
+      "title": "Seção Insights proativa no Dashboard",
+      "description": "Como usuário do SoloBoard, quero ver uma seção 'Insights' no Dashboard com alertas proativos sobre minha produtividade, para que eu receba feedback do AI sem precisar solicitar ativamente",
+      "complexity": "G",
+      "estimated_hours": 3.5,
+      "criteria": [
+        "Nova seção 'Insights' renderizada no Dashboard acima de 'Tempo médio por status'",
+        "Seção só é renderizada quando ai_enabled é true",
+        "Cada insight renderizado como card com ícone de severidade e mensagem",
+        "Cada insight tem botão de ação principal e botão 'Ignorar'",
+        "Botão de ação navega para rota correta",
+        "Quando não há insights, seção não é renderizada",
+        "Estilização segue dark mode do projeto",
+        "Computed property $this->insights carrega dados",
+        "Botão 'Atualizar' permite forçar refresh"
+      ],
+      "dependencies": ["US-005"],
+      "order": 13,
+      "status": "backlog",
+      "type": "both",
+      "files_affected": [
+        "resources/views/pages/⚡dashboard.blade.php"
+      ]
+    },
+    {
+      "id": "US-014",
+      "title": "Cache de insights e ação 'Ignorar'",
+      "description": "Como usuário do SoloBoard, quero que os insights sejam cacheados por 24h e que eu possa ignorar insights irrelevantes por 7 dias, para que a API não seja chamada excessivamente e eu não veja alertas repetitivos",
+      "complexity": "M",
+      "estimated_hours": 2,
+      "criteria": [
+        "Insights cacheados com Cache::remember() por ai_insights_cache_hours horas",
+        "Cache key inclui data do dia para renovar diariamente",
+        "Computed property lê do cache antes de chamar API",
+        "Ao clicar 'Ignorar', salva no cache por 7 dias",
+        "Hash do insight calculado com md5($insight['message'])",
+        "Insights ignorados filtrados antes de renderizar",
+        "Após ignorar, insight desaparece imediatamente",
+        "Botão 'Atualizar' limpa cache e recarrega",
+        "Após 7 dias, insight ignorado volta a aparecer",
+        "Quando todos os insights são ignorados, seção desaparece"
+      ],
+      "dependencies": ["US-013"],
+      "order": 14,
+      "status": "backlog",
+      "type": "both",
+      "files_affected": [
+        "resources/views/pages/⚡dashboard.blade.php"
+      ]
+    },
+    {
+      "id": "US-015",
+      "title": "Testes de AI Insights no Dashboard",
+      "description": "Como desenvolvedor do SoloBoard, quero testes Feature que verificam a seção Insights no Dashboard, para garantir que cache, ações e 'Ignorar' funcionam corretamente",
+      "complexity": "M",
+      "estimated_hours": 3,
+      "criteria": [
+        "Arquivo tests/Feature/AiInsightsTest.php criado com Pest",
+        "Teste: seção Insights não aparece quando ai_enabled=false",
+        "Teste: seção Insights aparece quando ai_enabled=true e há insights",
+        "Teste: seção não aparece quando insights é array vazio",
+        "Teste: insights renderizados com mensagem e botões",
+        "Teste: 'Ignorar' remove insight e salva no cache por 7 dias",
+        "Teste: insight ignorado não aparece na próxima renderização",
+        "Teste: cache é usado (Service não chamado na segunda renderização)",
+        "Teste: botão 'Atualizar' limpa cache e rechama Service",
+        "Todos os testes passam"
+      ],
+      "dependencies": ["US-013", "US-014"],
+      "order": 15,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "tests/Feature/AiInsightsTest.php"
+      ]
+    }
+  ]
+}

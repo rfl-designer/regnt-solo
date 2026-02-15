@@ -3,8 +3,10 @@
 use App\Enums\TaskStatus;
 use App\Models\DailyPlan;
 use App\Models\Task;
+use App\Services\AiAssistantService;
 use Carbon\Carbon;
 use Flux\Flux;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
@@ -18,6 +20,13 @@ new class extends Component
     public string $notes = '';
 
     public bool $showCarryOver = true;
+
+    public bool $showAiSuggestions = false;
+
+    /** @var array<int, array{task_id: int, reason: string, priority_score: int}> */
+    public array $aiSuggestions = [];
+
+    public bool $aiLoading = false;
 
     public function mount(): void
     {
@@ -241,6 +250,142 @@ new class extends Component
     {
         unset($this->plan, $this->availableTasks, $this->completionRate, $this->yesterdayIncompleteTasks);
     }
+
+    /**
+     * Check if AI features are enabled and configured.
+     */
+    public function isAiEnabled(): bool
+    {
+        return app(AiAssistantService::class)->isEnabled();
+    }
+
+    /**
+     * Suggest a daily plan using the AI assistant.
+     */
+    public function suggestDailyPlan(): void
+    {
+        if (! $this->isAiEnabled()) {
+            return;
+        }
+
+        $cacheKey = 'ai_daily_plan_'.(auth()->id() ?? 'guest');
+
+        if (Cache::has($cacheKey)) {
+            Flux::toast(variant: 'warning', heading: 'Aguarde', text: 'Aguarde 1 minuto antes de solicitar novas sugestões.');
+
+            return;
+        }
+
+        $this->aiLoading = true;
+
+        try {
+            $availableTasks = Task::query()
+                ->whereIn('status', [TaskStatus::Todo, TaskStatus::Doing])
+                ->with('project')
+                ->get();
+
+            $history = $this->buildCompletionHistory();
+
+            $service = app(AiAssistantService::class);
+            $result = $service->suggestDailyPlan($availableTasks, $history);
+
+            $this->aiSuggestions = $result;
+            $this->showAiSuggestions = true;
+
+            Cache::put($cacheKey, true, now()->addMinute());
+        } catch (\Throwable $e) {
+            Flux::toast(variant: 'danger', heading: 'Erro', text: 'Não foi possível gerar sugestões. Tente novamente.');
+        } finally {
+            $this->aiLoading = false;
+        }
+    }
+
+    /**
+     * Build completion history for the last 7 days.
+     *
+     * @return array<int, array{date: string, completion_rate: float}>
+     */
+    private function buildCompletionHistory(): array
+    {
+        $today = Carbon::today();
+        $weekAgo = $today->copy()->subDays(6);
+
+        $plans = DailyPlan::query()
+            ->whereDate('date', '>=', $weekAgo)
+            ->whereDate('date', '<=', $today)
+            ->with('tasks')
+            ->get()
+            ->keyBy(fn (DailyPlan $plan): string => $plan->date->toDateString());
+
+        $history = [];
+
+        for ($i = 6; $i >= 0; $i--) {
+            $dateString = $today->copy()->subDays($i)->toDateString();
+
+            $history[] = [
+                'date' => $dateString,
+                'completion_rate' => $plans->get($dateString)?->completionRate() ?? 0,
+            ];
+        }
+
+        return $history;
+    }
+
+    /**
+     * Add a single AI suggestion to the daily plan.
+     */
+    public function addSuggestionToPlan(int $taskId): void
+    {
+        $task = Task::query()
+            ->whereIn('status', [TaskStatus::Todo, TaskStatus::Doing])
+            ->find($taskId);
+
+        if (! $task) {
+            return;
+        }
+
+        $maxOrder = $this->plan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+
+        $this->plan->tasks()->syncWithoutDetaching([
+            $taskId => ['sort_order' => $maxOrder + 1],
+        ]);
+
+        $this->aiSuggestions = array_values(
+            array_filter($this->aiSuggestions, fn (array $s): bool => $s['task_id'] !== $taskId)
+        );
+
+        unset($this->plan, $this->availableTasks, $this->completionRate);
+
+        Flux::toast(variant: 'success', heading: 'Task adicionada', text: $task->title);
+    }
+
+    /**
+     * Add all AI suggestions to the daily plan.
+     */
+    public function addAllSuggestionsToPlan(): void
+    {
+        $taskIds = array_column($this->aiSuggestions, 'task_id');
+
+        $tasks = Task::query()
+            ->whereIn('status', [TaskStatus::Todo, TaskStatus::Doing])
+            ->whereIn('id', $taskIds)
+            ->get();
+
+        $maxOrder = $this->plan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+
+        foreach ($tasks as $index => $task) {
+            $this->plan->tasks()->syncWithoutDetaching([
+                $task->id => ['sort_order' => $maxOrder + 1 + $index],
+            ]);
+        }
+
+        $this->aiSuggestions = [];
+        $this->showAiSuggestions = false;
+
+        unset($this->plan, $this->availableTasks, $this->completionRate);
+
+        Flux::toast(variant: 'success', heading: 'Sugestões aplicadas', text: $tasks->count().' tasks adicionadas ao plano');
+    }
 }
 
 ?>
@@ -259,6 +404,20 @@ new class extends Component
         </div>
 
         <div class="flex items-center gap-3">
+            @if ($this->isAiEnabled())
+                <flux:button
+                    variant="subtle"
+                    icon="sparkles"
+                    wire:click="suggestDailyPlan"
+                    wire:loading.attr="disabled"
+                    wire:target="suggestDailyPlan"
+                    size="sm"
+                >
+                    <span wire:loading.remove wire:target="suggestDailyPlan">Sugerir plano</span>
+                    <span wire:loading wire:target="suggestDailyPlan">Analisando...</span>
+                </flux:button>
+            @endif
+
             <flux:date-picker wire:model.live="date" with-today locale="pt-BR" />
         </div>
     </div>
@@ -493,4 +652,87 @@ new class extends Component
             </div>
         @endunless
     </div>
+
+    {{-- AI Suggestions Modal --}}
+    @if ($this->isAiEnabled())
+        <flux:modal wire:model.self="showAiSuggestions" class="md:w-[32rem]">
+            <div class="space-y-4">
+                <div>
+                    <flux:heading size="lg">Sugestões do AI Coach</flux:heading>
+                    <flux:text class="mt-1">Baseado nas suas tasks e histórico de produtividade.</flux:text>
+                </div>
+
+                @if ($aiLoading)
+                    <div class="space-y-3">
+                        @for ($i = 0; $i < 3; $i++)
+                            <div class="rounded-lg border border-zinc-700 p-3">
+                                <flux:skeleton class="mb-2 h-4 w-3/4" />
+                                <flux:skeleton class="mb-2 h-3 w-full" />
+                                <flux:skeleton class="h-3 w-1/4" />
+                            </div>
+                        @endfor
+                    </div>
+                @elseif (empty($aiSuggestions))
+                    <div class="py-8 text-center">
+                        <flux:icon name="sparkles" class="mx-auto mb-2 size-8 text-zinc-600" />
+                        <flux:text class="text-sm text-zinc-500">Nenhuma sugestão disponível no momento.</flux:text>
+                    </div>
+                @else
+                    @php
+                        $suggestionTaskIds = array_column($aiSuggestions, 'task_id');
+                        $suggestionTasks = \App\Models\Task::whereIn('id', $suggestionTaskIds)->get()->keyBy('id');
+                    @endphp
+
+                    <div class="max-h-96 space-y-3 overflow-y-auto">
+                        @foreach ($aiSuggestions as $suggestion)
+                            @php
+                                $task = $suggestionTasks->get($suggestion['task_id']);
+                                $score = $suggestion['priority_score'] ?? 0;
+                                $scoreColor = $score >= 80 ? 'red' : ($score >= 50 ? 'amber' : 'blue');
+                            @endphp
+
+                            @if ($task)
+                                <div wire:key="suggestion-{{ $suggestion['task_id'] }}" class="rounded-lg border border-zinc-700 p-3">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="truncate text-sm font-medium text-zinc-200">{{ $task->title }}</span>
+                                                <flux:badge size="sm" color="{{ $scoreColor }}">{{ $score }}%</flux:badge>
+                                            </div>
+                                            <flux:text class="mt-1 text-xs text-zinc-400">{{ $suggestion['reason'] }}</flux:text>
+                                        </div>
+
+                                        <flux:button
+                                            wire:click="addSuggestionToPlan({{ $task->id }})"
+                                            wire:loading.attr="disabled"
+                                            wire:target="addSuggestionToPlan({{ $task->id }})"
+                                            size="sm"
+                                            variant="ghost"
+                                            icon="plus"
+                                            class="shrink-0"
+                                        />
+                                    </div>
+                                </div>
+                            @endif
+                        @endforeach
+                    </div>
+
+                    <div class="flex justify-end gap-2 border-t border-zinc-700 pt-4">
+                        <flux:modal.close>
+                            <flux:button variant="ghost">Fechar</flux:button>
+                        </flux:modal.close>
+                        <flux:button
+                            wire:click="addAllSuggestionsToPlan"
+                            wire:loading.attr="disabled"
+                            wire:target="addAllSuggestionsToPlan"
+                            variant="primary"
+                            icon="plus"
+                        >
+                            Adicionar todas
+                        </flux:button>
+                    </div>
+                @endif
+            </div>
+        </flux:modal>
+    @endif
 </div>

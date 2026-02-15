@@ -333,3 +333,46 @@ test('validates estimated minutes must be positive', function () {
         ->call('saveTask')
         ->assertHasErrors(['estimatedMinutes']);
 });
+
+test('task modal shows session view for session tasks', function () {
+    $task = Task::factory()->doing()->session()->create();
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->assertSee('Sessão de Desenvolvimento')
+        ->assertSee('Prompt da Sessão');
+});
+
+test('task modal does not show session view for normal tasks', function () {
+    $task = Task::factory()->doing()->create();
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->assertDontSee('Sessão de Desenvolvimento');
+});
+
+test('task modal loads session fields when opening session task', function () {
+    $task = Task::factory()->doing()->create([
+        'session_prompt' => 'Implement login feature',
+        'session_result' => 'Login implemented with tests',
+    ]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->assertSet('sessionPrompt', 'Implement login feature')
+        ->assertSet('sessionResult', 'Login implemented with tests');
+});
+
+test('task modal saves session fields', function () {
+    $task = Task::factory()->doing()->session()->create();
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->set('sessionPrompt', 'Updated prompt')
+        ->set('sessionResult', 'Updated result')
+        ->call('saveTask');
+
+    $task->refresh();
+    expect($task->session_prompt)->toBe('Updated prompt');
+    expect($task->session_result)->toBe('Updated result');
+});

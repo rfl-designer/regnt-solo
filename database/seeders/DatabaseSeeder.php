@@ -169,6 +169,11 @@ class DatabaseSeeder extends Seeder
             ['title' => 'Responder email do cliente', 'project' => null, 'status' => TaskStatus::Inbox, 'priority' => TaskPriority::Urgent, 'estimated_minutes' => 15, 'due_date' => now()->toDateString(), 'completed_at' => null],
             ['title' => 'Agendar reunião de sprint planning', 'project' => null, 'status' => TaskStatus::Inbox, 'priority' => TaskPriority::Medium, 'estimated_minutes' => null, 'due_date' => now()->addDays(2)->toDateString(), 'completed_at' => null],
 
+            // Session tasks (AI-assisted)
+            ['title' => 'Implementar módulo de notificações push', 'project' => 'mobile', 'status' => TaskStatus::Doing, 'priority' => TaskPriority::High, 'estimated_minutes' => 180, 'due_date' => now()->addDays(3)->toDateString(), 'completed_at' => null, 'session_prompt' => 'Implementar sistema de notificações push para o app mobile. Deve suportar notificações em foreground e background, com deep linking para a tela correta. Usar Firebase Cloud Messaging.', 'session_result' => null],
+            ['title' => 'Refatorar serviço de autenticação', 'project' => 'api', 'status' => TaskStatus::Done, 'priority' => TaskPriority::High, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => now()->subDays(1), 'session_prompt' => 'Refatorar o serviço de autenticação para usar o padrão Strategy, separando JWT e OAuth2 em classes distintas. Manter compatibilidade com a API existente.', 'session_result' => 'Serviço refatorado com sucesso. Criados AuthStrategy interface, JwtStrategy e OAuth2Strategy. 12 testes atualizados, todos passando. PR #87 aberto.'],
+            ['title' => 'Criar pipeline de deploy automático', 'project' => 'admin', 'status' => TaskStatus::Doing, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 150, 'due_date' => now()->addDays(5)->toDateString(), 'completed_at' => null, 'session_prompt' => 'Configurar GitHub Actions para deploy automático do Admin Dashboard em staging ao fazer merge na branch develop. Incluir steps de lint, testes e build.', 'session_result' => null],
+
             // Extra tasks with overdue dates
             ['title' => 'Corrigir bug no upload de arquivos', 'project' => 'api', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Urgent, 'estimated_minutes' => 60, 'due_date' => now()->subDays(2)->toDateString(), 'completed_at' => null],
             ['title' => 'Refatorar módulo de pagamentos', 'project' => 'admin', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::High, 'estimated_minutes' => 240, 'due_date' => now()->subDay()->toDateString(), 'completed_at' => null],
@@ -189,6 +194,8 @@ class DatabaseSeeder extends Seeder
                     'due_date' => $def['due_date'],
                     'completed_at' => $def['completed_at'],
                     'sort_order' => $index,
+                    'session_prompt' => $def['session_prompt'] ?? null,
+                    'session_result' => $def['session_result'] ?? null,
                 ]);
 
                 $allTasks->push($task);

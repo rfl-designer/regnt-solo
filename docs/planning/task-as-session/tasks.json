@@ -1,0 +1,200 @@
+{
+  "feature": "task-as-session",
+  "epic": "Epic 15 — Task-as-Session",
+  "created_at": "2026-02-15",
+  "total_stories": 7,
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Migration e Model — Session Fields",
+      "description": "Como desenvolvedor solo, quero que a tabela tasks tenha campos session_prompt e session_result, e que o model Task tenha metodos para identificar e resumir session tasks, para que o sistema possa distinguir tasks normais de session tasks.",
+      "complexity": "P",
+      "estimated_hours": 1.5,
+      "criteria": [
+        "Migration add_session_fields_to_tasks_table criada com session_prompt (text, nullable) e session_result (text, nullable)",
+        "Migration roda com sucesso em SQLite",
+        "Migration tem metodo down() que remove ambas as colunas",
+        "session_prompt e session_result adicionados ao $fillable do model Task",
+        "Metodo isSessionTask(): bool retorna true quando session_prompt nao e null",
+        "Metodo isSessionTask(): bool retorna false quando session_prompt e null",
+        "Metodo sessionSummary(): array retorna array com keys: is_session, prompt, result, pr_url, commits_count, files_changed, status",
+        "sessionSummary() reutiliza commitCount() e totalFilesChanged() existentes",
+        "Tasks existentes (sem session data) continuam funcionando — nenhum teste existente quebra",
+        "Testes Feature criados em tests/Feature/TaskSessionTest.php"
+      ],
+      "dependencies": [],
+      "order": 1,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "database/migrations/XXXX_add_session_fields_to_tasks_table.php",
+        "app/Models/Task.php",
+        "tests/Feature/TaskSessionTest.php"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Factory State e Seeder — Session Data",
+      "description": "Como desenvolvedor solo, quero que a factory de Task tenha um state ->session() e que o seeder inclua tasks com session data, para que eu possa criar session tasks facilmente em testes e ter dados de exemplo.",
+      "complexity": "P",
+      "estimated_hours": 1,
+      "criteria": [
+        "Factory state ->session() criado em TaskFactory com session_prompt e session_result fake",
+        "State ->session() e combinavel com outros states existentes",
+        "Seeder atualizado com 2-3 tasks com session data (doing/done)",
+        "Session tasks no seeder tem dados realistas em PT-BR",
+        "php artisan migrate:fresh --seed roda sem erros",
+        "Teste Feature valida que factory state ->session() cria task com isSessionTask() === true",
+        "Teste Feature valida que factory state ->session() combinado com ->done() funciona"
+      ],
+      "dependencies": ["US-001"],
+      "order": 2,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "database/factories/TaskFactory.php",
+        "database/seeders/DatabaseSeeder.php",
+        "tests/Feature/TaskSessionTest.php"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "MCP Tools — Session Fields no CreateTask, UpdateTask e GetTask",
+      "description": "Como assistente AI usando o MCP server, quero poder criar tasks com session_prompt, atualizar session_prompt/session_result, e ver o session_summary ao consultar uma task, para gerenciar sessoes de coding via MCP.",
+      "complexity": "M",
+      "estimated_hours": 2.5,
+      "criteria": [
+        "CreateTaskTool aceita session_prompt (string, opcional) no schema e validation",
+        "CreateTaskTool: task criada com session_prompt tem isSessionTask() === true",
+        "CreateTaskTool: retorno inclui is_session_task: true/false",
+        "UpdateTaskTool aceita session_prompt e session_result no schema e validation",
+        "UpdateTaskTool permite atualizar session_prompt e session_result independentemente",
+        "GetTaskTool retorno inclui session_summary usando $task->sessionSummary()",
+        "Testes: criar task com session_prompt via CreateTaskTool",
+        "Testes: criar task sem session_prompt (comportamento inalterado)",
+        "Testes: atualizar session_result via UpdateTaskTool",
+        "Testes: GetTask retorna session_summary para session task e task normal",
+        "Todos os testes MCP existentes continuam passando"
+      ],
+      "dependencies": ["US-001"],
+      "order": 3,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "app/Mcp/Tools/CreateTaskTool.php",
+        "app/Mcp/Tools/UpdateTaskTool.php",
+        "app/Mcp/Tools/GetTaskTool.php",
+        "tests/Feature/Mcp/TaskToolsTest.php"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "MCP Prompt — SessionPlanningPrompt",
+      "description": "Como assistente AI usando o MCP server, quero ter um prompt SessionPlanningPrompt que gere contexto para planejar uma sessao de coding, para receber instrucoes estruturadas ao iniciar uma sessao.",
+      "complexity": "M",
+      "estimated_hours": 2.5,
+      "criteria": [
+        "Classe SessionPlanningPrompt criada seguindo padrao do DailyPlanningPrompt",
+        "Argumento obrigatorio: task_id (integer)",
+        "Valida que a task existe e e uma session task",
+        "Contexto inclui: prompt da task, projeto, tasks relacionadas, commits, status",
+        "System message com instrucoes para planejar sessao de coding",
+        "User message com contexto formatado",
+        "SessionPlanningPrompt registrado no SoloBoardServer",
+        "Testes: prompt retorna contexto para session task valida",
+        "Testes: prompt inclui dados do projeto quando task tem projeto",
+        "Testes: prompt inclui commits quando existem",
+        "Testes: prompt falha para task_id inexistente",
+        "Testes: prompt funciona para session task sem projeto"
+      ],
+      "dependencies": ["US-001", "US-003"],
+      "order": 4,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "app/Mcp/Prompts/SessionPlanningPrompt.php",
+        "app/Mcp/Servers/SoloBoardServer.php",
+        "tests/Feature/Mcp/SessionPlanningPromptTest.php"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "Task Modal — Session View",
+      "description": "Como desenvolvedor solo, quero que o Task Modal exiba um layout especial quando a task e uma session task, mostrando o prompt e o resultado, para visualizar e editar dados da sessao diretamente no modal.",
+      "complexity": "M",
+      "estimated_hours": 3,
+      "criteria": [
+        "Task Modal detecta isSessionTask() e exibe secoes adicionais condicionalmente",
+        "Secao Prompt da Sessao exibe session_prompt em bloco estilizado read-only",
+        "Secao Resultado exibe campo editavel com session_result",
+        "Salvar o modal persiste alteracoes no session_result",
+        "Tasks normais nao exibem secoes de session",
+        "Labels em PT-BR: Prompt da Sessao, Resultado",
+        "Dark mode: cores zinc-700/800/900 consistentes",
+        "Teste: modal exibe secao de prompt para session task",
+        "Teste: modal nao exibe secao de prompt para task normal",
+        "Teste: pode salvar session_result via modal",
+        "Teste: secao de resultado e editavel"
+      ],
+      "dependencies": ["US-001"],
+      "order": 5,
+      "status": "backlog",
+      "type": "frontend",
+      "files_affected": [
+        "resources/views/components/⚡task-modal.blade.php",
+        "tests/Feature/TaskModalTest.php"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "Quick-Add — Prefixo > para Session Task",
+      "description": "Como desenvolvedor solo, quero poder criar uma session task rapidamente usando o prefixo > no Quick-Add, para iniciar uma sessao de coding com um unico input.",
+      "complexity": "M",
+      "estimated_hours": 2,
+      "criteria": [
+        "Input comecando com > cria session task: texto apos > vira session_prompt",
+        "Titulo derivado do prompt (primeiras palavras, max 255 chars)",
+        "Prefixo > combinavel com outros prefixos: >Implementar auth #api-gateway !high",
+        "Task criada com session_prompt preenchido e isSessionTask() === true",
+        "Input sem > continua criando task normal",
+        "Input vazio apos > nao cria task",
+        "Toast de sucesso indica session task criada",
+        "Teste: criar session task com >prompt text",
+        "Teste: combinar > com #projeto e !prioridade",
+        "Teste: > sozinho nao cria task",
+        "Teste: task normal sem > continua funcionando"
+      ],
+      "dependencies": ["US-001"],
+      "order": 6,
+      "status": "backlog",
+      "type": "frontend",
+      "files_affected": [
+        "resources/views/components/⚡task-quick-add.blade.php",
+        "tests/Feature/TaskQuickAddTest.php"
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "Kanban Card — Badge para Session Tasks",
+      "description": "Como desenvolvedor solo, quero ver um badge visual nos cards do Kanban quando a task e uma session task, para identificar rapidamente sessoes de coding no board.",
+      "complexity": "P",
+      "estimated_hours": 1,
+      "criteria": [
+        "Cards de session tasks exibem flux:badge size=sm color=violet com texto Sessao",
+        "Badge posicionado junto aos badges existentes",
+        "Tasks normais nao exibem o badge",
+        "Badge usa $task->isSessionTask() sem eager loading extra",
+        "Visual consistente com dark mode e badges existentes",
+        "Teste: badge aparece para session task no kanban",
+        "Teste: badge nao aparece para task normal no kanban"
+      ],
+      "dependencies": ["US-001"],
+      "order": 7,
+      "status": "backlog",
+      "type": "frontend",
+      "files_affected": [
+        "resources/views/pages/⚡kanban.blade.php"
+      ]
+    }
+  ]
+}

@@ -71,6 +71,7 @@ class GetTaskTool extends Tool
                 'deletions' => $commit->deletions,
                 'committed_at' => $commit->committed_at->toDateTimeString(),
             ])->all(),
+            'session_summary' => $task->sessionSummary(),
             'created_at' => $task->created_at->toDateTimeString(),
         ];
 

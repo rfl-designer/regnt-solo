@@ -31,6 +31,7 @@ class CreateTaskTool extends Tool
             'priority' => ['nullable', 'string', Rule::enum(TaskPriority::class)],
             'due_date' => 'nullable|date',
             'estimated_minutes' => 'nullable|integer|min:1',
+            'session_prompt' => 'nullable|string',
         ], [
             'title.required' => 'You must provide a title for the task.',
             'project_slug.exists' => 'Project not found. Use list-projects to find available project slugs.',
@@ -51,6 +52,7 @@ class CreateTaskTool extends Tool
             'priority' => $validated['priority'] ?? TaskPriority::Medium,
             'due_date' => $validated['due_date'] ?? null,
             'estimated_minutes' => $validated['estimated_minutes'] ?? null,
+            'session_prompt' => $validated['session_prompt'] ?? null,
         ]);
 
         $task->load('project');
@@ -63,6 +65,7 @@ class CreateTaskTool extends Tool
             'project' => $task->project?->name,
             'due_date' => $task->due_date?->toDateString(),
             'estimated_minutes' => $task->estimated_minutes,
+            'is_session_task' => $task->isSessionTask(),
             'created_at' => $task->created_at->toDateTimeString(),
         ];
 
@@ -84,6 +87,7 @@ class CreateTaskTool extends Tool
             'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('Task priority. Default: medium.'),
             'due_date' => $schema->string()->description('Due date in YYYY-MM-DD format.'),
             'estimated_minutes' => $schema->integer()->description('Estimated time in minutes to complete the task.'),
+            'session_prompt' => $schema->string()->description('Optional AI session prompt. When provided, the task becomes a session task (AI-assisted coding session).'),
         ];
     }
 }

@@ -34,6 +34,8 @@ class UpdateTaskTool extends Tool
             'priority' => ['nullable', 'string', Rule::enum(TaskPriority::class)],
             'due_date' => 'nullable|date',
             'estimated_minutes' => 'nullable|integer|min:1',
+            'session_prompt' => 'nullable|string',
+            'session_result' => 'nullable|string',
         ], [
             'task_id.required' => 'You must provide a task_id. Use list-tasks to find available task IDs.',
             'task_id.exists' => 'Task not found. Use list-tasks to find available task IDs.',
@@ -77,6 +79,14 @@ class UpdateTaskTool extends Tool
             $updates['estimated_minutes'] = $validated['estimated_minutes'];
         }
 
+        if (array_key_exists('session_prompt', $validated)) {
+            $updates['session_prompt'] = $validated['session_prompt'];
+        }
+
+        if (array_key_exists('session_result', $validated)) {
+            $updates['session_result'] = $validated['session_result'];
+        }
+
         if (! empty($updates)) {
             $task->update($updates);
         }
@@ -94,6 +104,7 @@ class UpdateTaskTool extends Tool
             'completed_at' => $task->completed_at?->toDateTimeString(),
             'is_overdue' => $task->isOverdue(),
             'is_running' => $task->isRunning(),
+            'is_session_task' => $task->isSessionTask(),
             'updated_at' => $task->updated_at->toDateTimeString(),
         ];
 
@@ -116,6 +127,8 @@ class UpdateTaskTool extends Tool
             'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('New priority.'),
             'due_date' => $schema->string()->description('New due date in YYYY-MM-DD format.'),
             'estimated_minutes' => $schema->integer()->description('New estimated time in minutes.'),
+            'session_prompt' => $schema->string()->description('AI session prompt. When provided, the task becomes a session task (AI-assisted coding session).'),
+            'session_result' => $schema->string()->description('Result/summary of the AI coding session.'),
         ];
     }
 }

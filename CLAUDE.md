@@ -97,6 +97,28 @@ Revisão semanal automática com métricas computadas, reflexão pessoal e hist�
   - Histórico: últimas 4 semanas anteriores, clicáveis para navegação
 - **Sidebar**: item "Review" com ícone `clipboard-document-check`
 
+## Task-as-Session (Epic 15)
+
+Modela tasks como sessões de AI coding: 1 task = 1 sessão = 1 PR. Primeira ferramenta PM a modelar o workflow agentic de devs usando Claude Code/Cursor/Copilot.
+
+- **Campos na Task**: `session_prompt` (text) e `session_result` (text) — o prompt dado ao AI e o resumo do que foi implementado
+- **Model Task**:
+  - `isSessionTask(): bool` — identifica tasks com `session_prompt` preenchido
+  - `sessionSummary(): array` — retorna `{prompt, result, pr_url, commits, files_changed, total_time_minutes, focus_time_minutes}`
+- **Factory**: state `->session()` preenche `session_prompt` com texto realista
+- **Seeder**: 3 session tasks realistas (doing/done) com prompts e resultados
+- **MCP Tools**:
+  - `create-task` — aceita `session_prompt` opcional
+  - `update-task` — aceita `session_prompt` e `session_result` opcionais
+  - `get-task` — retorna `session_summary` com dados completos da sessão
+- **MCP Prompt**: `session-planning` — lê o prompt de uma task e gera contexto para planejar a sessão de coding (argumentos: `task_id`)
+- **Task Modal**: seção "Sessão de Desenvolvimento" com:
+  - Prompt editável (read-only se task done) via `<flux:editor>`
+  - Resultado da sessão editável
+  - Timeline visual: Prompt → Timer → Commits → PR → Done (cada etapa com status completo/pendente)
+- **Quick-Add**: prefixo `>` no título cria session task automaticamente + checkbox "Sessão de Dev" para textarea extra
+- **Kanban**: badge 🤖 Sessão (violet) identifica session tasks nos cards
+
 ## Keyboard Shortcuts
 
 | Atalho  | Ação                        |
@@ -139,7 +161,9 @@ O SoloBoard expõe um MCP Server para integração com AI clients (Claude Code, 
   - `add-to-plan` — Adiciona task ao plano do dia
   - `list-projects` — Lista projetos por status
 - **Resource**: `soloboard://overview` — Resumo geral do estado
-- **Prompt**: `daily-planning` — Ajuda a planejar o dia
+- **Prompts**:
+  - `daily-planning` — Ajuda a planejar o dia
+  - `session-planning` — Lê prompt de uma task e gera contexto para planejar sessão de AI coding
 
 <laravel-boost-guidelines>
 === foundation rules ===

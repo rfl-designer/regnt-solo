@@ -195,3 +195,50 @@ test('delete-task fails for non-existent task', function () {
 
     $response->assertHasErrors();
 });
+
+// TaskSession: CreateTaskTool session tests
+test('create-task accepts session_prompt', function () {
+    $response = SoloBoardServer::tool(CreateTaskTool::class, [
+        'title' => 'Session Task',
+        'session_prompt' => 'Implement push notifications with Firebase.',
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('"is_session_task": true');
+
+    $this->assertDatabaseHas('tasks', [
+        'title' => 'Session Task',
+        'session_prompt' => 'Implement push notifications with Firebase.',
+    ]);
+});
+
+// TaskSession: UpdateTaskTool session tests
+test('update-task accepts session_prompt and session_result', function () {
+    $task = Task::factory()->create();
+
+    $response = SoloBoardServer::tool(UpdateTaskTool::class, [
+        'task_id' => $task->id,
+        'session_prompt' => 'Refactor auth service to use Strategy pattern.',
+        'session_result' => 'Refactored successfully. 12 tests passing.',
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('"is_session_task": true');
+
+    $task->refresh();
+    expect($task->session_prompt)->toBe('Refactor auth service to use Strategy pattern.');
+    expect($task->session_result)->toBe('Refactored successfully. 12 tests passing.');
+});
+
+// TaskSession: GetTaskTool session tests
+test('get-task includes session_summary', function () {
+    $task = Task::factory()->session()->create();
+
+    $response = SoloBoardServer::tool(GetTaskTool::class, [
+        'task_id' => $task->id,
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('session_summary');
+    $response->assertSee('"is_session": true');
+});

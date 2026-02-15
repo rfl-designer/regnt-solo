@@ -111,4 +111,15 @@ class TaskFactory extends Factory
             'estimated_minutes' => $minutes,
         ]);
     }
+
+    /**
+     * Indicate that the task is a session task with AI-generated prompt and optional result.
+     */
+    public function session(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'session_prompt' => fake()->paragraph(),
+            'session_result' => fake()->optional(0.7)->paragraph(),
+        ]);
+    }
 }

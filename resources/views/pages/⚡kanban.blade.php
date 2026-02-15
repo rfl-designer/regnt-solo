@@ -6,6 +6,7 @@ use App\Models\Project;
 use App\Models\Task;
 use Carbon\Carbon;
 use Flux\Flux;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
@@ -308,6 +309,13 @@ new class extends Component
                                                 {{ $task->commits_count }} {{ $task->commits_count === 1 ? 'commit' : 'commits' }}
                                             </flux:badge>
                                         @endif
+
+                                        {{-- Session Badge --}}
+                                        @if ($task->isSessionTask())
+                                            <flux:badge size="sm" color="violet" class="gap-1">
+                                                🤖 Sessão
+                                            </flux:badge>
+                                        @endif
                                     </div>
                                 </div>
                             </li>
@@ -379,6 +387,13 @@ new class extends Component
                                                 @if ($task->commits_count > 0)
                                                     <flux:badge size="sm" color="zinc" icon="code-bracket">
                                                         {{ $task->commits_count }} {{ $task->commits_count === 1 ? 'commit' : 'commits' }}
+                                                    </flux:badge>
+                                                @endif
+
+                                                {{-- Session Badge --}}
+                                                @if ($task->isSessionTask())
+                                                    <flux:badge size="sm" color="violet" class="gap-1">
+                                                        🤖 Sessão
                                                     </flux:badge>
                                                 @endif
                                             </div>

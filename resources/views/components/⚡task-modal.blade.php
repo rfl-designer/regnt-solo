@@ -4,6 +4,7 @@ use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TaskCommit;
 use App\Models\TimeEntry;
 use Flux\Flux;
 use Livewire\Attributes\Computed;
@@ -38,6 +39,10 @@ new class extends Component
     /** @var array<string, array{label: string, minutes: float, color: string, hex_color: string, percentage: float}> */
     public array $statusTimeSegments = [];
 
+    public string $sessionPrompt = '';
+
+    public string $sessionResult = '';
+
     public string $prUrl = '';
 
     /** @var array<int, array{hash: string, short_hash: string, message: string, files_changed: int, insertions: int, deletions: int, committed_at: string}> */
@@ -50,6 +55,12 @@ new class extends Component
     public function projects(): \Illuminate\Database\Eloquent\Collection
     {
         return Project::active()->orderBy('name')->get();
+    }
+
+    #[Computed]
+    public function isSessionTask(): bool
+    {
+        return $this->sessionPrompt !== '';
     }
 
     #[On('open-task-modal')]
@@ -81,6 +92,9 @@ new class extends Component
             ->all();
 
         $this->statusTimeSegments = $this->buildStatusTimeSegments($task);
+
+        $this->sessionPrompt = $task->session_prompt ?? '';
+        $this->sessionResult = $task->session_result ?? '';
 
         $this->prUrl = $task->pr_url ?? '';
 
@@ -191,6 +205,8 @@ new class extends Component
                 'due_date' => $this->dueDate ?: null,
                 'estimated_minutes' => $this->estimatedMinutes,
                 'pr_url' => $this->prUrl ?: null,
+                'session_prompt' => $this->sessionPrompt ?: null,
+                'session_result' => $this->sessionResult ?: null,
             ]);
             $task->markAsDone();
             $this->status = TaskStatus::Done->value;
@@ -205,6 +221,8 @@ new class extends Component
                 'estimated_minutes' => $this->estimatedMinutes,
                 'completed_at' => $newStatus === TaskStatus::Done ? $task->completed_at : null,
                 'pr_url' => $this->prUrl ?: null,
+                'session_prompt' => $this->sessionPrompt ?: null,
+                'session_result' => $this->sessionResult ?: null,
             ]);
         }
 
@@ -261,7 +279,7 @@ new class extends Component
 
         $this->showDeleteConfirm = false;
         $this->showModal = false;
-        $this->reset('taskId', 'title', 'description', 'projectId', 'priority', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'commits');
+        $this->reset('taskId', 'title', 'description', 'projectId', 'priority', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'commits', 'sessionPrompt', 'sessionResult');
 
         $this->dispatch('task-updated');
 
@@ -332,6 +350,109 @@ new class extends Component
                 placeholder="Ex: 60"
                 min="1"
             />
+
+            {{-- Sessão de Desenvolvimento --}}
+            @if ($this->isSessionTask)
+                @php
+                    $totalMinutes = collect($timeEntries)->sum('duration_minutes');
+                    $commitsCount = count($commits);
+                    $focusMinutes = collect($timeEntries)->where('is_focus_session', true)->sum('duration_minutes');
+                    $isDone = $status === TaskStatus::Done->value;
+                @endphp
+                <div class="space-y-4">
+                    <flux:separator />
+                    <flux:heading size="sm" class="flex items-center gap-2">
+                        <flux:icon name="command-line" variant="mini" class="text-violet-400" />
+                        Sessão de Desenvolvimento
+                    </flux:heading>
+
+                    {{-- Prompt da Sessão --}}
+                    <flux:field>
+                        <flux:label>Prompt da Sessão</flux:label>
+                        @if ($isDone)
+                            <div class="rounded-lg border border-zinc-700 bg-zinc-800/50 p-3 text-sm text-zinc-300">
+                                {{ $sessionPrompt }}
+                            </div>
+                        @else
+                            <flux:textarea wire:model="sessionPrompt" rows="4" placeholder="Descreva o que o AI deve implementar..." />
+                        @endif
+                    </flux:field>
+
+                    {{-- Resultado da Sessão --}}
+                    @if ($sessionResult || $isDone)
+                        <flux:field>
+                            <flux:label>Resultado da Sessão</flux:label>
+                            <flux:textarea wire:model="sessionResult" rows="3" placeholder="Resumo do que foi implementado..." />
+                        </flux:field>
+                    @endif
+
+                    {{-- Timeline da Sessão --}}
+                    <div class="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
+                        {{-- Prompt --}}
+                        <div class="flex items-center gap-1.5">
+                            <div class="flex h-6 w-6 items-center justify-center rounded-full {{ $sessionPrompt ? 'bg-violet-500/20 text-violet-400' : 'bg-zinc-700 text-zinc-500' }}">
+                                <flux:icon name="document-text" variant="micro" />
+                            </div>
+                            <span class="text-xs {{ $sessionPrompt ? 'text-zinc-300' : 'text-zinc-500' }}">Prompt</span>
+                        </div>
+
+                        <flux:icon name="chevron-right" variant="micro" class="text-zinc-600" />
+
+                        {{-- Timer --}}
+                        <div class="flex items-center gap-1.5">
+                            <div class="flex h-6 w-6 items-center justify-center rounded-full {{ $totalMinutes > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-zinc-700 text-zinc-500' }}">
+                                <flux:icon name="clock" variant="micro" />
+                            </div>
+                            <span class="text-xs {{ $totalMinutes > 0 ? 'text-zinc-300' : 'text-zinc-500' }}">
+                                {{ $totalMinutes > 0 ? round($totalMinutes / 60, 1) . 'h' : 'Timer' }}
+                            </span>
+                        </div>
+
+                        <flux:icon name="chevron-right" variant="micro" class="text-zinc-600" />
+
+                        {{-- Commits --}}
+                        <div class="flex items-center gap-1.5">
+                            <div class="flex h-6 w-6 items-center justify-center rounded-full {{ $commitsCount > 0 ? 'bg-green-500/20 text-green-400' : 'bg-zinc-700 text-zinc-500' }}">
+                                <flux:icon name="code-bracket" variant="micro" />
+                            </div>
+                            <span class="text-xs {{ $commitsCount > 0 ? 'text-zinc-300' : 'text-zinc-500' }}">
+                                {{ $commitsCount > 0 ? $commitsCount . ' commits' : 'Commits' }}
+                            </span>
+                        </div>
+
+                        <flux:icon name="chevron-right" variant="micro" class="text-zinc-600" />
+
+                        {{-- PR --}}
+                        <div class="flex items-center gap-1.5">
+                            <div class="flex h-6 w-6 items-center justify-center rounded-full {{ $prUrl ? 'bg-orange-500/20 text-orange-400' : 'bg-zinc-700 text-zinc-500' }}">
+                                <flux:icon name="arrow-up-on-square" variant="micro" />
+                            </div>
+                            @if ($prUrl)
+                                <a href="{{ $prUrl }}" target="_blank" class="text-xs text-orange-400 hover:underline">PR</a>
+                            @else
+                                <span class="text-xs text-zinc-500">PR</span>
+                            @endif
+                        </div>
+
+                        <flux:icon name="chevron-right" variant="micro" class="text-zinc-600" />
+
+                        {{-- Done --}}
+                        <div class="flex items-center gap-1.5">
+                            <div class="flex h-6 w-6 items-center justify-center rounded-full {{ $isDone ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-700 text-zinc-500' }}">
+                                <flux:icon name="check" variant="micro" />
+                            </div>
+                            <span class="text-xs {{ $isDone ? 'text-emerald-400' : 'text-zinc-500' }}">Done</span>
+                        </div>
+
+                        {{-- Focus badge --}}
+                        @if ($focusMinutes > 0)
+                            <flux:badge size="sm" color="amber" class="ml-auto">
+                                🎯 {{ round($focusMinutes / 60, 1) }}h de focus
+                            </flux:badge>
+                        @endif
+                    </div>
+                </div>
+            @endif
 
             {{-- Time Entries Section --}}
             @if (count($timeEntries) > 0)

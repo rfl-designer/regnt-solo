@@ -28,6 +28,22 @@ Route::livewire('projects/{slug}', 'pages::project-detail')
     ->middleware(['auth'])
     ->name('project.detail');
 
+Route::livewire('docs', 'pages::documents')
+    ->middleware(['auth'])
+    ->name('documents');
+
+Route::livewire('docs/new', 'pages::document-edit')
+    ->middleware(['auth'])
+    ->name('document.create');
+
+Route::livewire('docs/{slug}/edit', 'pages::document-edit')
+    ->middleware(['auth'])
+    ->name('document.edit');
+
+Route::livewire('docs/{slug}', 'pages::document-view')
+    ->middleware(['auth'])
+    ->name('document.view');
+
 Route::livewire('time', 'pages::time-report')
     ->middleware(['auth'])
     ->name('time');

@@ -36,6 +36,7 @@ class Task extends Model
         'estimated_minutes',
         'completed_at',
         'sort_order',
+        'pr_url',
     ];
 
     /**
@@ -59,6 +60,14 @@ class Task extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * Get the commits associated with this task.
+     */
+    public function commits(): HasMany
+    {
+        return $this->hasMany(TaskCommit::class);
     }
 
     /**
@@ -216,6 +225,30 @@ class Task extends Model
         }
 
         return $this->timeEntries()->running()->exists();
+    }
+
+    /**
+     * Get the total number of commits for this task.
+     */
+    public function commitCount(): int
+    {
+        if ($this->relationLoaded('commits')) {
+            return $this->commits->count();
+        }
+
+        return $this->commits()->count();
+    }
+
+    /**
+     * Get the total number of files changed across all commits.
+     */
+    public function totalFilesChanged(): int
+    {
+        if ($this->relationLoaded('commits')) {
+            return (int) $this->commits->sum('files_changed');
+        }
+
+        return (int) $this->commits()->sum('files_changed');
     }
 
     /**

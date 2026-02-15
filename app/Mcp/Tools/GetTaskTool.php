@@ -29,7 +29,7 @@ class GetTaskTool extends Tool
         ]);
 
         $task = Task::query()
-            ->with(['project', 'timeEntries', 'dailyPlans', 'statusChanges'])
+            ->with(['project', 'timeEntries', 'dailyPlans', 'statusChanges', 'commits'])
             ->findOrFail($validated['task_id']);
 
         $data = [
@@ -46,6 +46,7 @@ class GetTaskTool extends Tool
             'due_date' => $task->due_date?->toDateString(),
             'estimated_minutes' => $task->estimated_minutes,
             'completed_at' => $task->completed_at?->toDateTimeString(),
+            'pr_url' => $task->pr_url,
             'is_overdue' => $task->isOverdue(),
             'is_running' => $task->isRunning(),
             'time_entries' => $task->timeEntries->map(fn ($entry) => [
@@ -62,6 +63,14 @@ class GetTaskTool extends Tool
             'status_timeline' => $this->buildStatusTimeline($task),
             'time_in_status' => $task->time_in_status,
             'current_status_duration_minutes' => $task->current_status_duration,
+            'commits' => $task->commits->sortByDesc('committed_at')->values()->map(fn ($commit) => [
+                'hash' => $commit->hash,
+                'message' => $commit->message,
+                'files_changed' => $commit->files_changed,
+                'insertions' => $commit->insertions,
+                'deletions' => $commit->deletions,
+                'committed_at' => $commit->committed_at->toDateTimeString(),
+            ])->all(),
             'created_at' => $task->created_at->toDateTimeString(),
         ];
 

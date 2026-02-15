@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '@tailwindcss/typography';
 @import '../../vendor/livewire/flux/dist/flux.css';
 
 @source '../views';
@@ -64,3 +65,36 @@ select:focus[data-flux-control] {
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
+
+/* Markdown Viewer Styles */
+.markdown-viewer {
+    @apply prose prose-invert prose-indigo max-w-none;
+}
+
+.markdown-viewer pre {
+    @apply rounded-lg bg-zinc-900 border border-zinc-700;
+}
+
+.markdown-viewer code:not(pre code) {
+    @apply bg-zinc-800 text-zinc-200 rounded px-1.5 py-0.5 text-sm;
+}
+
+.markdown-viewer a {
+    @apply text-indigo-400 hover:text-indigo-300;
+}
+
+.markdown-viewer blockquote {
+    @apply border-l-indigo-500;
+}
+
+.markdown-viewer table {
+    @apply border-collapse;
+}
+
+.markdown-viewer th {
+    @apply border border-zinc-700 bg-zinc-800 px-3 py-2;
+}
+
+.markdown-viewer td {
+    @apply border border-zinc-700 px-3 py-2;
+}

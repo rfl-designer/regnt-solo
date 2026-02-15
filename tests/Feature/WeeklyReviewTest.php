@@ -406,3 +406,58 @@ test('tasksCreatedVsCompleted does not count tasks outside the week', function (
     expect($result['created'])->toBe(0)
         ->and($result['completed'])->toBe(0);
 });
+
+// ─── US-003: Artisan Command ─────────────────────────────────────────
+
+test('soloboard:weekly-review command creates review for current week', function () {
+    expect(WeeklyReview::count())->toBe(0);
+
+    $this->artisan('soloboard:weekly-review')
+        ->assertExitCode(0)
+        ->expectsOutputToContain('Weekly Review gerada com sucesso!');
+
+    expect(WeeklyReview::count())->toBe(1);
+
+    $review = WeeklyReview::first();
+    expect($review->week_start->toDateString())->toBe(now()->startOfWeek()->toDateString());
+});
+
+test('soloboard:weekly-review command accepts --week option', function () {
+    $targetDate = now()->subWeeks(2)->startOfWeek();
+
+    $this->artisan('soloboard:weekly-review', ['--week' => $targetDate->toDateString()])
+        ->assertExitCode(0);
+
+    $review = WeeklyReview::first();
+    expect($review->week_start->toDateString())->toBe($targetDate->toDateString());
+});
+
+test('soloboard:weekly-review command is idempotent', function () {
+    $this->artisan('soloboard:weekly-review')->assertExitCode(0);
+    $this->artisan('soloboard:weekly-review')->assertExitCode(0);
+
+    expect(WeeklyReview::count())->toBe(1);
+});
+
+test('soloboard:weekly-review command fails with invalid date', function () {
+    $this->artisan('soloboard:weekly-review', ['--week' => 'invalid-date'])
+        ->assertExitCode(1)
+        ->expectsOutputToContain('Data invalida');
+});
+
+test('soloboard:weekly-review command displays summary with metrics', function () {
+    $task = Task::withoutEvents(fn () => Task::factory()->done()->create([
+        'completed_at' => now()->startOfWeek()->addDay(),
+    ]));
+
+    TimeEntry::factory()->create([
+        'task_id' => $task->id,
+        'started_at' => now()->startOfWeek()->addHours(9),
+        'stopped_at' => now()->startOfWeek()->addHours(11),
+    ]);
+
+    $this->artisan('soloboard:weekly-review')
+        ->assertExitCode(0)
+        ->expectsOutputToContain('Weekly Review gerada com sucesso!')
+        ->expectsOutputToContain('Tasks completadas');
+});

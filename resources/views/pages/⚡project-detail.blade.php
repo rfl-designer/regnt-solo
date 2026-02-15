@@ -34,8 +34,17 @@ new class extends Component
     {
         return Project::query()
             ->where('slug', $this->slug)
-            ->with(['tasks.timeEntries', 'tasks.commits'])
+            ->with(['tasks.timeEntries', 'tasks.commits', 'documents'])
             ->firstOrFail();
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, \App\Models\Document>
+     */
+    #[Computed]
+    public function projectDocuments(): \Illuminate\Database\Eloquent\Collection
+    {
+        return $this->project->documents->sortByDesc('is_pinned')->sortBy('sort_order');
     }
 
     /**
@@ -116,9 +125,10 @@ new class extends Component
     #[On('task-created')]
     #[On('task-updated')]
     #[On('project-updated')]
+    #[On('document-saved')]
     public function refreshProject(): void
     {
-        unset($this->project, $this->tasksByStatus, $this->metrics);
+        unset($this->project, $this->tasksByStatus, $this->metrics, $this->projectDocuments);
     }
 }
 
@@ -197,6 +207,7 @@ new class extends Component
     <flux:tab.group>
         <flux:tabs wire:model="tab">
             <flux:tab name="tasks" icon="clipboard-document-list">Tasks</flux:tab>
+            <flux:tab name="docs" icon="document-text">Docs</flux:tab>
             <flux:tab name="metrics" icon="chart-bar-square">Métricas</flux:tab>
         </flux:tabs>
 
@@ -278,6 +289,69 @@ new class extends Component
                         </div>
                     @endforeach
                 </div>
+            </div>
+        </flux:tab.panel>
+
+        {{-- Tab Panel: Docs --}}
+        <flux:tab.panel name="docs">
+            <div class="flex flex-col gap-4">
+                {{-- New Document button --}}
+                <div class="flex justify-end">
+                    <flux:button
+                        size="sm"
+                        variant="primary"
+                        icon="plus"
+                        href="{{ route('document.create') }}?project={{ $this->project->id }}"
+                        wire:navigate
+                    >
+                        Novo Documento
+                    </flux:button>
+                </div>
+
+                @if ($this->projectDocuments->isEmpty())
+                    <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 py-12">
+                        <flux:icon name="document-text" class="mb-3 size-10 text-zinc-600" />
+                        <flux:text class="text-sm text-zinc-500">Nenhum documento neste projeto.</flux:text>
+                    </div>
+                @else
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        @foreach ($this->projectDocuments as $document)
+                            <div
+                                wire:key="doc-{{ $document->id }}"
+                                class="flex items-start gap-3 rounded-lg border border-zinc-700 bg-zinc-900/50 p-3 transition hover:border-zinc-500"
+                            >
+                                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-{{ $document->type->color() }}-500/10">
+                                    <flux:icon :name="$document->type->icon()" class="size-4 text-{{ $document->type->color() }}-400" />
+                                </div>
+
+                                <div class="min-w-0 flex-1">
+                                    <a href="{{ route('document.view', $document->slug) }}" wire:navigate class="text-sm font-medium text-zinc-200 hover:text-white">
+                                        {{ $document->title }}
+                                    </a>
+                                    <div class="mt-1 flex items-center gap-2">
+                                        <flux:badge size="sm" :color="$document->type->color()">
+                                            {{ $document->type->label() }}
+                                        </flux:badge>
+                                        @if ($document->is_pinned)
+                                            <flux:icon name="star" variant="micro" class="size-3 text-amber-400" />
+                                        @endif
+                                    </div>
+                                    <flux:text class="mt-1 line-clamp-2 text-xs text-zinc-500">
+                                        {{ $document->excerpt(100) }}
+                                    </flux:text>
+                                </div>
+
+                                <flux:button
+                                    variant="ghost"
+                                    size="xs"
+                                    icon="pencil-square"
+                                    href="{{ route('document.edit', $document->slug) }}"
+                                    wire:navigate
+                                />
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
             </div>
         </flux:tab.panel>
 

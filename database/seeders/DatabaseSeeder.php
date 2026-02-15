@@ -9,6 +9,7 @@ use App\Enums\TaskStatus;
 use App\Models\DailyPlan;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TaskStatusChange;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\Carbon;
@@ -30,6 +31,7 @@ class DatabaseSeeder extends Seeder
 
         $projects = $this->createProjects();
         $tasks = $this->createTasks($projects);
+        $this->createStatusChangeHistory($tasks);
         $this->createTimeEntries($tasks);
         $this->createDailyPlan($tasks);
         $this->createRunningTimer($tasks);
@@ -112,6 +114,9 @@ class DatabaseSeeder extends Seeder
     /**
      * Create 35 realistic tasks distributed across projects and statuses.
      *
+     * Tasks are created without events to avoid observer creating status changes,
+     * since we generate a realistic retroactive history separately.
+     *
      * @param  array<string, Project>  $projects
      * @return \Illuminate\Support\Collection<int, Task>
      */
@@ -171,24 +176,75 @@ class DatabaseSeeder extends Seeder
             ['title' => 'Configurar testes E2E com Cypress', 'project' => 'landing', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => null],
         ];
 
-        $allTasks = collect();
+        return Task::withoutEvents(function () use ($taskDefinitions, $projects) {
+            $allTasks = collect();
 
-        foreach ($taskDefinitions as $index => $def) {
-            $task = Task::create([
-                'title' => $def['title'],
-                'project_id' => $def['project'] !== null ? $projects[$def['project']]->id : null,
-                'status' => $def['status'],
-                'priority' => $def['priority'],
-                'estimated_minutes' => $def['estimated_minutes'],
-                'due_date' => $def['due_date'],
-                'completed_at' => $def['completed_at'],
-                'sort_order' => $index,
-            ]);
+            foreach ($taskDefinitions as $index => $def) {
+                $task = Task::create([
+                    'title' => $def['title'],
+                    'project_id' => $def['project'] !== null ? $projects[$def['project']]->id : null,
+                    'status' => $def['status'],
+                    'priority' => $def['priority'],
+                    'estimated_minutes' => $def['estimated_minutes'],
+                    'due_date' => $def['due_date'],
+                    'completed_at' => $def['completed_at'],
+                    'sort_order' => $index,
+                ]);
 
-            $allTasks->push($task);
+                $allTasks->push($task);
+            }
+
+            return $allTasks;
+        });
+    }
+
+    /**
+     * Create retroactive status change history for all tasks.
+     *
+     * Generates a realistic timeline of status transitions based on each task's current status.
+     *
+     * @param  \Illuminate\Support\Collection<int, Task>  $tasks
+     */
+    private function createStatusChangeHistory(\Illuminate\Support\Collection $tasks): void
+    {
+        /** @var array<string, list<TaskStatus>> $statusPaths */
+        $statusPaths = [
+            TaskStatus::Inbox->value => [TaskStatus::Inbox],
+            TaskStatus::Backlog->value => [TaskStatus::Inbox, TaskStatus::Backlog],
+            TaskStatus::Todo->value => [TaskStatus::Inbox, TaskStatus::Backlog, TaskStatus::Todo],
+            TaskStatus::Doing->value => [TaskStatus::Inbox, TaskStatus::Backlog, TaskStatus::Todo, TaskStatus::Doing],
+            TaskStatus::Done->value => [TaskStatus::Inbox, TaskStatus::Backlog, TaskStatus::Todo, TaskStatus::Doing, TaskStatus::Done],
+        ];
+
+        foreach ($tasks as $task) {
+            $path = $statusPaths[$task->status->value];
+            $stepsCount = count($path);
+
+            // Spread changes over the last 30 days, ending near now
+            $baseDate = Carbon::now()->subDays(rand(15, 30));
+
+            $previousStatus = null;
+
+            foreach ($path as $stepIndex => $status) {
+                // Distribute timestamps evenly with some randomness
+                $hoursOffset = $stepIndex * rand(24, 72);
+                $changedAt = $baseDate->copy()->addHours($hoursOffset)->addMinutes(rand(0, 59));
+
+                // Ensure last step is not in the future
+                if ($changedAt->isFuture()) {
+                    $changedAt = Carbon::now()->subMinutes(rand(1, 60 * ($stepsCount - $stepIndex)));
+                }
+
+                TaskStatusChange::create([
+                    'task_id' => $task->id,
+                    'from_status' => $previousStatus,
+                    'to_status' => $status,
+                    'changed_at' => $changedAt,
+                ]);
+
+                $previousStatus = $status;
+            }
         }
-
-        return $allTasks;
     }
 
     /**

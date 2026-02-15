@@ -1,0 +1,194 @@
+{
+  "feature": "epic-11-status-time-tracking",
+  "created_at": "2026-02-15",
+  "total_stories": 7,
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Migration e Model TaskStatusChange",
+      "description": "Como desenvolvedor, quero uma tabela e model para registrar mudancas de status das tasks, para ter a infraestrutura de dados necessaria para calcular tempo por status",
+      "complexity": "P",
+      "estimated_hours": 1.5,
+      "criteria": [
+        "Migration create_task_status_changes_table cria tabela com id, task_id (FK cascade), status (string), changed_at (timestamp), timestamps",
+        "Indice composto em [task_id, changed_at] para queries performaticas",
+        "Model TaskStatusChange com $fillable: task_id, status, changed_at",
+        "Cast status para TaskStatus enum e changed_at para datetime no metodo casts()",
+        "Relationship task() retorna BelongsTo para Task",
+        "Factory TaskStatusChangeFactory com definition basica e states: inbox(), backlog(), todo(), doing(), done()",
+        "Migration executada cria tabela com colunas e FK corretas",
+        "Teste Feature: model criado via factory, casts funcionam, relationship task() retorna Task"
+      ],
+      "dependencies": [],
+      "order": 1,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "database/migrations/xxxx_create_task_status_changes_table.php",
+        "app/Models/TaskStatusChange.php",
+        "database/factories/TaskStatusChangeFactory.php",
+        "tests/Feature/TaskStatusChangeTest.php"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Observer TaskObserver com registro automatico de mudancas",
+      "description": "Como usuario, quero que cada mudanca de status das minhas tasks seja registrada automaticamente, para ter um historico completo sem precisar fazer nada manualmente",
+      "complexity": "M",
+      "estimated_hours": 3,
+      "criteria": [
+        "Observer TaskObserver criado em app/Observers/TaskObserver.php",
+        "Registrado via atributo #[ObservedBy(TaskObserver::class)] no model Task (padrao Laravel 12)",
+        "Evento created: registra TaskStatusChange com status inicial e changed_at = created_at da task",
+        "Evento updating: se $task->isDirty('status'), registra TaskStatusChange com NOVO status e changed_at = now()",
+        "Evento updating: se status NAO mudou, nao cria registro",
+        "Task criada com status Inbox gera 1 registro com status=inbox",
+        "Task atualizada de Todo para Doing gera registro com status=doing",
+        "Task atualizada apenas no titulo nao gera novo registro",
+        "markAsDone() gera registro com status=done (observer captura update interno)",
+        "Suite completa de testes existentes continua passando apos registrar observer",
+        "Teste Feature: criacao registra status inicial, update de status registra, update sem status nao registra, markAsDone registra"
+      ],
+      "dependencies": ["US-001"],
+      "order": 2,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "app/Observers/TaskObserver.php",
+        "app/Models/Task.php",
+        "tests/Feature/TaskStatusChangeTest.php"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Relationship e Accessors de tempo no Task model",
+      "description": "Como usuario, quero consultar quanto tempo cada task passou em cada status, para entender o fluxo de trabalho e identificar gargalos",
+      "complexity": "M",
+      "estimated_hours": 3,
+      "criteria": [
+        "Relationship statusChanges() no Task retorna HasMany ordenado por changed_at asc",
+        "Accessor time_per_status retorna array<string, float> com minutos em cada status",
+        "Accessor time_per_status calcula tempo entre mudancas consecutivas de changed_at",
+        "Accessor time_per_status inclui tempo no status atual (ultimo registro ate now())",
+        "Accessor time_per_status retorna array vazio quando task nao tem historico",
+        "Accessor time_per_status acumula tempo se task voltou para status anterior",
+        "Accessor current_status_duration retorna float com minutos no status atual",
+        "Accessor current_status_duration retorna 0.0 quando task nao tem historico",
+        "Task com 3 mudancas (Inbox 2h, Todo 1h, Doing 30min) retorna valores corretos",
+        "Funciona corretamente com CarbonImmutable",
+        "Teste Feature: time_per_status multiplas mudancas, status repetido acumula, sem historico vazio, current_status_duration correto"
+      ],
+      "dependencies": ["US-002"],
+      "order": 3,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "app/Models/Task.php",
+        "tests/Feature/TaskStatusChangeTest.php"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Seeder com historico retroativo de status",
+      "description": "Como desenvolvedor, quero que o seeder gere historico de mudancas de status para as tasks existentes, para ter dados realistas para visualizar metricas de tempo",
+      "complexity": "M",
+      "estimated_hours": 2,
+      "criteria": [
+        "Metodo createStatusHistory(Task $task) adicionado ao DatabaseSeeder",
+        "Gera mudancas seguindo fluxo natural: Inbox -> Backlog -> Todo -> Doing -> Done ate status atual",
+        "Timestamps retroativos e realistas: baseados no created_at com intervalos de 1-48h entre mudancas",
+        "Tasks Done tem historico completo ate Done",
+        "Tasks Inbox tem apenas 1 registro (status inicial)",
+        "Observer desabilitado durante seeder (Task::withoutEvents()) para evitar duplicatas",
+        "Seeder executado gera historico coerente para todas as 35 tasks",
+        "Task com status Doing tem registros para Inbox, Backlog, Todo e Doing em ordem cronologica"
+      ],
+      "dependencies": ["US-002"],
+      "order": 4,
+      "status": "backlog",
+      "type": "core",
+      "files_affected": [
+        "database/seeders/DatabaseSeeder.php"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "Barra segmentada de tempo por status no Task Modal",
+      "description": "Como usuario, quero ver uma barra visual no modal da task mostrando quanto tempo ela passou em cada status, para entender rapidamente o ciclo de vida da task",
+      "complexity": "G",
+      "estimated_hours": 4,
+      "criteria": [
+        "Secao Tempo por status adicionada ao Task Modal abaixo dos campos de edicao",
+        "Barra horizontal segmentada (stacked bar) com largura proporcional ao tempo em cada status",
+        "Cada segmento usa cor do TaskStatus::color() (zinc, slate, blue, amber, emerald)",
+        "Tooltip em cada segmento mostra label PT-BR + tempo formatado (ex: Fazendo: 2h 30min)",
+        "Legenda abaixo da barra com icone + label + tempo de cada status presente",
+        "Formatacao de tempo: < 60min Xmin, >= 60min Xh Ymin, >= 24h Xd Xh",
+        "Task sem historico: secao nao aparece (graceful degradation)",
+        "Task com historico: barra renderiza com segmentos proporcionais e cores corretas",
+        "Eager loading de statusChanges ao abrir modal para evitar N+1",
+        "Teste Feature: barra renderiza com dados, secao esconde sem historico, cores corretas"
+      ],
+      "dependencies": ["US-003"],
+      "order": 5,
+      "status": "backlog",
+      "type": "frontend",
+      "files_affected": [
+        "resources/views/components/⚡task-modal.blade.php",
+        "tests/Feature/TaskModalTest.php"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "Metricas de tempo medio no Dashboard",
+      "description": "Como usuario, quero ver metricas de tempo medio por status no dashboard, para entender a velocidade do meu fluxo de trabalho e identificar gargalos",
+      "complexity": "G",
+      "estimated_hours": 5,
+      "criteria": [
+        "Dashboard deixa de ser placeholder e exibe cards de metricas reais",
+        "Card Tempo medio total: media de cycle time para tasks concluidas nos ultimos 30 dias",
+        "Card Tempo medio por coluna: media de tempo em cada status para tasks concluidas nos ultimos 30 dias",
+        "Card Tasks concluidas: quantidade de tasks concluidas nos ultimos 30 dias",
+        "Metricas calculadas via queries agregadas no banco para performance",
+        "Filtro de periodo: ultimos 30 dias (hardcoded)",
+        "Sem tasks concluidas: cards exibem Sem dados ou valor zero",
+        "Com tasks concluidas: medias calculadas corretamente",
+        "Formatacao de tempo consistente com US-005 (Xmin, Xh Ymin, Xd Xh)",
+        "Labels e textos em PT-BR",
+        "Teste Feature: metricas calculam corretamente com dados, exibem gracefully sem dados"
+      ],
+      "dependencies": ["US-003"],
+      "order": 6,
+      "status": "backlog",
+      "type": "both",
+      "files_affected": [
+        "resources/views/pages/⚡dashboard.blade.php",
+        "tests/Feature/DashboardTest.php"
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "Timeline de status no MCP GetTaskTool",
+      "description": "Como assistente AI (via MCP), quero receber o historico de mudancas de status e tempo por status ao consultar uma task, para fornecer contexto temporal completo ao usuario",
+      "complexity": "P",
+      "estimated_hours": 1.5,
+      "criteria": [
+        "GetTaskTool inclui campo status_timeline no response: array com status, changed_at e label ordenados cronologicamente",
+        "GetTaskTool inclui campo time_per_status no response: objeto com status como chave e minutos como valor",
+        "GetTaskTool inclui campo current_status_duration_minutes no response",
+        "Eager loading de statusChanges adicionado a query do GetTaskTool",
+        "Task com historico de 3 mudancas retorna timeline com 3 entries e time_per_status correto",
+        "Task sem historico retorna status_timeline vazio, time_per_status vazio, duration 0",
+        "Teste Feature: response inclui timeline e time_per_status, dados corretos, graceful sem historico"
+      ],
+      "dependencies": ["US-003"],
+      "order": 7,
+      "status": "backlog",
+      "type": "frontend",
+      "files_affected": [
+        "app/Mcp/Tools/GetTaskTool.php",
+        "tests/Feature/Mcp/TaskToolsTest.php"
+      ]
+    }
+  ]
+}

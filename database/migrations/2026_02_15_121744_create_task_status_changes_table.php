@@ -18,7 +18,6 @@ return new class extends Migration
             $table->string('to_status');
             $table->dateTime('changed_at');
 
-            $table->index('task_id');
             $table->index('changed_at');
         });
     }

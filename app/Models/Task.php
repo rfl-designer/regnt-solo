@@ -95,7 +95,9 @@ class Task extends Model
     protected function timeInStatus(): Attribute
     {
         return Attribute::get(function (): array {
-            $changes = $this->statusChanges()->orderBy('changed_at')->get();
+            $changes = $this->relationLoaded('statusChanges')
+                ? $this->statusChanges->sortBy('changed_at')->values()
+                : $this->statusChanges()->orderBy('changed_at')->get();
 
             $times = [];
             foreach (TaskStatus::cases() as $status) {
@@ -111,11 +113,9 @@ class Task extends Model
                 $statusValue = $change->to_status->value;
                 $start = $change->changed_at;
 
-                if ($i + 1 < $changes->count()) {
-                    $end = $changes[$i + 1]->changed_at;
-                } else {
-                    $end = now();
-                }
+                $end = $i + 1 < $changes->count()
+                    ? $changes[$i + 1]->changed_at
+                    : now();
 
                 $times[$statusValue] += round($start->diffInMinutes($end), 2);
             }
@@ -130,7 +130,9 @@ class Task extends Model
     protected function currentStatusDuration(): Attribute
     {
         return Attribute::get(function (): float {
-            $lastChange = $this->statusChanges()->orderByDesc('changed_at')->first();
+            $lastChange = $this->relationLoaded('statusChanges')
+                ? $this->statusChanges->sortByDesc('changed_at')->first()
+                : $this->statusChanges()->orderByDesc('changed_at')->first();
 
             if ($lastChange === null) {
                 return 0.0;

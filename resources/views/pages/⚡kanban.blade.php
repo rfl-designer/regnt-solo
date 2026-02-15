@@ -137,6 +137,7 @@ new class extends Component
     {
         $query = Task::query()
             ->with('project', 'timeEntries')
+            ->withCount('commits')
             ->where('status', $status);
 
         if ($status === TaskStatus::Done) {
@@ -300,6 +301,13 @@ new class extends Component
                                                 Timer
                                             </flux:badge>
                                         @endif
+
+                                        {{-- Commits Badge --}}
+                                        @if ($task->commits_count > 0)
+                                            <flux:badge size="sm" color="zinc" icon="code-bracket">
+                                                {{ $task->commits_count }} {{ $task->commits_count === 1 ? 'commit' : 'commits' }}
+                                            </flux:badge>
+                                        @endif
                                     </div>
                                 </div>
                             </li>
@@ -364,6 +372,13 @@ new class extends Component
                                                     <flux:badge size="sm" color="emerald" class="animate-pulse">
                                                         <div class="mr-1 size-2 rounded-full bg-emerald-400"></div>
                                                         Timer
+                                                    </flux:badge>
+                                                @endif
+
+                                                {{-- Commits Badge --}}
+                                                @if ($task->commits_count > 0)
+                                                    <flux:badge size="sm" color="zinc" icon="code-bracket">
+                                                        {{ $task->commits_count }} {{ $task->commits_count === 1 ? 'commit' : 'commits' }}
                                                     </flux:badge>
                                                 @endif
                                             </div>

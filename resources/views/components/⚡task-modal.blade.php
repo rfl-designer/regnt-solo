@@ -38,6 +38,11 @@ new class extends Component
     /** @var array<string, array{label: string, minutes: float, color: string, hex_color: string, percentage: float}> */
     public array $statusTimeSegments = [];
 
+    public string $prUrl = '';
+
+    /** @var array<int, array{hash: string, short_hash: string, message: string, files_changed: int, insertions: int, deletions: int, committed_at: string}> */
+    public array $commits = [];
+
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Project>
      */
@@ -50,7 +55,7 @@ new class extends Component
     #[On('open-task-modal')]
     public function openTask(int $taskId): void
     {
-        $task = Task::with(['timeEntries', 'statusChanges'])->findOrFail($taskId);
+        $task = Task::with(['timeEntries', 'statusChanges', 'commits'])->findOrFail($taskId);
 
         $this->taskId = $task->id;
         $this->title = $task->title;
@@ -74,6 +79,22 @@ new class extends Component
             ->all();
 
         $this->statusTimeSegments = $this->buildStatusTimeSegments($task);
+
+        $this->prUrl = $task->pr_url ?? '';
+
+        $this->commits = $task->commits
+            ->sortByDesc('committed_at')
+            ->map(fn (\App\Models\TaskCommit $commit) => [
+                'hash' => $commit->hash,
+                'short_hash' => substr($commit->hash, 0, 7),
+                'message' => $commit->message,
+                'files_changed' => $commit->files_changed,
+                'insertions' => $commit->insertions,
+                'deletions' => $commit->deletions,
+                'committed_at' => $commit->committed_at->format('d/m H:i'),
+            ])
+            ->values()
+            ->all();
 
         $this->showModal = true;
         $this->showDeleteConfirm = false;
@@ -167,6 +188,7 @@ new class extends Component
                 'priority' => $this->priority,
                 'due_date' => $this->dueDate ?: null,
                 'estimated_minutes' => $this->estimatedMinutes,
+                'pr_url' => $this->prUrl ?: null,
             ]);
             $task->markAsDone();
             $this->status = TaskStatus::Done->value;
@@ -180,6 +202,7 @@ new class extends Component
                 'due_date' => $this->dueDate ?: null,
                 'estimated_minutes' => $this->estimatedMinutes,
                 'completed_at' => $newStatus === TaskStatus::Done ? $task->completed_at : null,
+                'pr_url' => $this->prUrl ?: null,
             ]);
         }
 
@@ -236,7 +259,7 @@ new class extends Component
 
         $this->showDeleteConfirm = false;
         $this->showModal = false;
-        $this->reset('taskId', 'title', 'description', 'projectId', 'priority', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries');
+        $this->reset('taskId', 'title', 'description', 'projectId', 'priority', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'commits');
 
         $this->dispatch('task-updated');
 
@@ -354,6 +377,53 @@ new class extends Component
                     </div>
                 </div>
             @endif
+
+            {{-- Git Section --}}
+            <div class="space-y-3">
+                <flux:heading size="sm">Git</flux:heading>
+
+                {{-- PR URL --}}
+                <div class="flex items-center gap-2">
+                    <flux:input
+                        wire:model="prUrl"
+                        label="PR URL"
+                        placeholder="https://github.com/user/repo/pull/123"
+                        size="sm"
+                        class="flex-1"
+                    />
+                    @if ($prUrl)
+                        <a href="{{ $prUrl }}" target="_blank" rel="noopener noreferrer" class="mt-5 shrink-0">
+                            <flux:button variant="ghost" size="sm" icon="arrow-top-right-on-square">
+                                Abrir PR
+                            </flux:button>
+                        </a>
+                    @endif
+                </div>
+
+                {{-- Commits List --}}
+                @if (count($commits) > 0)
+                    <div class="space-y-2">
+                        @foreach ($commits as $commit)
+                            <div class="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-800/50 px-3 py-2">
+                                <code class="shrink-0 rounded bg-zinc-700 px-1.5 py-0.5 text-xs font-mono text-zinc-300">
+                                    {{ $commit['short_hash'] }}
+                                </code>
+                                <span class="flex-1 truncate text-sm text-zinc-300" title="{{ $commit['message'] }}">
+                                    {{ Str::limit($commit['message'], 50) }}
+                                </span>
+                                <div class="flex shrink-0 items-center gap-2 text-xs text-zinc-500">
+                                    <span>{{ $commit['files_changed'] }} {{ $commit['files_changed'] === 1 ? 'arquivo' : 'arquivos' }}</span>
+                                    <span class="text-emerald-400">+{{ $commit['insertions'] }}</span>
+                                    <span class="text-red-400">-{{ $commit['deletions'] }}</span>
+                                    <span>{{ $commit['committed_at'] }}</span>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <flux:text class="text-sm text-zinc-500">Nenhum commit registrado</flux:text>
+                @endif
+            </div>
 
             {{-- Status Time Section --}}
             @if (count($statusTimeSegments) > 0)

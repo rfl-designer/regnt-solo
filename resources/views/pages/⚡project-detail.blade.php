@@ -34,7 +34,7 @@ new class extends Component
     {
         return Project::query()
             ->where('slug', $this->slug)
-            ->with(['tasks.timeEntries'])
+            ->with(['tasks.timeEntries', 'tasks.commits'])
             ->firstOrFail();
     }
 
@@ -76,11 +76,16 @@ new class extends Component
             return $entry->started_at->diffInMinutes($end);
         });
 
+        $totalCommits = $tasks->sum(fn ($task) => $task->commits->count());
+        $totalFilesChanged = $tasks->sum(fn ($task) => $task->commits->sum('files_changed'));
+
         return [
             'total' => $total,
             'by_status' => $byStatus,
             'total_hours' => round($totalMinutes / 60, 1),
             'completion_percent' => $total > 0 ? round(($doneCount / $total) * 100, 1) : 0,
+            'total_commits' => $totalCommits,
+            'total_files_changed' => $totalFilesChanged,
         ];
     }
 
@@ -282,7 +287,7 @@ new class extends Component
                 $metrics = $this->metrics;
             @endphp
 
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {{-- Total de Tasks --}}
                 <flux:card class="space-y-2">
                     <div class="flex items-center gap-2">
@@ -323,6 +328,24 @@ new class extends Component
                         <flux:text class="text-sm text-zinc-400">Concluídas</flux:text>
                     </div>
                     <flux:heading size="xl">{{ $metrics['by_status']['done'] ?? 0 }}</flux:heading>
+                </flux:card>
+
+                {{-- Total de Commits --}}
+                <flux:card class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <flux:icon name="code-bracket" class="size-5 text-violet-400" />
+                        <flux:text class="text-sm text-zinc-400">Commits</flux:text>
+                    </div>
+                    <flux:heading size="xl">{{ $metrics['total_commits'] }}</flux:heading>
+                </flux:card>
+
+                {{-- Arquivos Alterados --}}
+                <flux:card class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <flux:icon name="document-text" class="size-5 text-sky-400" />
+                        <flux:text class="text-sm text-zinc-400">Arquivos Alterados</flux:text>
+                    </div>
+                    <flux:heading size="xl">{{ $metrics['total_files_changed'] }}</flux:heading>
                 </flux:card>
             </div>
 

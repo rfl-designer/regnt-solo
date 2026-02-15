@@ -37,6 +37,8 @@ class Task extends Model
         'completed_at',
         'sort_order',
         'pr_url',
+        'session_prompt',
+        'session_result',
     ];
 
     /**
@@ -268,6 +270,32 @@ class Task extends Model
             ->whereNotNull('stopped_at')
             ->get()
             ->sum('duration_minutes');
+    }
+
+    /**
+     * Check if this task is a session task (has a session prompt).
+     */
+    public function isSessionTask(): bool
+    {
+        return $this->session_prompt !== null;
+    }
+
+    /**
+     * Get a summary of the session data for this task.
+     *
+     * @return array{is_session: bool, prompt: string|null, result: string|null, pr_url: string|null, commits_count: int, files_changed: int, status: string}
+     */
+    public function sessionSummary(): array
+    {
+        return [
+            'is_session' => $this->isSessionTask(),
+            'prompt' => $this->session_prompt,
+            'result' => $this->session_result,
+            'pr_url' => $this->pr_url,
+            'commits_count' => $this->commitCount(),
+            'files_changed' => $this->totalFilesChanged(),
+            'status' => $this->status->value,
+        ];
     }
 
     /**

@@ -36,4 +36,8 @@ Route::livewire('review', 'pages::weekly-review')
     ->middleware(['auth'])
     ->name('review');
 
+Route::livewire('analytics', 'pages::analytics')
+    ->middleware(['auth'])
+    ->name('analytics');
+
 require __DIR__.'/settings.php';

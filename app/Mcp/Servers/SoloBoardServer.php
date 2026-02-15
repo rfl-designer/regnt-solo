@@ -40,6 +40,7 @@ class SoloBoardServer extends Server
         \App\Mcp\Tools\AddToPlanTool::class,
         \App\Mcp\Tools\ListProjectsTool::class,
         \App\Mcp\Tools\LogCommitsTool::class,
+        \App\Mcp\Tools\GetAnalyticsTool::class,
     ];
 
     /**

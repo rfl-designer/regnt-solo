@@ -35,6 +35,8 @@ class DatabaseSeeder extends Seeder
         $this->createTimeEntries($tasks);
         $this->createDailyPlan($tasks);
         $this->createRunningTimer($tasks);
+        $this->createTaskCommits($tasks);
+        $this->createWeeklyReviews();
     }
 
     /**
@@ -255,7 +257,9 @@ class DatabaseSeeder extends Seeder
     }
 
     /**
-     * Create time entries for the last 14 days.
+     * Create time entries for the last 30 days with focus sessions.
+     *
+     * Distributes 1-5 hours per day with ~40% of days having focus sessions.
      *
      * @param  \Illuminate\Support\Collection<int, Task>  $tasks
      */
@@ -263,15 +267,17 @@ class DatabaseSeeder extends Seeder
     {
         $workTasks = $tasks->filter(fn (Task $t) => $t->status !== TaskStatus::Inbox);
 
-        for ($day = 13; $day >= 0; $day--) {
+        for ($day = 29; $day >= 0; $day--) {
             $date = Carbon::today()->subDays($day);
 
-            if ($date->isWeekend()) {
+            // Skip some weekends (but not all, to create interesting patterns)
+            if ($date->isWeekend() && rand(0, 3) > 0) {
                 continue;
             }
 
             $sessionsPerDay = rand(2, 5);
-            $startHour = 9;
+            $startHour = rand(8, 10);
+            $isFocusDay = rand(1, 100) <= 40; // ~40% of days have focus sessions
 
             for ($session = 0; $session < $sessionsPerDay; $session++) {
                 $task = $workTasks->random();
@@ -284,11 +290,20 @@ class DatabaseSeeder extends Seeder
                     break;
                 }
 
+                // First session of focus days is always a focus session (2+ hours)
+                $isFocusSession = $isFocusDay && $session === 0;
+                if ($isFocusSession) {
+                    $durationMinutes = rand(120, 180);
+                    $stoppedAt = $startedAt->copy()->addMinutes($durationMinutes);
+                }
+
                 TimeEntry::create([
                     'task_id' => $task->id,
                     'started_at' => $startedAt,
                     'stopped_at' => $stoppedAt,
                     'notes' => fake()->optional(0.4)->sentence(),
+                    'is_focus_session' => $isFocusSession,
+                    'focus_rating' => $isFocusSession ? rand(3, 5) : null,
                 ]);
 
                 $startHour = $stoppedAt->hour + (rand(0, 1) ? 1 : 0);
@@ -336,5 +351,67 @@ class DatabaseSeeder extends Seeder
                 'stopped_at' => null,
             ]);
         }
+    }
+
+    /**
+     * Create task commits for done tasks.
+     *
+     * @param  \Illuminate\Support\Collection<int, Task>  $tasks
+     */
+    private function createTaskCommits(\Illuminate\Support\Collection $tasks): void
+    {
+        $doneTasks = $tasks->filter(fn (Task $t) => $t->status === TaskStatus::Done);
+
+        foreach ($doneTasks as $task) {
+            $commitCount = rand(1, 4);
+
+            for ($i = 0; $i < $commitCount; $i++) {
+                $committedAt = $task->completed_at
+                    ? $task->completed_at->copy()->subMinutes(rand(10, 120 * ($commitCount - $i)))
+                    : now()->subDays(rand(1, 14));
+
+                TaskCommit::create([
+                    'task_id' => $task->id,
+                    'hash' => fake()->sha1(),
+                    'message' => fake()->randomElement([
+                        'feat: implement '.fake()->words(3, true),
+                        'fix: resolve '.fake()->words(2, true).' issue',
+                        'refactor: improve '.fake()->words(2, true),
+                        'test: add tests for '.fake()->words(2, true),
+                        'chore: update '.fake()->words(2, true),
+                    ]),
+                    'files_changed' => rand(1, 15),
+                    'insertions' => rand(5, 300),
+                    'deletions' => rand(0, 100),
+                    'committed_at' => $committedAt,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Create weekly reviews for the last 2 weeks with reflections.
+     */
+    private function createWeeklyReviews(): void
+    {
+        // Last week's review
+        $lastWeekStart = Carbon::now()->subWeek()->startOfWeek();
+        WeeklyReview::create([
+            'week_start' => $lastWeekStart->toDateString(),
+            'week_end' => $lastWeekStart->copy()->endOfWeek()->toDateString(),
+            'notes' => 'Semana produtiva. Foco no API Gateway e Landing Page. Circuit breaker quase pronto.',
+            'reflection' => 'Consegui manter bom ritmo de deep work. Preciso melhorar a organização do backlog do Mobile App. O Design System ficou parado — considerar retomar na próxima sprint.',
+            'generated_at' => $lastWeekStart->copy()->endOfWeek(),
+        ]);
+
+        // Two weeks ago review
+        $twoWeeksStart = Carbon::now()->subWeeks(2)->startOfWeek();
+        WeeklyReview::create([
+            'week_start' => $twoWeeksStart->toDateString(),
+            'week_end' => $twoWeeksStart->copy()->endOfWeek()->toDateString(),
+            'notes' => 'Sprint focada em autenticação e setup do mobile. Boa velocidade de entrega.',
+            'reflection' => 'JWT implementado com sucesso. React Native setup demorou mais que o esperado. Preciso estimar melhor tasks de setup/infra. Focus sessions ajudaram muito na concentração.',
+            'generated_at' => $twoWeeksStart->copy()->endOfWeek(),
+        ]);
     }
 }

@@ -19,7 +19,7 @@ class AiAssistantService
     /**
      * Check if AI features are enabled and properly configured.
      */
-    private function isEnabled(): bool
+    public function isEnabled(): bool
     {
         return config('soloboard.ai_enabled') === true
             && ! empty(config('soloboard.ai_api_key'));

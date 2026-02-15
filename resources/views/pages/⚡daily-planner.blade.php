@@ -256,8 +256,7 @@ new class extends Component
      */
     public function isAiEnabled(): bool
     {
-        return config('soloboard.ai_enabled') === true
-            && ! empty(config('soloboard.ai_api_key'));
+        return app(AiAssistantService::class)->isEnabled();
     }
 
     /**
@@ -304,19 +303,28 @@ new class extends Component
     /**
      * Build completion history for the last 7 days.
      *
-     * @return array<string, mixed>
+     * @return array<int, array{date: string, completion_rate: float}>
      */
     private function buildCompletionHistory(): array
     {
+        $today = Carbon::today();
+        $weekAgo = $today->copy()->subDays(6);
+
+        $plans = DailyPlan::query()
+            ->whereDate('date', '>=', $weekAgo)
+            ->whereDate('date', '<=', $today)
+            ->with('tasks')
+            ->get()
+            ->keyBy(fn (DailyPlan $plan): string => $plan->date->toDateString());
+
         $history = [];
 
         for ($i = 6; $i >= 0; $i--) {
-            $date = Carbon::today()->subDays($i);
-            $plan = DailyPlan::query()->whereDate('date', $date->toDateString())->first();
+            $dateString = $today->copy()->subDays($i)->toDateString();
 
             $history[] = [
-                'date' => $date->toDateString(),
-                'completion_rate' => $plan?->completionRate() ?? 0,
+                'date' => $dateString,
+                'completion_rate' => $plans->get($dateString)?->completionRate() ?? 0,
             ];
         }
 
@@ -670,10 +678,15 @@ new class extends Component
                         <flux:text class="text-sm text-zinc-500">Nenhuma sugestão disponível no momento.</flux:text>
                     </div>
                 @else
+                    @php
+                        $suggestionTaskIds = array_column($aiSuggestions, 'task_id');
+                        $suggestionTasks = \App\Models\Task::whereIn('id', $suggestionTaskIds)->get()->keyBy('id');
+                    @endphp
+
                     <div class="max-h-96 space-y-3 overflow-y-auto">
                         @foreach ($aiSuggestions as $suggestion)
                             @php
-                                $task = \App\Models\Task::find($suggestion['task_id']);
+                                $task = $suggestionTasks->get($suggestion['task_id']);
                                 $score = $suggestion['priority_score'] ?? 0;
                                 $scoreColor = $score >= 80 ? 'red' : ($score >= 50 ? 'amber' : 'blue');
                             @endphp

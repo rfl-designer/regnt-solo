@@ -126,8 +126,7 @@ new class extends Component
      */
     public function isAiEnabled(): bool
     {
-        return config('soloboard.ai_enabled') === true
-            && ! empty(config('soloboard.ai_api_key'));
+        return app(AiAssistantService::class)->isEnabled();
     }
 
     /**
@@ -230,14 +229,14 @@ new class extends Component
      */
     private function buildWeeklyData(): array
     {
-        $weekAgo = Carbon::now()->subDays(7);
+        $today = Carbon::today();
+        $weekAgo = $today->copy()->subDays(6);
 
-        $tasksByStatus = [];
-        foreach (TaskStatus::cases() as $status) {
-            $tasksByStatus[$status->value] = Task::query()
-                ->where('status', $status)
-                ->count();
-        }
+        $tasksByStatus = Task::query()
+            ->selectRaw('status, count(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status')
+            ->toArray();
 
         $projects = Project::query()
             ->active()
@@ -249,16 +248,21 @@ new class extends Component
             ])
             ->toArray();
 
+        $timeEntries = TimeEntry::query()
+            ->whereNotNull('stopped_at')
+            ->whereDate('started_at', '>=', $weekAgo)
+            ->whereDate('started_at', '<=', $today)
+            ->get();
+
         $hoursPerDay = [];
         for ($i = 6; $i >= 0; $i--) {
-            $date = Carbon::today()->subDays($i);
-            $minutes = TimeEntry::query()
-                ->whereNotNull('stopped_at')
-                ->whereDate('started_at', $date)
-                ->get()
+            $date = $today->copy()->subDays($i);
+            $dateString = $date->toDateString();
+            $minutes = $timeEntries
+                ->filter(fn (TimeEntry $entry): bool => $entry->started_at->toDateString() === $dateString)
                 ->sum('duration_minutes');
 
-            $hoursPerDay[$date->toDateString()] = round($minutes / 60, 2);
+            $hoursPerDay[$dateString] = round($minutes / 60, 2);
         }
 
         $staleBacklogTasks = Task::query()
@@ -266,12 +270,17 @@ new class extends Component
             ->where('created_at', '<', Carbon::now()->subDays(14))
             ->count();
 
+        $dailyPlans = DailyPlan::query()
+            ->whereDate('date', '>=', $weekAgo)
+            ->whereDate('date', '<=', $today)
+            ->with('tasks')
+            ->get()
+            ->keyBy(fn (DailyPlan $plan): string => $plan->date->toDateString());
+
         $completionRates = [];
         for ($i = 6; $i >= 0; $i--) {
-            $date = Carbon::today()->subDays($i);
-            $plan = DailyPlan::query()->whereDate('date', $date->toDateString())->first();
-
-            $completionRates[$date->toDateString()] = $plan?->completionRate() ?? 0;
+            $dateString = $today->copy()->subDays($i)->toDateString();
+            $completionRates[$dateString] = $dailyPlans->get($dateString)?->completionRate() ?? 0;
         }
 
         return [

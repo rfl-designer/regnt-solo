@@ -115,8 +115,7 @@ new class extends Component
      */
     public function isAiEnabled(): bool
     {
-        return config('soloboard.ai_enabled') === true
-            && ! empty(config('soloboard.ai_api_key'));
+        return app(AiAssistantService::class)->isEnabled();
     }
 
     /**
@@ -356,10 +355,15 @@ new class extends Component
                         <flux:text class="text-sm text-zinc-500">Nenhuma sugestão disponível no momento.</flux:text>
                     </div>
                 @else
+                    @php
+                        $analysisTaskIds = array_column($backlogAnalysis, 'task_id');
+                        $analysisTasks = \App\Models\Task::whereIn('id', $analysisTaskIds)->get()->keyBy('id');
+                    @endphp
+
                     <div class="max-h-96 space-y-3 overflow-y-auto">
                         @foreach ($backlogAnalysis as $analysis)
                             @php
-                                $task = \App\Models\Task::find($analysis['task_id']);
+                                $task = $analysisTasks->get($analysis['task_id']);
                                 $action = $analysis['action'] ?? 'estimate';
                                 $actionColor = match ($action) {
                                     'prioritize' => 'amber',

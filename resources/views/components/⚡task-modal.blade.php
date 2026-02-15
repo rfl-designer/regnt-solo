@@ -84,7 +84,7 @@ new class extends Component
 
         $this->commits = $task->commits
             ->sortByDesc('committed_at')
-            ->map(fn (\App\Models\TaskCommit $commit) => [
+            ->map(fn (TaskCommit $commit) => [
                 'hash' => $commit->hash,
                 'short_hash' => substr($commit->hash, 0, 7),
                 'message' => $commit->message,

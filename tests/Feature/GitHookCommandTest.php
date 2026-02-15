@@ -47,14 +47,14 @@ test('git-hook-install fails for non-git directory', function () {
     rmdir($nonGitDir);
 });
 
-test('git-hook-install uses default url', function () {
+test('git-hook-install uses app url as default', function () {
     $this->artisan('soloboard:git-hook-install', [
         'path' => $this->tempDir,
     ])
         ->assertSuccessful();
 
     $content = file_get_contents($this->tempDir.'/.git/hooks/post-commit');
-    expect($content)->toContain('http://regnt.test');
+    expect($content)->toContain(config('app.url'));
 });
 
 test('git-hook-remove removes soloboard hook', function () {

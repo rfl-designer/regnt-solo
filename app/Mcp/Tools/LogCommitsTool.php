@@ -45,10 +45,10 @@ class LogCommitsTool extends Tool
             $task->update(['pr_url' => $validated['pr_url']]);
         }
 
-        // Upsert commits (ignore duplicates by hash)
-        $logged = [];
+        // Upsert commits — duplicates by hash are updated (commit may be reassigned between tasks)
+        $commitsLogged = 0;
         foreach ($validated['commits'] as $commitData) {
-            $commit = TaskCommit::updateOrCreate(
+            TaskCommit::updateOrCreate(
                 ['hash' => $commitData['hash']],
                 [
                     'task_id' => $task->id,
@@ -59,7 +59,7 @@ class LogCommitsTool extends Tool
                     'committed_at' => $commitData['committed_at'] ?? now(),
                 ]
             );
-            $logged[] = $commit;
+            $commitsLogged++;
         }
 
         $task->load('commits');
@@ -68,7 +68,7 @@ class LogCommitsTool extends Tool
             'task_id' => $task->id,
             'task_title' => $task->title,
             'pr_url' => $task->pr_url,
-            'commits_logged' => count($logged),
+            'commits_logged' => $commitsLogged,
             'total_commits' => $task->commits->count(),
             'commits' => $task->commits->sortByDesc('committed_at')->values()->map(fn (TaskCommit $c) => [
                 'hash' => $c->hash,

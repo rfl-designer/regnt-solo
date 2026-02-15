@@ -13,7 +13,7 @@ class GitHookInstallCommand extends Command
      */
     protected $signature = 'soloboard:git-hook-install
         {path? : Caminho do repositório Git (default: diretório atual)}
-        {--url=http://regnt.test : URL do SoloBoard}
+        {--url= : URL do SoloBoard (default: APP_URL)}
         {--key= : API key para autenticação MCP}';
 
     /**
@@ -43,7 +43,7 @@ class GitHookInstallCommand extends Command
         }
 
         $hookPath = $hooksDir.'/post-commit';
-        $url = $this->option('url');
+        $url = $this->option('url') ?: config('app.url');
         $key = $this->option('key') ?: '';
 
         $hookContent = $this->generateHookScript($url, $key);
@@ -72,11 +72,11 @@ class GitHookInstallCommand extends Command
 # Automatically logs commits referencing [SB-{id}] to SoloBoard
 
 COMMIT_MSG=\$(git log -1 --pretty=%B)
-TASK_ID=\$(echo "\$COMMIT_MSG" | grep -oP '\\[SB-\\K\\d+' | head -1)
+# Extract task ID from [SB-{id}] or #SB-{id} format (POSIX-compatible for macOS/Linux)
+TASK_ID=\$(echo "\$COMMIT_MSG" | sed -n 's/.*\[SB-\([0-9][0-9]*\)\].*/\1/p' | head -1)
 
 if [ -z "\$TASK_ID" ]; then
-    # Also try #SB-{id} format
-    TASK_ID=\$(echo "\$COMMIT_MSG" | grep -oP '#SB-\\K\\d+' | head -1)
+    TASK_ID=\$(echo "\$COMMIT_MSG" | sed -n 's/.*#SB-\([0-9][0-9]*\).*/\1/p' | head -1)
 fi
 
 if [ -n "\$TASK_ID" ]; then

@@ -11,8 +11,6 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class TaskCommitFactory extends Factory
 {
-    protected $model = TaskCommit::class;
-
     /**
      * Define the model's default state.
      *

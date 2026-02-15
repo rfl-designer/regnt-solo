@@ -118,7 +118,7 @@ class TimeEntry extends Model
     }
 
     /**
-     * Get the total focus duration in minutes for a query scope.
+     * Get the total focus duration in minutes for a given date (or all time).
      */
     public static function focusDurationMinutes(?Carbon $date = null): float
     {

@@ -152,11 +152,21 @@ new class extends Component
     #[Computed]
     public function focusStreak(): int
     {
+        $startDate = Carbon::today()->subDays(27);
+
+        $dailyMinutes = TimeEntry::query()
+            ->focusSessions()
+            ->whereNotNull('stopped_at')
+            ->whereDate('started_at', '>=', $startDate)
+            ->get()
+            ->groupBy(fn (TimeEntry $entry): string => $entry->started_at->toDateString())
+            ->map(fn ($entries): float => $entries->sum('duration_minutes'));
+
         $streak = 0;
         $date = Carbon::today();
 
         for ($i = 0; $i < 28; $i++) {
-            $minutes = TimeEntry::focusDurationMinutes($date);
+            $minutes = $dailyMinutes->get($date->toDateString(), 0.0);
 
             if ($minutes >= 120) {
                 $streak++;

@@ -40,24 +40,7 @@ new class extends Component
      */
     public function saveWithNotes(): void
     {
-        $entry = TimeEntry::findOrFail($this->entryId);
-
-        $data = [
-            'stopped_at' => now(),
-            'notes' => $this->notes,
-        ];
-
-        if ($this->isFocusSession && $this->focusRating !== null) {
-            $data['focus_rating'] = $this->focusRating;
-        }
-
-        $entry->update($data);
-
-        $this->showModal = false;
-
-        $this->dispatch('timer-updated');
-
-        Flux::toast(variant: 'success', heading: 'Timer parado', text: 'Notas salvas com sucesso.');
+        $this->stopEntry(notes: $this->notes, toastText: 'Notas salvas com sucesso.');
     }
 
     /**
@@ -65,9 +48,21 @@ new class extends Component
      */
     public function skipNotes(): void
     {
+        $this->stopEntry(toastText: 'Timer finalizado sem notas.');
+    }
+
+    /**
+     * Stop the time entry, optionally saving notes and focus rating.
+     */
+    private function stopEntry(?string $notes = null, string $toastText = ''): void
+    {
         $entry = TimeEntry::findOrFail($this->entryId);
 
         $data = ['stopped_at' => now()];
+
+        if ($notes !== null) {
+            $data['notes'] = $notes;
+        }
 
         if ($this->isFocusSession && $this->focusRating !== null) {
             $data['focus_rating'] = $this->focusRating;
@@ -79,7 +74,7 @@ new class extends Component
 
         $this->dispatch('timer-updated');
 
-        Flux::toast(variant: 'success', heading: 'Timer parado', text: 'Timer finalizado sem notas.');
+        Flux::toast(variant: 'success', heading: 'Timer parado', text: $toastText);
     }
 };
 

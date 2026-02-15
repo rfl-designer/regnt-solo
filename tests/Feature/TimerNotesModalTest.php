@@ -202,7 +202,7 @@ test('saveWithNotes does not save focus rating when not set', function () {
 
 test('skipNotes saves focus rating for focus sessions when set', function () {
     $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+    $entry = TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id, 'notes' => null]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)

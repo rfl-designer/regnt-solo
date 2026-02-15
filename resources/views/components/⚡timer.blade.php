@@ -59,14 +59,14 @@ new class extends Component
     /**
      * Start a new time entry for this task, stopping any other running timers.
      */
-    public function start(): void
+    public function start(bool $focus = false): void
     {
         TimeEntry::stopAllRunning();
 
         TimeEntry::create([
             'task_id' => $this->taskId,
             'started_at' => now(),
-            'is_focus_session' => false,
+            'is_focus_session' => $focus,
         ]);
 
         unset($this->isRunning, $this->runningEntry, $this->isFocusSession);
@@ -79,17 +79,7 @@ new class extends Component
      */
     public function startFocus(): void
     {
-        TimeEntry::stopAllRunning();
-
-        TimeEntry::create([
-            'task_id' => $this->taskId,
-            'started_at' => now(),
-            'is_focus_session' => true,
-        ]);
-
-        unset($this->isRunning, $this->runningEntry, $this->isFocusSession);
-
-        $this->dispatch('timer-updated');
+        $this->start(focus: true);
     }
 
     /**

@@ -7,11 +7,14 @@ use App\Enums\ProjectStatus;
 use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
 use App\Models\DailyPlan;
+use App\Models\Document;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TaskCommit;
 use App\Models\TaskStatusChange;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Models\WeeklyReview;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -36,6 +39,7 @@ class DatabaseSeeder extends Seeder
         $this->createDailyPlan($tasks);
         $this->createRunningTimer($tasks);
         $this->createTaskCommits($tasks);
+        $this->createDocuments($projects);
         $this->createWeeklyReviews();
     }
 
@@ -387,6 +391,71 @@ class DatabaseSeeder extends Seeder
                 ]);
             }
         }
+    }
+
+    /**
+     * Create example documents for projects.
+     *
+     * @param  array<string, Project>  $projects
+     */
+    private function createDocuments(array $projects): void
+    {
+        // API Gateway documents
+        Document::create([
+            'project_id' => $projects['api']->id,
+            'title' => 'PRD — API Gateway v2',
+            'content' => "# PRD — API Gateway v2\n\n## Objetivo\n\nCriar um gateway centralizado para gerenciar todas as chamadas entre microserviços, com foco em **performance**, **segurança** e **observabilidade**.\n\n## Requisitos Funcionais\n\n### Autenticação\n- JWT com refresh tokens\n- OAuth2 para integrações externas\n- Rate limiting por endpoint e por usuário\n\n### Roteamento\n- Proxy reverso para microserviços\n- Load balancing round-robin\n- Circuit breaker pattern\n\n### Observabilidade\n- Logging estruturado (JSON)\n- Métricas Prometheus\n- Tracing distribuído (OpenTelemetry)\n\n## Requisitos Não-Funcionais\n\n- Latência p99 < 50ms\n- Disponibilidade 99.9%\n- Suporte a 10k req/s\n\n## Stack\n\n- Laravel 12 + Octane\n- Redis para cache e rate limiting\n- PostgreSQL para persistência\n\n## Timeline\n\n| Fase | Prazo | Status |\n|------|-------|--------|\n| Autenticação | Semana 1-2 | ✅ Concluído |\n| Roteamento | Semana 3-4 | 🔄 Em andamento |\n| Observabilidade | Semana 5-6 | ⏳ Pendente |",
+            'type' => 'prd',
+            'is_pinned' => true,
+            'sort_order' => 0,
+        ]);
+
+        Document::create([
+            'project_id' => $projects['api']->id,
+            'title' => 'Spec — Autenticação OAuth2',
+            'content' => "# Spec — Autenticação OAuth2\n\n## Visão Geral\n\nImplementação do fluxo OAuth2 Authorization Code com PKCE para integrações externas.\n\n## Endpoints\n\n```\nGET  /oauth/authorize    → Tela de autorização\nPOST /oauth/token        → Troca code por token\nPOST /oauth/token/refresh → Refresh token\nDELETE /oauth/token      → Revogação\n```\n\n## Fluxo\n\n1. Client redireciona para `/oauth/authorize` com `code_challenge`\n2. Usuário autoriza\n3. Redirect com `authorization_code`\n4. Client troca code por `access_token` + `refresh_token`\n\n## Segurança\n\n- Tokens JWT com expiração de 15min\n- Refresh tokens com expiração de 7 dias\n- PKCE obrigatório (S256)\n- Scopes: `read`, `write`, `admin`\n\n## Exemplo de Request\n\n```bash\ncurl -X POST https://api.example.com/oauth/token \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n    \"grant_type\": \"authorization_code\",\n    \"code\": \"abc123\",\n    \"code_verifier\": \"xyz789\",\n    \"client_id\": \"my-app\"\n  }'\n```",
+            'type' => 'spec',
+            'is_pinned' => false,
+            'sort_order' => 1,
+        ]);
+
+        Document::create([
+            'project_id' => $projects['api']->id,
+            'title' => 'Decisão — REST vs GraphQL',
+            'content' => "# Decisão — REST vs GraphQL\n\n## Contexto\n\nPrecisamos definir o padrão de API para o gateway. As duas opções principais são REST e GraphQL.\n\n## Opções Avaliadas\n\n### REST\n**Prós:**\n- Simplicidade e maturidade\n- Cache HTTP nativo\n- Ferramentas consolidadas (OpenAPI, Postman)\n- Equipe já tem experiência\n\n**Contras:**\n- Over-fetching / under-fetching\n- Múltiplas chamadas para dados relacionados\n\n### GraphQL\n**Prós:**\n- Query flexível (cliente pede exatamente o que precisa)\n- Uma única chamada para dados complexos\n- Schema tipado\n\n**Contras:**\n- Complexidade de implementação\n- Cache mais difícil\n- Curva de aprendizado\n\n## Decisão\n\n**REST** — pela simplicidade, cache nativo e experiência da equipe. GraphQL pode ser adicionado como camada opcional no futuro.\n\n## Consequências\n\n- Usar OpenAPI 3.0 para documentação\n- Implementar HATEOAS para navegabilidade\n- Versionar via URL (`/v1/`, `/v2/`)",
+            'type' => 'decision',
+            'is_pinned' => false,
+            'sort_order' => 2,
+        ]);
+
+        // Landing Page v2 documents
+        Document::create([
+            'project_id' => $projects['landing']->id,
+            'title' => 'PRD — Landing Page Redesign',
+            'content' => "# PRD — Landing Page Redesign\n\n## Objetivo\n\nRedesign completo da landing page para aumentar conversão em 30%.\n\n## Seções\n\n1. **Hero** — Headline impactante + CTA principal\n2. **Social Proof** — Logos de clientes + depoimentos\n3. **Features** — Grid de funcionalidades com ícones\n4. **Pricing** — Tabela comparativa de planos\n5. **FAQ** — Accordion com perguntas frequentes\n6. **Footer** — Links + newsletter\n\n## Métricas de Sucesso\n\n- Taxa de conversão > 5%\n- Bounce rate < 40%\n- Time on page > 2min\n- Core Web Vitals: LCP < 2.5s, FID < 100ms, CLS < 0.1",
+            'type' => 'prd',
+            'is_pinned' => true,
+            'sort_order' => 0,
+        ]);
+
+        Document::create([
+            'project_id' => $projects['landing']->id,
+            'title' => 'Referências visuais e inspirações',
+            'content' => "# Referências Visuais\n\n## Sites de Referência\n\n- [Linear](https://linear.app) — Clean, dark mode, animações suaves\n- [Vercel](https://vercel.com) — Gradientes, tipografia bold\n- [Stripe](https://stripe.com) — Ilustrações, micro-interações\n\n## Paleta de Cores\n\n- Primary: `#6366F1` (Indigo)\n- Secondary: `#8B5CF6` (Violet)\n- Accent: `#06B6D4` (Cyan)\n- Background: `#0F172A` (Slate 900)\n\n## Tipografia\n\n- Headings: Inter Bold\n- Body: Inter Regular\n- Code: JetBrains Mono\n\n## Notas\n\n> Manter consistência com o Design System existente. Priorizar acessibilidade (WCAG AA).",
+            'type' => 'note',
+            'is_pinned' => false,
+            'sort_order' => 1,
+        ]);
+
+        // Global document (no project)
+        Document::create([
+            'project_id' => null,
+            'title' => 'Convenções de Código — SoloBoard',
+            'content' => "# Convenções de Código\n\n## PHP / Laravel\n\n- PSR-12 + Laravel Pint\n- Strict types em todos os arquivos\n- Return types explícitos\n- PHPDoc para arrays complexos\n\n## Nomenclatura\n\n```\nModels:     PascalCase singular    → Task, Project, Document\nControllers: PascalCase + Controller → TaskController\nMigrations:  snake_case             → create_documents_table\nEnums:       PascalCase             → TaskStatus, DocumentType\nTests:       PascalCase + Test      → DocumentTest\n```\n\n## Git\n\n```\nfeat: nova funcionalidade\nfix: correção de bug\nrefactor: refatoração sem mudança de comportamento\ntest: adição/modificação de testes\ndocs: documentação\nchore: manutenção\n```\n\n## Testes\n\n- Pest PHP para todos os testes\n- Feature tests para fluxos completos\n- Unit tests para lógica isolada\n- Factories para criação de dados\n- Mínimo 90% de cobertura",
+            'type' => 'reference',
+            'is_pinned' => true,
+            'sort_order' => 0,
+        ]);
     }
 
     /**

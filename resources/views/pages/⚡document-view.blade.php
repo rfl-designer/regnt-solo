@@ -38,11 +38,16 @@ new class extends Component
     {
         $document = $this->document;
         $title = $document->title;
+        $projectSlug = $document->project?->slug;
         $document->delete();
 
         Flux::toast(variant: 'success', heading: 'Documento excluído', text: $title);
 
-        $this->redirect(route('documents'), navigate: true);
+        $redirectRoute = $projectSlug
+            ? route('project.detail', $projectSlug).'?tab=docs'
+            : route('projects');
+
+        $this->redirect($redirectRoute, navigate: true);
     }
 }
 
@@ -51,8 +56,8 @@ new class extends Component
 <div class="flex h-full w-full flex-1 flex-col gap-6 p-6">
     {{-- Breadcrumb --}}
     <flux:breadcrumbs>
-        <flux:breadcrumbs.item href="{{ route('documents') }}" wire:navigate icon="document-text">
-            Docs
+        <flux:breadcrumbs.item href="{{ route('projects') }}" wire:navigate icon="folder">
+            Projetos
         </flux:breadcrumbs.item>
         @if ($this->document->project)
             <flux:breadcrumbs.item href="{{ route('project.detail', $this->document->project->slug) }}" wire:navigate>
@@ -95,8 +100,7 @@ new class extends Component
             <flux:button
                 variant="ghost"
                 icon="arrow-left"
-                href="{{ route('documents') }}"
-                wire:navigate
+                x-on:click="history.back()"
             >
                 Voltar
             </flux:button>

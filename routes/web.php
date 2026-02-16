@@ -28,10 +28,6 @@ Route::livewire('projects/{slug}', 'pages::project-detail')
     ->middleware(['auth'])
     ->name('project.detail');
 
-Route::livewire('docs', 'pages::documents')
-    ->middleware(['auth'])
-    ->name('documents');
-
 Route::livewire('docs/new', 'pages::document-edit')
     ->middleware(['auth'])
     ->name('document.create');

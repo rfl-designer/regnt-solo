@@ -121,11 +121,11 @@ new class extends Component
 <div class="flex h-full w-full flex-1 flex-col gap-6 p-6">
     {{-- Breadcrumb --}}
     <flux:breadcrumbs>
-        <flux:breadcrumbs.item href="{{ route('documents') }}" wire:navigate icon="document-text">
-            Docs
+        <flux:breadcrumbs.item href="{{ route('projects') }}" wire:navigate icon="folder">
+            Projetos
         </flux:breadcrumbs.item>
         <flux:breadcrumbs.item>
-            {{ $this->isEditing ? 'Editar' : 'Novo' }}
+            {{ $this->isEditing ? 'Editar Documento' : 'Novo Documento' }}
         </flux:breadcrumbs.item>
     </flux:breadcrumbs>
 
@@ -148,8 +148,7 @@ new class extends Component
             <flux:button
                 variant="ghost"
                 icon="arrow-left"
-                href="{{ route('documents') }}"
-                wire:navigate
+                x-on:click="history.back()"
             >
                 Voltar
             </flux:button>

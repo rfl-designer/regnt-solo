@@ -2,6 +2,7 @@
 
 use App\Enums\ProjectStatus;
 use App\Enums\TaskStatus;
+use App\Models\Document;
 use App\Models\Project;
 use Flux\Flux;
 use Livewire\Attributes\Computed;
@@ -16,6 +17,8 @@ new class extends Component
 
     /** @var list<TaskStatus> */
     public array $kanbanStatuses = [];
+
+    public ?int $selectedDocumentId = null;
 
     public function mount(string $slug): void
     {
@@ -50,6 +53,21 @@ new class extends Component
                 ['sort_order', 'asc'],
                 ['title', 'asc'],
             ]);
+    }
+
+    #[Computed]
+    public function selectedDocument(): ?Document
+    {
+        if (! $this->selectedDocumentId) {
+            return null;
+        }
+
+        return $this->projectDocuments->firstWhere('id', $this->selectedDocumentId);
+    }
+
+    public function selectDocument(int $documentId): void
+    {
+        $this->selectedDocumentId = $documentId;
     }
 
     /**
@@ -133,7 +151,7 @@ new class extends Component
     #[On('document-saved')]
     public function refreshProject(): void
     {
-        unset($this->project, $this->tasksByStatus, $this->metrics, $this->projectDocuments);
+        unset($this->project, $this->tasksByStatus, $this->metrics, $this->projectDocuments, $this->selectedDocument);
     }
 }
 
@@ -319,10 +337,108 @@ new class extends Component
                         <flux:text class="text-sm text-zinc-500">Nenhum documento neste projeto.</flux:text>
                     </div>
                 @else
-                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {{-- Desktop: Split View (lg+) --}}
+                    <div class="hidden lg:flex lg:gap-4" style="min-height: 500px;">
+                        {{-- Left Panel: Document List --}}
+                        <div class="flex w-1/3 flex-col gap-2 overflow-y-auto border-r border-zinc-700 pr-4">
+                            @foreach ($this->projectDocuments as $document)
+                                <div
+                                    wire:key="doc-list-{{ $document->id }}"
+                                    wire:click="selectDocument({{ $document->id }})"
+                                    class="cursor-pointer rounded-lg border p-3 transition {{ $selectedDocumentId === $document->id ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-500' }}"
+                                >
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-{{ $document->type->color() }}-500/10">
+                                            <flux:icon :name="$document->type->icon()" class="size-4 text-{{ $document->type->color() }}-400" />
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-sm font-medium text-zinc-200">{{ $document->title }}</span>
+                                                @if ($document->is_pinned)
+                                                    <flux:icon name="star" variant="micro" class="size-3 text-amber-400" />
+                                                @endif
+                                            </div>
+                                            <div class="mt-1 flex items-center gap-2">
+                                                <flux:badge size="sm" :color="$document->type->color()">
+                                                    {{ $document->type->label() }}
+                                                </flux:badge>
+                                                <span class="text-xs text-zinc-500">{{ $document->updated_at->diffForHumans() }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+
+                        {{-- Right Panel: Preview Area --}}
+                        <div class="w-2/3 overflow-y-auto">
+                            @if ($this->selectedDocument)
+                                <div class="flex flex-col gap-4">
+                                    {{-- Document Header --}}
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-3">
+                                            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-{{ $this->selectedDocument->type->color() }}-500/10">
+                                                <flux:icon :name="$this->selectedDocument->type->icon()" class="size-5 text-{{ $this->selectedDocument->type->color() }}-400" />
+                                            </div>
+                                            <div>
+                                                <flux:heading size="lg">{{ $this->selectedDocument->title }}</flux:heading>
+                                                <div class="flex items-center gap-2">
+                                                    <flux:badge size="sm" :color="$this->selectedDocument->type->color()">
+                                                        {{ $this->selectedDocument->type->label() }}
+                                                    </flux:badge>
+                                                    @if ($this->selectedDocument->is_pinned)
+                                                        <flux:badge size="sm" color="amber" icon="star">Fixado</flux:badge>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <flux:button
+                                                variant="ghost"
+                                                size="sm"
+                                                icon="arrow-top-right-on-square"
+                                                href="{{ route('document.view', $this->selectedDocument->slug) }}"
+                                                wire:navigate
+                                            >
+                                                Abrir
+                                            </flux:button>
+                                            <flux:button
+                                                variant="ghost"
+                                                size="sm"
+                                                icon="pencil-square"
+                                                href="{{ route('document.edit', $this->selectedDocument->slug) }}"
+                                                wire:navigate
+                                            >
+                                                Editar
+                                            </flux:button>
+                                        </div>
+                                    </div>
+
+                                    {{-- Markdown Preview --}}
+                                    <div class="rounded-lg border border-zinc-700 bg-zinc-900/30 p-4">
+                                        <livewire:markdown-viewer
+                                            :content="$this->selectedDocument->content"
+                                            :show-copy-buttons="false"
+                                            :key="'preview-'.$this->selectedDocument->id"
+                                        />
+                                    </div>
+                                </div>
+                            @else
+                                {{-- Empty State --}}
+                                <div class="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 py-16">
+                                    <flux:icon name="document-magnifying-glass" class="mb-3 size-12 text-zinc-600" />
+                                    <flux:heading size="sm" class="text-zinc-400">Selecione um documento</flux:heading>
+                                    <flux:text class="mt-1 text-sm text-zinc-500">Clique em um documento na lista para visualizar o preview.</flux:text>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+
+                    {{-- Mobile/Tablet: List with Modal Preview --}}
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:hidden">
                         @foreach ($this->projectDocuments as $document)
                             <div
-                                wire:key="doc-{{ $document->id }}"
+                                wire:key="doc-mobile-{{ $document->id }}"
                                 class="flex items-start gap-3 rounded-lg border border-zinc-700 bg-zinc-900/50 p-3 transition hover:border-zinc-500"
                             >
                                 <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-{{ $document->type->color() }}-500/10">
@@ -330,32 +446,96 @@ new class extends Component
                                 </div>
 
                                 <div class="min-w-0 flex-1">
-                                    <a href="{{ route('document.view', $document->slug) }}" wire:navigate class="text-sm font-medium text-zinc-200 hover:text-white">
-                                        {{ $document->title }}
-                                    </a>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium text-zinc-200">{{ $document->title }}</span>
+                                        @if ($document->is_pinned)
+                                            <flux:icon name="star" variant="micro" class="size-3 text-amber-400" />
+                                        @endif
+                                    </div>
                                     <div class="mt-1 flex items-center gap-2">
                                         <flux:badge size="sm" :color="$document->type->color()">
                                             {{ $document->type->label() }}
                                         </flux:badge>
-                                        @if ($document->is_pinned)
-                                            <flux:icon name="star" variant="micro" class="size-3 text-amber-400" />
-                                        @endif
                                     </div>
                                     <flux:text class="mt-1 line-clamp-2 text-xs text-zinc-500">
                                         {{ $document->excerpt(100) }}
                                     </flux:text>
                                 </div>
 
-                                <flux:button
-                                    variant="ghost"
-                                    size="xs"
-                                    icon="pencil-square"
-                                    href="{{ route('document.edit', $document->slug) }}"
-                                    wire:navigate
-                                />
+                                <div class="flex shrink-0 items-center gap-1">
+                                    <flux:button
+                                        variant="ghost"
+                                        size="xs"
+                                        icon="eye"
+                                        wire:click="selectDocument({{ $document->id }})"
+                                        x-on:click="$flux.modal('doc-preview-modal').show()"
+                                    />
+                                    <flux:button
+                                        variant="ghost"
+                                        size="xs"
+                                        icon="pencil-square"
+                                        href="{{ route('document.edit', $document->slug) }}"
+                                        wire:navigate
+                                    />
+                                </div>
                             </div>
                         @endforeach
                     </div>
+
+                    {{-- Mobile Preview Modal (flyout) --}}
+                    <flux:modal name="doc-preview-modal" variant="flyout" class="w-full max-w-2xl">
+                        @if ($this->selectedDocument)
+                            <div class="flex flex-col gap-4">
+                                {{-- Header --}}
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-{{ $this->selectedDocument->type->color() }}-500/10">
+                                            <flux:icon :name="$this->selectedDocument->type->icon()" class="size-5 text-{{ $this->selectedDocument->type->color() }}-400" />
+                                        </div>
+                                        <div>
+                                            <flux:heading size="lg">{{ $this->selectedDocument->title }}</flux:heading>
+                                            <div class="flex items-center gap-2">
+                                                <flux:badge size="sm" :color="$this->selectedDocument->type->color()">
+                                                    {{ $this->selectedDocument->type->label() }}
+                                                </flux:badge>
+                                                @if ($this->selectedDocument->is_pinned)
+                                                    <flux:badge size="sm" color="amber" icon="star">Fixado</flux:badge>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <flux:button
+                                        variant="ghost"
+                                        size="sm"
+                                        icon="pencil-square"
+                                        href="{{ route('document.edit', $this->selectedDocument->slug) }}"
+                                        wire:navigate
+                                    />
+                                </div>
+
+                                {{-- Markdown Preview --}}
+                                <div class="overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-900/30 p-4">
+                                    <livewire:markdown-viewer
+                                        :content="$this->selectedDocument->content"
+                                        :show-copy-buttons="false"
+                                        :key="'preview-mobile-'.$this->selectedDocument->id"
+                                    />
+                                </div>
+
+                                {{-- Actions --}}
+                                <div class="flex justify-end gap-2">
+                                    <flux:button
+                                        variant="ghost"
+                                        icon="arrow-top-right-on-square"
+                                        href="{{ route('document.view', $this->selectedDocument->slug) }}"
+                                        wire:navigate
+                                    >
+                                        Abrir Documento
+                                    </flux:button>
+                                </div>
+                            </div>
+                        @endif
+                    </flux:modal>
                 @endif
             </div>
         </flux:tab.panel>

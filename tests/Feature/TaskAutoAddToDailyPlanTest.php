@@ -110,3 +110,59 @@ test('task added to existing daily plan with tasks gets correct sort_order', fun
     $newTaskPivot = $plan->tasks->where('id', $newTask->id)->first()->pivot;
     expect($newTaskPivot->sort_order)->toBe(6);
 });
+
+test('marking task as done updates pivot completed_at in daily plan', function () {
+    $plan = DailyPlan::factory()->today()->create();
+    $task = Task::factory()->todo()->create();
+    $plan->tasks()->attach($task, ['sort_order' => 0]);
+
+    expect($plan->tasks()->first()->pivot->completed_at)->toBeNull();
+
+    $task->update(['status' => \App\Enums\TaskStatus::Done, 'completed_at' => now()]);
+
+    $plan->refresh();
+    expect($plan->tasks()->first()->pivot->completed_at)->not->toBeNull();
+});
+
+test('reopening done task clears pivot completed_at in daily plan', function () {
+    $plan = DailyPlan::factory()->today()->create();
+    $task = Task::factory()->done()->create();
+    $plan->tasks()->attach($task, ['sort_order' => 0, 'completed_at' => now()]);
+
+    expect($plan->tasks()->first()->pivot->completed_at)->not->toBeNull();
+
+    $task->update(['status' => \App\Enums\TaskStatus::Doing, 'completed_at' => null]);
+
+    $plan->refresh();
+    expect($plan->tasks()->first()->pivot->completed_at)->toBeNull();
+});
+
+test('marking task as done does not affect other daily plans', function () {
+    $todayPlan = DailyPlan::factory()->today()->create();
+    $yesterdayPlan = DailyPlan::factory()->create(['date' => now()->subDay()]);
+    $task = Task::factory()->todo()->create();
+
+    $todayPlan->tasks()->attach($task, ['sort_order' => 0]);
+    $yesterdayPlan->tasks()->attach($task, ['sort_order' => 0]);
+
+    $task->update(['status' => \App\Enums\TaskStatus::Done, 'completed_at' => now()]);
+
+    $todayPlan->refresh();
+    $yesterdayPlan->refresh();
+
+    // Só o plano de hoje deve ser atualizado
+    expect($todayPlan->tasks()->first()->pivot->completed_at)->not->toBeNull()
+        ->and($yesterdayPlan->tasks()->first()->pivot->completed_at)->toBeNull();
+});
+
+test('marking task as done when not in daily plan does not fail', function () {
+    $task = Task::factory()->todo()->create();
+
+    // Nenhum plano existe
+    expect(DailyPlan::count())->toBe(0);
+
+    // Não deve lançar exceção
+    $task->update(['status' => \App\Enums\TaskStatus::Done, 'completed_at' => now()]);
+
+    expect($task->fresh()->status)->toBe(\App\Enums\TaskStatus::Done);
+});

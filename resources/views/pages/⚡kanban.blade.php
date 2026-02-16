@@ -102,15 +102,15 @@ new class extends Component
 
         DB::transaction(function () use ($task, $newStatus, $position): void {
             if ($newStatus === TaskStatus::Done && $task->status !== TaskStatus::Done) {
-                $task->markAsDone();
-
+                // Add to daily plan if not already there (Observer syncs completed_at)
                 $dailyPlan = DailyPlan::getOrCreateForDate(Carbon::today());
 
                 if (! $dailyPlan->tasks()->where('task_id', $task->id)->exists()) {
-                    $dailyPlan->tasks()->attach($task->id, ['completed_at' => now()]);
-                } else {
-                    $dailyPlan->tasks()->updateExistingPivot($task->id, ['completed_at' => now()]);
+                    $maxOrder = $dailyPlan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+                    $dailyPlan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
                 }
+
+                $task->markAsDone();
 
                 Flux::toast(variant: 'success', heading: 'Task concluída', text: $task->title);
             } else {

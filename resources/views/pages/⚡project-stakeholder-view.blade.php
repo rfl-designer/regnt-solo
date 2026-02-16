@@ -5,8 +5,12 @@ use App\Models\Document;
 use App\Models\Project;
 use App\Models\Stakeholder;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 
+#[Layout('layouts.public')]
+#[Title('Acompanhamento de Projeto')]
 new class extends Component
 {
     public string $token = '';

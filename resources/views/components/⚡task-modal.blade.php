@@ -397,7 +397,7 @@ new class extends Component
                                 </div>
                             </div>
                         @else
-                            <flux:textarea wire:model="sessionPrompt" rows="4" placeholder="Descreva o que o AI deve implementar..." />
+                            <flux:textarea wire:model="sessionPrompt" rows="6" placeholder="## User Story&#10;Como [persona], quero [ação] para [benefício].&#10;&#10;## Contexto&#10;[Situação atual]&#10;&#10;## Critérios de Aceitação&#10;- [ ] Critério 1&#10;&#10;## Notas Técnicas&#10;[Arquivos relevantes]" />
                         @endif
                     </flux:field>
 

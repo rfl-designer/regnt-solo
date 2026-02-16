@@ -127,7 +127,7 @@ class UpdateTaskTool extends Tool
             'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('New priority.'),
             'due_date' => $schema->string()->description('New due date in YYYY-MM-DD format.'),
             'estimated_minutes' => $schema->integer()->description('New estimated time in minutes.'),
-            'session_prompt' => $schema->string()->description('AI session prompt. When provided, the task becomes a session task (AI-assisted coding session).'),
+            'session_prompt' => $schema->string()->description('AI session prompt. When provided, the task becomes a session task (AI-assisted coding session). Use User Story format: "## User Story\nComo [persona], quero [ação] para [benefício].\n\n## Contexto\n[Situação atual]\n\n## Critérios de Aceitação\n- [ ] Critério 1\n- [ ] Critério 2\n\n## Notas Técnicas\n[Arquivos, dependências]"'),
             'session_result' => $schema->string()->description('Result/summary of the AI coding session.'),
         ];
     }

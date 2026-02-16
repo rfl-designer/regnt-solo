@@ -187,12 +187,12 @@ new class extends Component
 
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-4 p-6">
+<div class="flex h-full w-full flex-1 flex-col p-6">
     {{-- Header --}}
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex items-center justify-between">
         <flux:heading size="xl">Kanban</flux:heading>
 
-        <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-3">
             {{-- Project filter --}}
             <flux:select wire:model.live="filterProject" size="sm" class="min-w-40">
                 <option value="">Todos os projetos</option>
@@ -220,6 +220,9 @@ new class extends Component
             </flux:button>
         </div>
     </div>
+
+    {{-- Separator --}}
+    <flux:separator class="my-4" />
 
     {{-- Kanban Board --}}
     <div class="flex flex-1 gap-4 overflow-x-auto pb-4">

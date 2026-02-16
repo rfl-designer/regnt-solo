@@ -226,27 +226,32 @@ new class extends Component
     </div>
 
     {{-- Filters --}}
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <flux:date-picker
-            wire:model.live="range"
-            mode="range"
-            with-presets
-            presets="today thisWeek thisMonth lastWeek lastMonth custom"
-            locale="pt-BR"
-        />
+    <div class="flex flex-wrap items-end gap-3">
+        <div class="w-full sm:w-auto">
+            <flux:date-picker
+                wire:model.live="range"
+                mode="range"
+                with-presets
+                presets="today thisWeek thisMonth lastWeek lastMonth custom"
+                locale="pt-BR"
+            />
+        </div>
 
-        <flux:select wire:model.live="project" size="sm" class="min-w-40">
-            <flux:select.option value="">Todos os projetos</flux:select.option>
-            @foreach ($this->projects as $proj)
-                <flux:select.option :value="$proj->id">
-                    {{ $proj->emoji }} {{ $proj->name }}
-                </flux:select.option>
-            @endforeach
-        </flux:select>
+        <div class="w-full sm:w-48">
+            <flux:select wire:model.live="project" size="sm">
+                <flux:select.option value="">Todos os projetos</flux:select.option>
+                @foreach ($this->projects as $proj)
+                    <flux:select.option :value="$proj->id">
+                        {{ $proj->emoji }} {{ $proj->name }}
+                    </flux:select.option>
+                @endforeach
+            </flux:select>
+        </div>
 
         <flux:checkbox
             wire:model.live="focusOnly"
             label="Apenas Focus"
+            class="whitespace-nowrap"
         />
     </div>
 

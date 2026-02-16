@@ -20,6 +20,10 @@ Route::livewire('daily', 'pages::daily-planner')
     ->middleware(['auth'])
     ->name('daily');
 
+Route::livewire('weekly', 'pages::weekly-calendar')
+    ->middleware(['auth'])
+    ->name('weekly');
+
 Route::livewire('projects', 'pages::projects')
     ->middleware(['auth'])
     ->name('projects');

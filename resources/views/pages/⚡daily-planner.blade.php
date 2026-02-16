@@ -17,7 +17,7 @@ new class extends Component
     #[Url]
     public string $date = '';
 
-    public ?int $filterProjectId = null;
+    public string $filterProjectId = '';
 
     public string $notes = '';
 
@@ -620,7 +620,8 @@ new class extends Component
                         <flux:badge size="sm" color="zinc">{{ $this->availableTasks->count() }}</flux:badge>
                     </div>
 
-                    <flux:select wire:model.live="filterProjectId" size="sm" placeholder="Todos os projetos" class="w-40">
+                    <flux:select wire:model.live="filterProjectId" size="sm" class="w-44">
+                        <flux:select.option value="">Todos os projetos</flux:select.option>
                         @foreach ($this->projects as $project)
                             <flux:select.option value="{{ $project->id }}">
                                 {{ $project->emoji }} {{ $project->name }}

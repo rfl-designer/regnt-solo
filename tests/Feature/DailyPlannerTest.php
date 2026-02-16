@@ -366,7 +366,7 @@ test('daily planner can filter available tasks by project', function () {
     expect($availableTasks->pluck('id')->toArray())->toContain($task1->id)
         ->and($availableTasks->pluck('id')->toArray())->toContain($task2->id);
 
-    $component->set('filterProjectId', $project1->id);
+    $component->set('filterProjectId', (string) $project1->id);
 
     $filteredTasks = $component->get('availableTasks');
     expect($filteredTasks->pluck('id')->toArray())->toContain($task1->id)
@@ -387,11 +387,11 @@ test('daily planner filter resets when clearing project selection', function () 
     $task2 = Task::factory()->todo()->create(['project_id' => null]);
 
     $component = Livewire::test('pages::daily-planner')
-        ->set('filterProjectId', $project->id);
+        ->set('filterProjectId', (string) $project->id);
 
     expect($component->get('availableTasks')->pluck('id')->toArray())->not->toContain($task2->id);
 
-    $component->set('filterProjectId', null);
+    $component->set('filterProjectId', '');
 
     expect($component->get('availableTasks')->pluck('id')->toArray())->toContain($task1->id)
         ->and($component->get('availableTasks')->pluck('id')->toArray())->toContain($task2->id);

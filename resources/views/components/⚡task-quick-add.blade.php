@@ -235,14 +235,14 @@ new class extends Component
     {{-- Modal --}}
     <flux:modal name="quick-add" class="md:w-96">
         <div class="space-y-4" x-data="{
+            suggestions: @js($this->filteredSuggestions),
+            activePrefix: @entangle('activePrefix'),
             highlightIndex: 0,
-            get suggestions() {
-                return $wire.filteredSuggestions;
-            },
             get showSuggestions() {
-                return $wire.activePrefix !== '' && this.suggestions.length > 0;
+                return this.activePrefix !== '' && this.suggestions.length > 0;
             }
         }"
+        x-effect="suggestions = @js($this->filteredSuggestions)"
         x-on:keydown.arrow-down.prevent="highlightIndex = Math.min(highlightIndex + 1, suggestions.length - 1)"
         x-on:keydown.arrow-up.prevent="highlightIndex = Math.max(highlightIndex - 1, 0)"
         x-on:keydown.enter.prevent="

@@ -342,15 +342,24 @@ new class extends Component
                 :variant="$showWeekends ? 'primary' : 'ghost'"
                 icon="calendar"
             >
-                {{ $showWeekends ? 'Dom-Sáb' : 'Seg-Sex' }}
+                <span class="hidden sm:inline">{{ $showWeekends ? 'Dom-Sáb' : 'Seg-Sex' }}</span>
+                <span class="sm:hidden">{{ $showWeekends ? '7d' : '5d' }}</span>
             </flux:button>
+
+            {{-- Mobile tasks pool button --}}
+            <flux:modal.trigger name="mobile-tasks-pool" class="lg:hidden">
+                <flux:button size="sm" variant="subtle" icon="clipboard-document-list">
+                    <span class="hidden sm:inline">Disponíveis</span>
+                    <flux:badge size="sm" color="zinc" class="ml-1">{{ $this->availableTasks->count() }}</flux:badge>
+                </flux:button>
+            </flux:modal.trigger>
         </div>
     </div>
 
     {{-- Calendar Grid --}}
     <div class="flex flex-1 gap-4 overflow-hidden">
-        {{-- Available Tasks Pool (Fixed) --}}
-        <div class="flex w-72 shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50">
+        {{-- Available Tasks Pool (Fixed - hidden on small screens) --}}
+        <div class="hidden w-72 shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50 lg:flex">
             <div class="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
                 <div class="flex items-center gap-2">
                     <flux:icon name="clipboard-document-list" class="size-5 text-zinc-400" />
@@ -410,7 +419,49 @@ new class extends Component
         </div>
 
         {{-- Day Columns (Scrollable) --}}
-        <div class="flex flex-1 gap-3 overflow-x-auto pb-2">
+        <div
+            class="relative flex flex-1 gap-3 overflow-x-auto scroll-smooth pb-2"
+            x-data="{
+                showLeftFade: false,
+                showRightFade: true,
+                checkScroll() {
+                    this.showLeftFade = this.$el.scrollLeft > 20;
+                    this.showRightFade = this.$el.scrollLeft < (this.$el.scrollWidth - this.$el.clientWidth - 20);
+                },
+                scrollToToday() {
+                    const today = this.$el.querySelector('[data-today]');
+                    if (today) {
+                        today.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                    }
+                }
+            }"
+            x-init="$nextTick(() => { checkScroll(); scrollToToday(); })"
+            x-on:scroll.throttle.100ms="checkScroll()"
+        >
+            {{-- Left fade indicator --}}
+            <div
+                x-show="showLeftFade"
+                x-transition:enter="transition ease-out duration-200"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="transition ease-in duration-150"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
+                class="pointer-events-none absolute left-0 top-0 z-10 h-full w-8 bg-gradient-to-r from-zinc-950 to-transparent"
+            ></div>
+
+            {{-- Right fade indicator --}}
+            <div
+                x-show="showRightFade"
+                x-transition:enter="transition ease-out duration-200"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="transition ease-in duration-150"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
+                class="pointer-events-none absolute right-0 top-0 z-10 h-full w-8 bg-gradient-to-l from-zinc-950 to-transparent"
+            ></div>
+
         @foreach ($this->days as $day)
             @php
                 $date = $day['date'];
@@ -421,7 +472,10 @@ new class extends Component
                 $loadColor = $this->getLoadColor($dayLoad);
             @endphp
 
-            <div class="flex w-80 shrink-0 flex-col rounded-xl border {{ $isToday ? 'border-emerald-600' : ($isPast ? 'border-zinc-800' : 'border-zinc-700') }} {{ $isPast ? 'bg-zinc-900/30 opacity-75' : 'bg-zinc-900/50' }}">
+            <div
+                @if($isToday) data-today @endif
+                class="flex w-56 min-w-[14rem] shrink-0 flex-col rounded-xl border sm:w-64 md:w-72 lg:w-80 {{ $isToday ? 'border-emerald-600 ring-1 ring-emerald-600/30' : ($isPast ? 'border-zinc-800' : 'border-zinc-700') }} {{ $isPast ? 'bg-zinc-900/30 opacity-75' : 'bg-zinc-900/50' }}"
+            >
                 {{-- Day Header --}}
                 <div class="flex flex-col gap-1 border-b {{ $isToday ? 'border-emerald-600' : 'border-zinc-700' }} px-3 py-2">
                     <div class="flex items-center justify-between">
@@ -527,4 +581,60 @@ new class extends Component
         @endforeach
         </div>
     </div>
+
+    {{-- Mobile Tasks Pool Modal --}}
+    <flux:modal name="mobile-tasks-pool" class="w-full max-w-lg space-y-4">
+        <div class="flex items-center justify-between">
+            <flux:heading size="lg">Tasks Disponíveis</flux:heading>
+            <flux:badge color="zinc">{{ $this->availableTasks->count() }}</flux:badge>
+        </div>
+
+        <div class="max-h-[60vh] space-y-2 overflow-y-auto">
+            @forelse ($this->availableTasks as $task)
+                <div class="flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-800 p-3">
+                    <div class="min-w-0 flex-1">
+                        <span class="line-clamp-2 text-sm font-medium text-zinc-200">{{ $task->title }}</span>
+                        <div class="mt-1 flex flex-wrap items-center gap-2">
+                            @if ($task->project)
+                                <div class="flex items-center gap-1 border-l-2 pl-1" style="border-color: {{ $task->project->color }}">
+                                    <span class="text-xs">{{ $task->project->emoji }}</span>
+                                    <span class="text-xs text-zinc-400">{{ Str::limit($task->project->name, 15) }}</span>
+                                </div>
+                            @endif
+                            @if ($task->priority)
+                                <flux:badge size="sm" color="{{ $task->priority->color() }}">{{ $task->priority->label() }}</flux:badge>
+                            @endif
+                            @if ($task->estimated_minutes)
+                                <flux:badge size="sm" color="zinc">{{ $task->estimated_minutes }}m</flux:badge>
+                            @endif
+                        </div>
+                    </div>
+
+                    {{-- Add to day dropdown --}}
+                    <flux:dropdown>
+                        <flux:button size="sm" variant="ghost" icon="plus" />
+                        <flux:menu>
+                            @foreach ($this->days as $day)
+                                @if (!$day['isPast'])
+                                    <flux:menu.item
+                                        wire:click="addToPlan({{ $task->id }}, '{{ $day['date']->toDateString() }}')"
+                                        icon="{{ $day['isToday'] ? 'star' : 'calendar' }}"
+                                    >
+                                        {{ $day['date']->translatedFormat('D d') }}
+                                        @if ($day['isToday'])
+                                            <flux:badge size="sm" color="emerald" class="ml-1">Hoje</flux:badge>
+                                        @endif
+                                    </flux:menu.item>
+                                @endif
+                            @endforeach
+                        </flux:menu>
+                    </flux:dropdown>
+                </div>
+            @empty
+                <div class="py-8 text-center text-sm text-zinc-500">
+                    Todas as tasks estão planejadas 🎉
+                </div>
+            @endforelse
+        </div>
+    </flux:modal>
 </div>

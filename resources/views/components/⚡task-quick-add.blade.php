@@ -235,20 +235,21 @@ new class extends Component
     {{-- Modal --}}
     <flux:modal name="quick-add" class="md:w-96">
         <div class="space-y-4" x-data="{
-            suggestions: @js($this->filteredSuggestions),
-            activePrefix: @entangle('activePrefix'),
             highlightIndex: 0,
+            get suggestions() {
+                return $wire.filteredSuggestions;
+            },
             get showSuggestions() {
-                return this.activePrefix !== '' && this.suggestions.length > 0;
+                return $wire.activePrefix !== '' && this.suggestions.length > 0;
             }
         }"
         x-on:keydown.arrow-down.prevent="highlightIndex = Math.min(highlightIndex + 1, suggestions.length - 1)"
         x-on:keydown.arrow-up.prevent="highlightIndex = Math.max(highlightIndex - 1, 0)"
         x-on:keydown.enter.prevent="
-            if (showSuggestions) {
+            if (showSuggestions && suggestions[highlightIndex]) {
                 $wire.selectSuggestion(suggestions[highlightIndex].value);
                 highlightIndex = 0;
-            } else {
+            } else if (!showSuggestions) {
                 $wire.createTask();
             }
         "
@@ -267,6 +268,7 @@ new class extends Component
                     wire:model.live.debounce.150ms="rawInput"
                     placeholder="Ex: Revisar PR #meu-projeto !high @hoje"
                     autofocus
+                    x-on:input="highlightIndex = 0"
                     x-on:keydown.escape.prevent="$flux.modal('quick-add').close()"
                 />
 
@@ -274,7 +276,6 @@ new class extends Component
                 <div
                     x-show="showSuggestions"
                     x-cloak
-                    x-effect="suggestions = @js($this->filteredSuggestions); highlightIndex = 0;"
                     class="absolute z-50 mt-1 w-full overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800 shadow-lg"
                 >
                     <ul class="max-h-48 overflow-y-auto py-1">

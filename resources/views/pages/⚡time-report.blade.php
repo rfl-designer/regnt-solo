@@ -238,7 +238,7 @@ new class extends Component
         </div>
 
         <div class="w-full sm:w-48">
-            <flux:select wire:model.live="project" size="sm">
+            <flux:select wire:model.live="project">
                 <flux:select.option value="">Todos os projetos</flux:select.option>
                 @foreach ($this->projects as $proj)
                     <flux:select.option :value="$proj->id">

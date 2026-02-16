@@ -31,6 +31,7 @@ class TaskObserver
      *
      * Records a status change when the status field is modified.
      * Auto-adds task to today's daily plan if due_date changes to today.
+     * Syncs pivot_completed_at when status changes to/from done.
      */
     public function updating(Task $task): void
     {
@@ -41,10 +42,43 @@ class TaskObserver
                 'to_status' => $task->status,
                 'changed_at' => now(),
             ]);
+
+            $this->syncDailyPlanCompletedAt($task);
         }
 
         if ($task->isDirty('due_date')) {
             $this->addToDailyPlanIfDueToday($task);
+        }
+    }
+
+    /**
+     * Sync the pivot completed_at when status changes to/from done.
+     *
+     * When a task is marked as done (from any source), update the pivot
+     * completed_at in today's daily plan if the task is in the plan.
+     * When a task is reopened, clear the pivot completed_at.
+     */
+    private function syncDailyPlanCompletedAt(Task $task): void
+    {
+        $plan = DailyPlan::query()
+            ->whereDate('date', \Carbon\Carbon::today())
+            ->first();
+
+        if (! $plan) {
+            return;
+        }
+
+        if (! $plan->tasks()->where('tasks.id', $task->id)->exists()) {
+            return;
+        }
+
+        $newStatus = $task->status;
+        $oldStatus = $task->getOriginal('status');
+
+        if ($newStatus === \App\Enums\TaskStatus::Done && $oldStatus !== \App\Enums\TaskStatus::Done) {
+            $plan->tasks()->updateExistingPivot($task->id, ['completed_at' => now()]);
+        } elseif ($newStatus !== \App\Enums\TaskStatus::Done && $oldStatus === \App\Enums\TaskStatus::Done) {
+            $plan->tasks()->updateExistingPivot($task->id, ['completed_at' => null]);
         }
     }
 

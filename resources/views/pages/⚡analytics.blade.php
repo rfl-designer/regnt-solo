@@ -169,6 +169,16 @@ new class extends Component
 ?>
 
 <div class="flex h-full w-full flex-1 flex-col gap-6 p-6">
+    {{-- Breadcrumb --}}
+    <flux:breadcrumbs>
+        <flux:breadcrumbs.item href="{{ route('dashboard') }}" wire:navigate icon="home">
+            Dashboard
+        </flux:breadcrumbs.item>
+        <flux:breadcrumbs.item>
+            Analytics
+        </flux:breadcrumbs.item>
+    </flux:breadcrumbs>
+
     {{-- Header --}}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <flux:heading size="xl">Analytics Pessoais</flux:heading>

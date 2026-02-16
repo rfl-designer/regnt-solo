@@ -198,6 +198,16 @@ new class extends Component
 ?>
 
 <div class="flex h-full w-full flex-1 flex-col gap-6 p-6">
+    {{-- Breadcrumb --}}
+    <flux:breadcrumbs>
+        <flux:breadcrumbs.item href="{{ route('projects') }}" wire:navigate icon="folder">
+            Projetos
+        </flux:breadcrumbs.item>
+        <flux:breadcrumbs.item>
+            {{ $this->project->emoji }} {{ $this->project->name }}
+        </flux:breadcrumbs.item>
+    </flux:breadcrumbs>
+
     {{-- Header --}}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center gap-4">

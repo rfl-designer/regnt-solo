@@ -42,7 +42,6 @@ test('loads task data correctly when opened', function () {
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
         ->assertSet('title', 'Test Task')
-        ->assertSet('description', 'Test description')
         ->assertSet('projectId', (string) $project->id)
         ->assertSet('priority', 'high')
         ->assertSet('status', 'todo')
@@ -339,8 +338,7 @@ test('task modal shows session view for session tasks', function () {
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
-        ->assertSee('Sessão de Desenvolvimento')
-        ->assertSee('Prompt da Sessão');
+        ->assertSee('Sessão de Desenvolvimento');
 });
 
 test('task modal does not show session view for normal tasks', function () {

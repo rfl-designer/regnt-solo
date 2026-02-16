@@ -121,7 +121,7 @@ class UpdateTaskTool extends Tool
         return [
             'task_id' => $schema->integer()->description('The ID of the task to update.')->required(),
             'title' => $schema->string()->description('New title for the task.'),
-            'description' => $schema->string()->description('New description for the task.'),
+            'description' => $schema->string()->description('[DEPRECATED] New description for the task. Use session_prompt instead.'),
             'project_slug' => $schema->string()->description('Slug of the project to assign the task to.'),
             'status' => $schema->string()->enum(['inbox', 'backlog', 'todo', 'doing', 'done'])->description('New status. Setting to "done" will stop running timers and set completed_at.'),
             'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('New priority.'),

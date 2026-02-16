@@ -87,7 +87,7 @@ class CreateTaskTool extends Tool
             'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('Task priority. Default: medium.'),
             'due_date' => $schema->string()->description('Due date in YYYY-MM-DD format.'),
             'estimated_minutes' => $schema->integer()->description('Estimated time in minutes to complete the task.'),
-            'session_prompt' => $schema->string()->description('Optional AI session prompt. When provided, the task becomes a session task (AI-assisted coding session).'),
+            'session_prompt' => $schema->string()->description('Optional AI session prompt. When provided, the task becomes a session task (AI-assisted coding session). Use User Story format: "## User Story\nComo [persona], quero [ação] para [benefício].\n\n## Contexto\n[Situação atual]\n\n## Critérios de Aceitação\n- [ ] Critério 1\n- [ ] Critério 2\n\n## Notas Técnicas\n[Arquivos, dependências]"'),
         ];
     }
 }

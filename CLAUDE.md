@@ -101,6 +101,45 @@ Revisão semanal automática com métricas computadas, reflexão pessoal e hist�
 
 Modela tasks como sessões de AI coding: 1 task = 1 sessão = 1 PR. Primeira ferramenta PM a modelar o workflow agentic de devs usando Claude Code/Cursor/Copilot.
 
+### Template de User Story para `session_prompt`
+
+O campo `session_prompt` deve seguir a estrutura padronizada de User Story:
+
+```markdown
+## User Story
+Como [persona], quero [ação] para [benefício].
+
+## Contexto
+[Descrição adicional do problema ou situação atual]
+
+## Critérios de Aceitação
+- [ ] [Critério 1]
+- [ ] [Critério 2]
+- [ ] [Critério 3]
+
+## Notas Técnicas
+[Arquivos relevantes, dependências, considerações de implementação]
+```
+
+**Exemplo:**
+```markdown
+## User Story
+Como desenvolvedor, quero filtrar tasks por data no Kanban para visualizar apenas tasks de um período específico.
+
+## Contexto
+Atualmente o Kanban mostra todas as tasks sem opção de filtro temporal.
+
+## Critérios de Aceitação
+- [ ] Date picker na toolbar do Kanban
+- [ ] Filtrar tasks por due_date
+- [ ] Opção "Todas" para remover filtro
+- [ ] Persistir filtro na URL via query string
+
+## Notas Técnicas
+- Usar <flux:date-picker>
+- Página: resources/views/pages/⚡kanban.blade.php
+```
+
 - **Campos na Task**: `session_prompt` (text) e `session_result` (text) — o prompt dado ao AI e o resumo do que foi implementado
 - **Model Task**:
   - `isSessionTask(): bool` — identifica tasks com `session_prompt` preenchido

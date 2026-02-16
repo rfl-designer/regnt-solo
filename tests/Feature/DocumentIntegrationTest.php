@@ -72,5 +72,5 @@ test('task modal shows textarea for session prompt when not done', function () {
 
     Livewire::test('task-modal')
         ->call('openTask', $task->id)
-        ->assertSee('Descreva o que o AI deve implementar');
+        ->assertSee('User Story');
 });

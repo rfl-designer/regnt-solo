@@ -51,6 +51,14 @@ class Project extends Model
     }
 
     /**
+     * Get the documents for this project.
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
+
+    /**
      * Scope to only active projects.
      */
     public function scopeActive(Builder $query): void

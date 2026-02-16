@@ -48,6 +48,9 @@ new class extends Component
     /** @var array<int, array{hash: string, short_hash: string, message: string, files_changed: int, insertions: int, deletions: int, committed_at: string}> */
     public array $commits = [];
 
+    /** @var array<int, array{id: int, title: string, slug: string, type_label: string, type_icon: string, type_color: string}> */
+    public array $projectDocuments = [];
+
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Project>
      */
@@ -111,6 +114,24 @@ new class extends Component
             ])
             ->values()
             ->all();
+
+        $this->projectDocuments = [];
+        if ($task->project_id) {
+            $this->projectDocuments = \App\Models\Document::query()
+                ->forProject($task->project_id)
+                ->ordered()
+                ->take(5)
+                ->get()
+                ->map(fn (\App\Models\Document $doc) => [
+                    'id' => $doc->id,
+                    'title' => $doc->title,
+                    'slug' => $doc->slug,
+                    'type_label' => $doc->type->label(),
+                    'type_icon' => $doc->type->icon(),
+                    'type_color' => $doc->type->color(),
+                ])
+                ->all();
+        }
 
         $this->showModal = true;
         $this->showDeleteConfirm = false;
@@ -279,7 +300,7 @@ new class extends Component
 
         $this->showDeleteConfirm = false;
         $this->showModal = false;
-        $this->reset('taskId', 'title', 'description', 'projectId', 'priority', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'commits', 'sessionPrompt', 'sessionResult');
+        $this->reset('taskId', 'title', 'description', 'projectId', 'priority', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'commits', 'sessionPrompt', 'sessionResult', 'projectDocuments');
 
         $this->dispatch('task-updated');
 
@@ -369,9 +390,11 @@ new class extends Component
                     {{-- Prompt da Sessão --}}
                     <flux:field>
                         <flux:label>Prompt da Sessão</flux:label>
-                        @if ($isDone)
-                            <div class="rounded-lg border border-zinc-700 bg-zinc-800/50 p-3 text-sm text-zinc-300">
-                                {{ $sessionPrompt }}
+                        @if ($isDone && $sessionPrompt)
+                            <div class="max-h-40 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
+                                <div class="markdown-viewer prose-sm">
+                                    {!! \App\Support\Markdown::render($sessionPrompt) !!}
+                                </div>
                             </div>
                         @else
                             <flux:textarea wire:model="sessionPrompt" rows="4" placeholder="Descreva o que o AI deve implementar..." />
@@ -382,7 +405,15 @@ new class extends Component
                     @if ($sessionResult || $isDone)
                         <flux:field>
                             <flux:label>Resultado da Sessão</flux:label>
-                            <flux:textarea wire:model="sessionResult" rows="3" placeholder="Resumo do que foi implementado..." />
+                            @if ($isDone && $sessionResult)
+                                <div class="max-h-40 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
+                                    <div class="markdown-viewer prose-sm">
+                                        {!! \App\Support\Markdown::render($sessionResult) !!}
+                                    </div>
+                                </div>
+                            @else
+                                <flux:textarea wire:model="sessionResult" rows="3" placeholder="Resumo do que foi implementado..." />
+                            @endif
                         </flux:field>
                     @endif
 
@@ -450,6 +481,31 @@ new class extends Component
                                 🎯 {{ round($focusMinutes / 60, 1) }}h de focus
                             </flux:badge>
                         @endif
+                    </div>
+                </div>
+            @endif
+
+            {{-- Documentos do Projeto --}}
+            @if (count($projectDocuments) > 0)
+                <div class="space-y-3">
+                    <flux:separator />
+                    <flux:heading size="sm" class="flex items-center gap-2">
+                        <flux:icon name="document-text" variant="mini" class="text-indigo-400" />
+                        Documentos do Projeto
+                    </flux:heading>
+
+                    <div class="space-y-1.5">
+                        @foreach ($projectDocuments as $doc)
+                            <a
+                                href="{{ route('document.view', $doc['slug']) }}"
+                                wire:navigate
+                                class="flex items-center gap-2.5 rounded-lg border border-zinc-700/50 bg-zinc-800/30 px-3 py-2 transition hover:border-zinc-600 hover:bg-zinc-800/50"
+                            >
+                                <flux:icon :name="$doc['type_icon']" class="size-4 text-{{ $doc['type_color'] }}-400" />
+                                <span class="flex-1 truncate text-sm text-zinc-300">{{ $doc['title'] }}</span>
+                                <flux:badge size="sm" :color="$doc['type_color']">{{ $doc['type_label'] }}</flux:badge>
+                            </a>
+                        @endforeach
                     </div>
                 </div>
             @endif

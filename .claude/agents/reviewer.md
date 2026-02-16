@@ -1,4 +1,5 @@
 ---
+name: reviewer
 description: Agente de revisão de código que analisa qualidade, padrões e boas práticas. Use após implementação para garantir qualidade antes de merge.
 model: sonnet
 context: fork

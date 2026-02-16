@@ -1,6 +1,8 @@
 ---
+name: git-specialist
 description: Agente especialista em Git que gerencia branches, commits e PRs. Use para criar branches, commits incrementais ou finalizar PRs.
 model: haiku
+context: fork
 allowed-tools:
   - Bash
   - Read

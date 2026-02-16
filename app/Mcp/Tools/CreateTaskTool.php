@@ -81,7 +81,7 @@ class CreateTaskTool extends Tool
     {
         return [
             'title' => $schema->string()->description('The title of the task.')->required(),
-            'description' => $schema->string()->description('Optional description or notes for the task.'),
+            'description' => $schema->string()->description('[DEPRECATED] Optional description or notes for the task. Use session_prompt instead.'),
             'project_slug' => $schema->string()->description('Slug of the project to assign the task to. Use list-projects to find slugs.'),
             'status' => $schema->string()->enum(['inbox', 'backlog', 'todo', 'doing', 'done'])->description('Task status. Default: inbox.'),
             'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('Task priority. Default: medium.'),

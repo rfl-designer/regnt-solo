@@ -21,8 +21,6 @@ new class extends Component
 
     public string $title = '';
 
-    public string $description = '';
-
     public ?string $projectId = null;
 
     public string $priority = 'medium';
@@ -42,6 +40,8 @@ new class extends Component
     public string $sessionPrompt = '';
 
     public string $sessionResult = '';
+
+    public bool $editingPrompt = false;
 
     public string $prUrl = '';
 
@@ -73,7 +73,6 @@ new class extends Component
 
         $this->taskId = $task->id;
         $this->title = $task->title;
-        $this->description = $task->description ?? '';
         $this->projectId = $task->project_id ? (string) $task->project_id : null;
         $this->priority = $task->priority->value;
         $this->status = $task->status->value;
@@ -135,6 +134,7 @@ new class extends Component
 
         $this->showModal = true;
         $this->showDeleteConfirm = false;
+        $this->editingPrompt = false;
     }
 
     /**
@@ -205,7 +205,6 @@ new class extends Component
     {
         $this->validate([
             'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
             'projectId' => 'nullable|exists:projects,id',
             'priority' => 'required|in:'.implode(',', array_column(TaskPriority::cases(), 'value')),
             'status' => 'required|in:'.implode(',', array_column(TaskStatus::cases(), 'value')),
@@ -220,7 +219,6 @@ new class extends Component
         if ($newStatus === TaskStatus::Done && $task->status !== TaskStatus::Done) {
             $task->update([
                 'title' => $this->title,
-                'description' => $this->description ?: null,
                 'project_id' => $this->projectId ? (int) $this->projectId : null,
                 'priority' => $this->priority,
                 'due_date' => $this->dueDate ?: null,
@@ -234,7 +232,6 @@ new class extends Component
         } else {
             $task->update([
                 'title' => $this->title,
-                'description' => $this->description ?: null,
                 'project_id' => $this->projectId ? (int) $this->projectId : null,
                 'status' => $this->status,
                 'priority' => $this->priority,
@@ -300,7 +297,7 @@ new class extends Component
 
         $this->showDeleteConfirm = false;
         $this->showModal = false;
-        $this->reset('taskId', 'title', 'description', 'projectId', 'priority', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'commits', 'sessionPrompt', 'sessionResult', 'projectDocuments');
+        $this->reset('taskId', 'title', 'projectId', 'priority', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'commits', 'sessionPrompt', 'sessionResult', 'projectDocuments');
 
         $this->dispatch('task-updated');
 
@@ -326,8 +323,41 @@ new class extends Component
                 placeholder="Título da tarefa"
             />
 
-            {{-- Description (Rich Text Editor) --}}
-            <flux:editor wire:model="description" label="Descrição" placeholder="Descreva a tarefa..." />
+            {{-- Session Prompt / Descrição --}}
+            <flux:field>
+                <div class="flex items-center justify-between">
+                    <flux:label>{{ $this->isSessionTask ? 'Session Prompt' : 'Descrição' }}</flux:label>
+                    @if (!($status === 'done' && $this->isSessionTask))
+                        <flux:button
+                            wire:click="$toggle('editingPrompt')"
+                            variant="ghost"
+                            size="xs"
+                            :icon="$editingPrompt ? 'eye' : 'pencil'"
+                        />
+                    @endif
+                </div>
+
+                @if ($editingPrompt && !($status === 'done' && $this->isSessionTask))
+                    {{-- Modo Edição --}}
+                    <flux:editor
+                        wire:model="sessionPrompt"
+                        placeholder="Descreva a tarefa..."
+                    />
+                @else
+                    {{-- Modo Visualização --}}
+                    @if ($sessionPrompt)
+                        <div class="max-h-60 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
+                            <div class="prose prose-sm prose-invert max-w-none prose-headings:text-zinc-200 prose-p:text-zinc-300 prose-a:text-blue-400 prose-strong:text-zinc-200 prose-code:text-pink-400 prose-pre:bg-zinc-900 prose-li:text-zinc-300">
+                                {!! Str::markdown($sessionPrompt) !!}
+                            </div>
+                        </div>
+                    @else
+                        <div class="flex items-center justify-center rounded-lg border border-dashed border-zinc-700 bg-zinc-800/30 p-6 text-zinc-500">
+                            <span class="text-sm">Clique no ícone de editar para adicionar uma descrição</span>
+                        </div>
+                    @endif
+                @endif
+            </flux:field>
 
             {{-- Two-column grid for selects --}}
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -386,20 +416,6 @@ new class extends Component
                         <flux:icon name="command-line" variant="mini" class="text-violet-400" />
                         Sessão de Desenvolvimento
                     </flux:heading>
-
-                    {{-- Prompt da Sessão --}}
-                    <flux:field>
-                        <flux:label>Prompt da Sessão</flux:label>
-                        @if ($isDone && $sessionPrompt)
-                            <div class="max-h-40 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
-                                <div class="markdown-viewer prose-sm">
-                                    {!! \App\Support\Markdown::render($sessionPrompt) !!}
-                                </div>
-                            </div>
-                        @else
-                            <flux:textarea wire:model="sessionPrompt" rows="6" placeholder="## User Story&#10;Como [persona], quero [ação] para [benefício].&#10;&#10;## Contexto&#10;[Situação atual]&#10;&#10;## Critérios de Aceitação&#10;- [ ] Critério 1&#10;&#10;## Notas Técnicas&#10;[Arquivos relevantes]" />
-                        @endif
-                    </flux:field>
 
                     {{-- Resultado da Sessão --}}
                     @if ($sessionResult || $isDone)

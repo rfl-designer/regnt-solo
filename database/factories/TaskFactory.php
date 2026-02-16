@@ -21,7 +21,6 @@ class TaskFactory extends Factory
     {
         return [
             'title' => fake()->sentence(4),
-            'description' => fake()->optional()->paragraph(),
             'status' => TaskStatus::Inbox,
             'priority' => TaskPriority::Medium,
             'due_date' => null,

@@ -1,6 +1,8 @@
 ---
+name: tester
 description: Agente de testes que cria e executa testes Pest. Use para garantir cobertura de testes antes de finalizar uma feature.
 model: sonnet
+context: fork
 allowed-tools:
   - Read
   - Write

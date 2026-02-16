@@ -209,6 +209,16 @@ new class extends Component
         })
     "
 >
+    {{-- Breadcrumb --}}
+    <flux:breadcrumbs>
+        <flux:breadcrumbs.item href="{{ route('dashboard') }}" wire:navigate icon="home">
+            Dashboard
+        </flux:breadcrumbs.item>
+        <flux:breadcrumbs.item>
+            Tempo
+        </flux:breadcrumbs.item>
+    </flux:breadcrumbs>
+
     {{-- Header --}}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <flux:heading size="xl">Relatório de Tempo</flux:heading>

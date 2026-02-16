@@ -615,13 +615,13 @@ new class extends Component
         @unless ($this->isPast)
             <div class="flex flex-col gap-3 md:col-span-2">
                 <div class="flex items-center justify-between gap-2">
-                    <div class="flex items-center gap-2">
+                    <div class="flex shrink-0 items-center gap-2">
                         <flux:heading size="sm">Tasks Disponíveis</flux:heading>
                         <flux:badge size="sm" color="zinc">{{ $this->availableTasks->count() }}</flux:badge>
                     </div>
 
-                    <flux:select wire:model.live="filterProjectId" size="sm" class="w-44">
-                        <flux:select.option value="">Todos os projetos</flux:select.option>
+                    <flux:select wire:model.live="filterProjectId" size="sm" class="min-w-0 max-w-36">
+                        <flux:select.option value="">Todos</flux:select.option>
                         @foreach ($this->projects as $project)
                             <flux:select.option value="{{ $project->id }}">
                                 {{ $project->emoji }} {{ $project->name }}

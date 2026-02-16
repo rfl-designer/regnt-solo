@@ -84,6 +84,16 @@ class ProjectFactory extends Factory
     }
 
     /**
+     * Indicate that the project has urgent priority.
+     */
+    public function urgentPriority(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'priority' => ProjectPriority::Urgent,
+        ]);
+    }
+
+    /**
      * Indicate that the project has high priority.
      */
     public function highPriority(): static

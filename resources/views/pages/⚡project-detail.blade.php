@@ -89,7 +89,10 @@ new class extends Component
         foreach (TaskStatus::cases() as $status) {
             $grouped[$status->value] = $this->project->tasks
                 ->where('status', $status)
-                ->sortBy('sort_order');
+                ->sortBy([
+                    ['sort_order', 'asc'],
+                    ['created_at', 'desc'],
+                ]);
         }
 
         return $grouped;
@@ -104,7 +107,10 @@ new class extends Component
     {
         return $this->project->tasks
             ->where('status', $status)
-            ->sortBy('sort_order')
+            ->sortBy([
+                ['sort_order', 'asc'],
+                ['created_at', 'desc'],
+            ])
             ->take($this->limits[$status->value]);
     }
 

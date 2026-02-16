@@ -226,7 +226,7 @@ new class extends Component
 
 <div>
     {{-- Modal trigger with keyboard shortcut --}}
-    <flux:modal.trigger name="quick-add" shortcut="n">
+    <flux:modal.trigger name="quick-add" shortcut="ctrl.n">
         <flux:button icon="plus" variant="ghost" size="sm" class="sr-only">
             Nova Task
         </flux:button>

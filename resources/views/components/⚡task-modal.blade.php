@@ -41,6 +41,8 @@ new class extends Component
 
     public string $sessionResult = '';
 
+    public bool $editingPrompt = false;
+
     public string $prUrl = '';
 
     /** @var array<int, array{hash: string, short_hash: string, message: string, files_changed: int, insertions: int, deletions: int, committed_at: string}> */
@@ -132,6 +134,7 @@ new class extends Component
 
         $this->showModal = true;
         $this->showDeleteConfirm = false;
+        $this->editingPrompt = false;
     }
 
     /**
@@ -320,13 +323,41 @@ new class extends Component
                 placeholder="Título da tarefa"
             />
 
-            {{-- Session Prompt / Descrição (Rich Text Editor) --}}
-            <flux:editor
-                wire:model="sessionPrompt"
-                :label="$this->isSessionTask ? 'Session Prompt' : 'Descrição'"
-                placeholder="Descreva a tarefa..."
-                :disabled="$status === 'done' && $this->isSessionTask"
-            />
+            {{-- Session Prompt / Descrição --}}
+            <flux:field>
+                <div class="flex items-center justify-between">
+                    <flux:label>{{ $this->isSessionTask ? 'Session Prompt' : 'Descrição' }}</flux:label>
+                    @if (!($status === 'done' && $this->isSessionTask))
+                        <flux:button
+                            wire:click="$toggle('editingPrompt')"
+                            variant="ghost"
+                            size="xs"
+                            :icon="$editingPrompt ? 'eye' : 'pencil'"
+                        />
+                    @endif
+                </div>
+
+                @if ($editingPrompt && !($status === 'done' && $this->isSessionTask))
+                    {{-- Modo Edição --}}
+                    <flux:editor
+                        wire:model="sessionPrompt"
+                        placeholder="Descreva a tarefa..."
+                    />
+                @else
+                    {{-- Modo Visualização --}}
+                    @if ($sessionPrompt)
+                        <div class="max-h-60 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
+                            <div class="prose prose-sm prose-invert max-w-none prose-headings:text-zinc-200 prose-p:text-zinc-300 prose-a:text-blue-400 prose-strong:text-zinc-200 prose-code:text-pink-400 prose-pre:bg-zinc-900 prose-li:text-zinc-300">
+                                {!! Str::markdown($sessionPrompt) !!}
+                            </div>
+                        </div>
+                    @else
+                        <div class="flex items-center justify-center rounded-lg border border-dashed border-zinc-700 bg-zinc-800/30 p-6 text-zinc-500">
+                            <span class="text-sm">Clique no ícone de editar para adicionar uma descrição</span>
+                        </div>
+                    @endif
+                @endif
+            </flux:field>
 
             {{-- Two-column grid for selects --}}
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">

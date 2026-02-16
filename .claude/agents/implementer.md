@@ -1,6 +1,8 @@
 ---
+name: implementer
 description: Agente de implementação que executa tasks do SoloBoard. Use para implementar features, correções ou refatorações seguindo os padrões do projeto.
 model: sonnet
+context: fork
 allowed-tools:
   - Read
   - Write

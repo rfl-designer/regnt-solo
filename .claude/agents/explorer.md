@@ -1,4 +1,5 @@
 ---
+name: explorer
 description: Agente de exploração rápida do codebase. Use para encontrar arquivos, entender estruturas ou responder perguntas sobre o código existente.
 model: haiku
 context: fork

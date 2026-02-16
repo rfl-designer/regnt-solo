@@ -1,4 +1,5 @@
 ---
+name: brain
 description: Agente de análise e planejamento que mapeia contexto e requisitos antes de qualquer implementação. Use para analisar novas features, entender o codebase ou planejar mudanças arquiteturais.
 model: sonnet
 context: fork

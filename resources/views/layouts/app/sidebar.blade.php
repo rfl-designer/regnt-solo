@@ -25,6 +25,9 @@
                     <flux:sidebar.item icon="calendar-days" :href="route('daily')" :current="request()->routeIs('daily')" wire:navigate>
                         Daily
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="calendar" :href="route('weekly')" :current="request()->routeIs('weekly')" wire:navigate>
+                        Semanal
+                    </flux:sidebar.item>
                     <flux:sidebar.item icon="folder" :href="route('projects')" :current="request()->routeIs('projects') || request()->routeIs('project.*') || request()->routeIs('document.*')" wire:navigate>
                         Projetos
                     </flux:sidebar.item>

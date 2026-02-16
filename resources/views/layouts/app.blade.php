@@ -12,6 +12,7 @@
             if (key === 'b') { $event.preventDefault(); Livewire.navigate('/kanban'); }
             if (key === 'd') { $event.preventDefault(); Livewire.navigate('/daily'); }
             if (key === 'i') { $event.preventDefault(); Livewire.navigate('/inbox'); }
+            if (key === 'w') { $event.preventDefault(); Livewire.navigate('/weekly'); }
             if (key === 't') { $event.preventDefault(); $dispatch('toggle-timer'); }
         "
     >

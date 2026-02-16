@@ -4,6 +4,7 @@ namespace App\Enums;
 
 enum ProjectPriority: string
 {
+    case Urgent = 'urgent';
     case High = 'high';
     case Medium = 'medium';
     case Low = 'low';
@@ -14,6 +15,7 @@ enum ProjectPriority: string
     public function label(): string
     {
         return match ($this) {
+            self::Urgent => 'Urgente',
             self::High => 'Alta',
             self::Medium => 'Média',
             self::Low => 'Baixa',
@@ -26,7 +28,8 @@ enum ProjectPriority: string
     public function color(): string
     {
         return match ($this) {
-            self::High => 'red',
+            self::Urgent => 'red',
+            self::High => 'orange',
             self::Medium => 'blue',
             self::Low => 'zinc',
         };
@@ -38,6 +41,7 @@ enum ProjectPriority: string
     public function icon(): string
     {
         return match ($this) {
+            self::Urgent => 'fire',
             self::High => 'arrow-up',
             self::Medium => 'minus',
             self::Low => 'arrow-down',

@@ -111,7 +111,7 @@ class Project extends Model
      */
     public function scopeOrdered(Builder $query): void
     {
-        $query->orderByRaw("CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END")
+        $query->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END")
             ->orderBy('name');
     }
 }

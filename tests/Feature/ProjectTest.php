@@ -140,8 +140,43 @@ test('ordered scope sorts by priority desc then name asc', function () {
     Project::factory()->create(['name' => 'Bravo', 'priority' => ProjectPriority::High]);
     Project::factory()->create(['name' => 'Alpha', 'priority' => ProjectPriority::High]);
     Project::factory()->create(['name' => 'Charlie', 'priority' => ProjectPriority::Medium]);
+    Project::factory()->create(['name' => 'Delta', 'priority' => ProjectPriority::Urgent]);
+    Project::factory()->create(['name' => 'Echo', 'priority' => ProjectPriority::Urgent]);
 
     $ordered = Project::query()->ordered()->pluck('name')->all();
 
-    expect($ordered)->toBe(['Alpha', 'Bravo', 'Charlie', 'Zebra']);
+    expect($ordered)->toBe(['Delta', 'Echo', 'Alpha', 'Bravo', 'Charlie', 'Zebra']);
+});
+
+test('project priority enum has all expected values', function () {
+    $cases = ProjectPriority::cases();
+
+    expect($cases)->toHaveCount(4)
+        ->and(array_column($cases, 'value'))->toBe([
+            'urgent',
+            'high',
+            'medium',
+            'low',
+        ]);
+});
+
+test('project priority enum has labels in PT-BR', function () {
+    expect(ProjectPriority::Urgent->label())->toBe('Urgente')
+        ->and(ProjectPriority::High->label())->toBe('Alta')
+        ->and(ProjectPriority::Medium->label())->toBe('Média')
+        ->and(ProjectPriority::Low->label())->toBe('Baixa');
+});
+
+test('project priority enum has colors', function () {
+    expect(ProjectPriority::Urgent->color())->toBe('red')
+        ->and(ProjectPriority::High->color())->toBe('orange')
+        ->and(ProjectPriority::Medium->color())->toBe('blue')
+        ->and(ProjectPriority::Low->color())->toBe('zinc');
+});
+
+test('project priority enum has icons', function () {
+    expect(ProjectPriority::Urgent->icon())->toBe('fire')
+        ->and(ProjectPriority::High->icon())->toBe('arrow-up')
+        ->and(ProjectPriority::Medium->icon())->toBe('minus')
+        ->and(ProjectPriority::Low->icon())->toBe('arrow-down');
 });

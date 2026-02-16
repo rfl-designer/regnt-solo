@@ -338,9 +338,9 @@ new class extends Component
     </div>
 
     {{-- Calendar Grid --}}
-    <div class="flex flex-1 gap-3 overflow-x-auto pb-4">
-        {{-- Available Tasks Pool --}}
-        <div class="flex w-64 shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50">
+    <div class="flex flex-1 gap-4 overflow-hidden">
+        {{-- Available Tasks Pool (Fixed) --}}
+        <div class="flex w-72 shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50">
             <div class="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
                 <div class="flex items-center gap-2">
                     <flux:icon name="clipboard-document-list" class="size-5 text-zinc-400" />
@@ -399,7 +399,8 @@ new class extends Component
             </div>
         </div>
 
-        {{-- Day Columns --}}
+        {{-- Day Columns (Scrollable) --}}
+        <div class="flex flex-1 gap-3 overflow-x-auto pb-2">
         @foreach ($this->days as $day)
             @php
                 $date = $day['date'];
@@ -410,7 +411,7 @@ new class extends Component
                 $loadColor = $this->getLoadColor($dayLoad);
             @endphp
 
-            <div class="flex w-56 shrink-0 flex-col rounded-xl border {{ $isToday ? 'border-emerald-600' : ($isPast ? 'border-zinc-800' : 'border-zinc-700') }} {{ $isPast ? 'bg-zinc-900/30 opacity-75' : 'bg-zinc-900/50' }}">
+            <div class="flex w-80 shrink-0 flex-col rounded-xl border {{ $isToday ? 'border-emerald-600' : ($isPast ? 'border-zinc-800' : 'border-zinc-700') }} {{ $isPast ? 'bg-zinc-900/30 opacity-75' : 'bg-zinc-900/50' }}">
                 {{-- Day Header --}}
                 <div class="flex flex-col gap-1 border-b {{ $isToday ? 'border-emerald-600' : 'border-zinc-700' }} px-3 py-2">
                     <div class="flex items-center justify-between">
@@ -514,5 +515,6 @@ new class extends Component
                 </div>
             </div>
         @endforeach
+        </div>
     </div>
 </div>

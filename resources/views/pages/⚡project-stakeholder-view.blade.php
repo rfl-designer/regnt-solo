@@ -28,6 +28,8 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
 
     public ?int $selectedDocumentId = null;
 
+    public string $mobileStatus = 'doing';
+
     public function mount(string $token): void
     {
         $this->token = $token;
@@ -220,8 +222,102 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
             {{-- Tab Panel: Tasks (Mini-Kanban Read-Only) --}}
             <flux:tab.panel name="tasks">
                 <div class="flex flex-col gap-4">
-                    {{-- Mini-Kanban --}}
-                    <div class="flex gap-4 pb-4">
+                    {{-- Mobile: Select + Single Column --}}
+                    <div class="md:hidden">
+                        <flux:select wire:model.live="mobileStatus" class="mb-4">
+                            @foreach ($kanbanStatuses as $status)
+                                <flux:select.option value="{{ $status->value }}">
+                                    {{ $status->label() }} ({{ $this->getColumnTotal($status) }})
+                                </flux:select.option>
+                            @endforeach
+                        </flux:select>
+
+                        @php
+                            $mobileStatusEnum = App\Enums\TaskStatus::from($mobileStatus);
+                            $tasks = $this->getColumnTasks($mobileStatusEnum);
+                            $total = $this->getColumnTotal($mobileStatusEnum);
+                            $limit = $this->limits[$mobileStatus];
+                            $hasMore = $total > $limit;
+                        @endphp
+
+                        <div class="flex flex-col rounded-xl border border-zinc-700 bg-zinc-900/50">
+                            {{-- Column Header --}}
+                            <div class="flex items-center justify-between border-b border-zinc-700 px-3 py-2.5">
+                                <div class="flex items-center gap-2">
+                                    <flux:icon :name="$mobileStatusEnum->icon()" class="size-4 text-{{ $mobileStatusEnum->color() }}-400" />
+                                    <span class="text-sm font-medium text-zinc-300">{{ $mobileStatusEnum->label() }}</span>
+                                </div>
+                                <flux:badge size="sm" color="{{ $mobileStatusEnum->color() }}">{{ $total }}</flux:badge>
+                            </div>
+
+                            {{-- Tasks List --}}
+                            <div class="p-2">
+                                @forelse ($tasks as $task)
+                                    <div
+                                        wire:key="mobile-task-{{ $task->id }}"
+                                        class="mb-2 rounded-lg border border-zinc-700 bg-zinc-800 p-2.5"
+                                    >
+                                        <span class="line-clamp-2 text-sm font-medium text-zinc-200">{{ $task->title }}</span>
+
+                                        <div class="mt-1.5 flex flex-wrap items-center gap-1">
+                                            @if ($task->priority)
+                                                <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
+                                                    {{ $task->priority->label() }}
+                                                </flux:badge>
+                                            @endif
+
+                                            @if ($task->estimated_minutes)
+                                                <flux:badge size="sm" color="zinc" icon="clock">
+                                                    {{ $task->estimated_minutes }}m
+                                                </flux:badge>
+                                            @endif
+
+                                            @if ($task->isOverdue())
+                                                <flux:badge size="sm" color="red" icon="exclamation-triangle">
+                                                    {{ $task->due_date->diffForHumans() }}
+                                                </flux:badge>
+                                            @endif
+
+                                            @if ($task->isRunning())
+                                                <flux:badge size="sm" color="emerald" class="animate-pulse">
+                                                    <div class="mr-1 size-2 rounded-full bg-emerald-400"></div>
+                                                    Timer
+                                                </flux:badge>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="py-6 text-center text-xs text-zinc-600">
+                                        Nenhuma task
+                                    </div>
+                                @endforelse
+
+                                {{-- Load More Button --}}
+                                @if ($hasMore)
+                                    <div class="mt-2">
+                                        <flux:button
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full"
+                                            wire:click="loadMore('{{ $mobileStatus }}')"
+                                            wire:loading.attr="disabled"
+                                            wire:target="loadMore('{{ $mobileStatus }}')"
+                                        >
+                                            <span wire:loading.remove wire:target="loadMore('{{ $mobileStatus }}')">
+                                                Carregar mais ({{ $total - $limit }} restantes)
+                                            </span>
+                                            <span wire:loading wire:target="loadMore('{{ $mobileStatus }}')">
+                                                Carregando...
+                                            </span>
+                                        </flux:button>
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Desktop: All Columns --}}
+                    <div class="hidden gap-4 pb-4 md:flex">
                         @foreach ($kanbanStatuses as $status)
                             @php
                                 $tasks = $this->getColumnTasks($status);

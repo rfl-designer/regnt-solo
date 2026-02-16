@@ -18,6 +18,14 @@ new class extends Component
     /** @var list<TaskStatus> */
     public array $kanbanStatuses = [];
 
+    /** @var array<string, int> */
+    public array $limits = [
+        'backlog' => 10,
+        'todo' => 10,
+        'doing' => 10,
+        'done' => 10,
+    ];
+
     public ?int $selectedDocumentId = null;
 
     public function mount(string $slug): void
@@ -85,6 +93,32 @@ new class extends Component
         }
 
         return $grouped;
+    }
+
+    /**
+     * Get tasks for a specific column with pagination.
+     *
+     * @return \Illuminate\Support\Collection<int, \App\Models\Task>
+     */
+    public function getColumnTasks(TaskStatus $status): \Illuminate\Support\Collection
+    {
+        return $this->project->tasks
+            ->where('status', $status)
+            ->sortBy('sort_order')
+            ->take($this->limits[$status->value]);
+    }
+
+    /**
+     * Get total count for a column.
+     */
+    public function getColumnTotal(TaskStatus $status): int
+    {
+        return $this->project->tasks->where('status', $status)->count();
+    }
+
+    public function loadMore(string $status): void
+    {
+        $this->limits[$status] += 10;
     }
 
     /**
@@ -253,7 +287,10 @@ new class extends Component
                 <div class="flex gap-4 pb-4">
                     @foreach ($kanbanStatuses as $status)
                         @php
-                            $tasks = $this->tasksByStatus[$status->value] ?? collect();
+                            $tasks = $this->getColumnTasks($status);
+                            $total = $this->getColumnTotal($status);
+                            $limit = $this->limits[$status->value];
+                            $hasMore = $total > $limit;
                         @endphp
 
                         <div class="flex min-w-48 flex-1 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50">
@@ -263,7 +300,7 @@ new class extends Component
                                     <flux:icon :name="$status->icon()" class="size-4 text-{{ $status->color() }}-400" />
                                     <span class="text-sm font-medium text-zinc-300">{{ $status->label() }}</span>
                                 </div>
-                                <flux:badge size="sm" color="{{ $status->color() }}">{{ $tasks->count() }}</flux:badge>
+                                <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
                             </div>
 
                             {{-- Tasks List --}}
@@ -308,6 +345,27 @@ new class extends Component
                                         Nenhuma task
                                     </div>
                                 @endforelse
+
+                                {{-- Load More Button --}}
+                                @if ($hasMore)
+                                    <div class="mt-2">
+                                        <flux:button
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full"
+                                            wire:click="loadMore('{{ $status->value }}')"
+                                            wire:loading.attr="disabled"
+                                            wire:target="loadMore('{{ $status->value }}')"
+                                        >
+                                            <span wire:loading.remove wire:target="loadMore('{{ $status->value }}')">
+                                                Carregar mais ({{ $total - $limit }} restantes)
+                                            </span>
+                                            <span wire:loading wire:target="loadMore('{{ $status->value }}')">
+                                                Carregando...
+                                            </span>
+                                        </flux:button>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     @endforeach

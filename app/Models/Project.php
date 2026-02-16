@@ -59,6 +59,14 @@ class Project extends Model
     }
 
     /**
+     * Scope to only backlog projects.
+     */
+    public function scopeBacklog(Builder $query): void
+    {
+        $query->where('status', ProjectStatus::Backlog);
+    }
+
+    /**
      * Scope to only active projects.
      */
     public function scopeActive(Builder $query): void
@@ -72,6 +80,22 @@ class Project extends Model
     public function scopePaused(Builder $query): void
     {
         $query->where('status', ProjectStatus::Paused);
+    }
+
+    /**
+     * Scope to only done projects.
+     */
+    public function scopeDone(Builder $query): void
+    {
+        $query->where('status', ProjectStatus::Done);
+    }
+
+    /**
+     * Scope to only maintenance projects.
+     */
+    public function scopeMaintenance(Builder $query): void
+    {
+        $query->where('status', ProjectStatus::Maintenance);
     }
 
     /**

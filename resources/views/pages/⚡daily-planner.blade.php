@@ -21,8 +21,6 @@ new class extends Component
 
     public string $notes = '';
 
-    public bool $showCarryOver = true;
-
     public bool $showAiSuggestions = false;
 
     /** @var array<int, array{task_id: int, reason: string, priority_score: int}> */
@@ -137,7 +135,6 @@ new class extends Component
         unset($this->plan, $this->availableTasks, $this->completionRate, $this->isToday, $this->isPast, $this->yesterdayIncompleteTasks);
 
         $this->notes = $this->plan->notes ?? '';
-        $this->showCarryOver = true;
     }
 
     public function updatedNotes(): void
@@ -237,8 +234,6 @@ new class extends Component
                 $task->id => ['sort_order' => $maxOrder + 1 + $index],
             ]);
         }
-
-        $this->showCarryOver = false;
 
         unset($this->plan, $this->availableTasks, $this->completionRate, $this->yesterdayIncompleteTasks);
 
@@ -466,24 +461,6 @@ new class extends Component
         @endif
     </div>
 
-    {{-- Carry-over banner --}}
-    @if ($this->isToday && $showCarryOver && $this->yesterdayIncompleteTasks->isNotEmpty())
-        <flux:callout icon="arrow-uturn-right" variant="warning">
-            <flux:callout.heading>
-                Você tem {{ $this->yesterdayIncompleteTasks->count() }} {{ $this->yesterdayIncompleteTasks->count() === 1 ? 'task incompleta' : 'tasks incompletas' }} de ontem.
-            </flux:callout.heading>
-
-            <x-slot name="actions">
-                <flux:button wire:click="carryOver" wire:loading.attr="disabled" wire:target="carryOver" size="sm">
-                    Mover para hoje
-                </flux:button>
-                <flux:button wire:click="$set('showCarryOver', false)" variant="ghost" size="sm">
-                    Dispensar
-                </flux:button>
-            </x-slot>
-        </flux:callout>
-    @endif
-
     {{-- Two-column layout --}}
     <div class="grid flex-1 gap-4 md:grid-cols-5">
         {{-- Left column: Plano do Dia (3 cols) --}}
@@ -611,9 +588,75 @@ new class extends Component
             </div>
         </div>
 
-        {{-- Right column: Tasks Disponíveis (2 cols) --}}
+        {{-- Right column: Tasks de Ontem + Tasks Disponíveis (2 cols) --}}
         @unless ($this->isPast)
             <div class="flex flex-col gap-3 md:col-span-2">
+                {{-- Tasks de Ontem --}}
+                @if ($this->isToday && $this->yesterdayIncompleteTasks->isNotEmpty())
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex shrink-0 items-center gap-2">
+                            <flux:heading size="sm">Tasks de Ontem</flux:heading>
+                            <flux:badge size="sm" color="amber">{{ $this->yesterdayIncompleteTasks->count() }}</flux:badge>
+                        </div>
+
+                        <flux:button
+                            wire:click="carryOver"
+                            wire:loading.attr="disabled"
+                            wire:target="carryOver"
+                            size="sm"
+                            variant="subtle"
+                            icon="plus"
+                        >
+                            Adicionar todas
+                        </flux:button>
+                    </div>
+
+                    <div class="rounded-xl border border-amber-700/50 bg-amber-950/20">
+                        <ul class="divide-y divide-amber-700/30">
+                            @foreach ($this->yesterdayIncompleteTasks as $task)
+                                <li wire:key="yesterday-{{ $task->id }}" class="flex items-center gap-3 px-4 py-3">
+                                    <div class="flex min-w-0 flex-1 flex-col gap-1">
+                                        <span class="truncate text-sm font-medium text-zinc-200">{{ $task->title }}</span>
+
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            {{-- Project badge --}}
+                                            @if ($task->project)
+                                                <div class="flex items-center gap-1 border-l-2 pl-1.5" style="border-color: {{ $task->project->color }}">
+                                                    <span class="text-xs">{{ $task->project->emoji }}</span>
+                                                    <span class="truncate text-xs text-zinc-400">{{ $task->project->name }}</span>
+                                                </div>
+                                            @endif
+
+                                            {{-- Priority badge --}}
+                                            @if ($task->priority)
+                                                <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
+                                                    {{ $task->priority->label() }}
+                                                </flux:badge>
+                                            @endif
+
+                                            {{-- Status badge --}}
+                                            <flux:badge size="sm" color="{{ $task->status->color() }}" icon="{{ $task->status->icon() }}">
+                                                {{ $task->status->label() }}
+                                            </flux:badge>
+                                        </div>
+                                    </div>
+
+                                    <flux:button
+                                        wire:click="addToPlan({{ $task->id }})"
+                                        wire:loading.attr="disabled"
+                                        wire:target="addToPlan({{ $task->id }})"
+                                        size="sm"
+                                        variant="ghost"
+                                        icon="plus"
+                                        class="shrink-0"
+                                    />
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                {{-- Tasks Disponíveis --}}
                 <div class="flex items-center justify-between gap-2">
                     <div class="flex shrink-0 items-center gap-2">
                         <flux:heading size="sm">Tasks Disponíveis</flux:heading>

@@ -208,14 +208,15 @@ test('daily planner prevents notes update on past plans', function () {
     expect($plan->fresh()->notes)->toBe('Original');
 });
 
-test('daily planner shows carry-over banner when yesterday has incomplete tasks', function () {
+test('daily planner shows yesterday tasks section when yesterday has incomplete tasks', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
     $task = Task::factory()->todo()->create(['title' => 'Task de ontem']);
     $yesterdayPlan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
-        ->assertSee('1 task incompleta');
+        ->assertSee('Tasks de Ontem')
+        ->assertSee('Task de ontem');
 });
 
 test('daily planner can carry over tasks from yesterday', function () {

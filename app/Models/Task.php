@@ -313,4 +313,23 @@ class Task extends Model
             'completed_at' => now(),
         ]);
     }
+
+    /**
+     * Start a timer for this task, stopping any other running timers.
+     * Automatically changes status to "doing" if not already "doing" or "done".
+     */
+    public function startTimer(bool $focus = false): TimeEntry
+    {
+        TimeEntry::stopAllRunning();
+
+        if (! in_array($this->status, [TaskStatus::Doing, TaskStatus::Done], true)) {
+            $this->update(['status' => TaskStatus::Doing]);
+        }
+
+        return TimeEntry::create([
+            'task_id' => $this->id,
+            'started_at' => now(),
+            'is_focus_session' => $focus,
+        ]);
+    }
 }

@@ -218,3 +218,43 @@ test('refreshState clears isFocusSession computed', function () {
     $component->dispatch('timer-updated')
         ->assertSet('isFocusSession', false);
 });
+
+test('start changes task status to doing', function () {
+    $task = Task::factory()->todo()->create();
+
+    Livewire::test('timer', ['taskId' => $task->id])
+        ->call('start');
+
+    $task->refresh();
+    expect($task->status)->toBe(\App\Enums\TaskStatus::Doing);
+});
+
+test('startFocus changes task status to doing', function () {
+    $task = Task::factory()->todo()->create();
+
+    Livewire::test('timer', ['taskId' => $task->id])
+        ->call('startFocus');
+
+    $task->refresh();
+    expect($task->status)->toBe(\App\Enums\TaskStatus::Doing);
+});
+
+test('start does not change status if task is already doing', function () {
+    $task = Task::factory()->doing()->create();
+
+    Livewire::test('timer', ['taskId' => $task->id])
+        ->call('start');
+
+    $task->refresh();
+    expect($task->status)->toBe(\App\Enums\TaskStatus::Doing);
+});
+
+test('start does not change status if task is done', function () {
+    $task = Task::factory()->done()->create();
+
+    Livewire::test('timer', ['taskId' => $task->id])
+        ->call('start');
+
+    $task->refresh();
+    expect($task->status)->toBe(\App\Enums\TaskStatus::Done);
+});

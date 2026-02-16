@@ -53,6 +53,31 @@ test('start-timer fails for non-existent task', function () {
     $response->assertHasErrors();
 });
 
+test('start-timer changes task status to doing', function () {
+    $task = Task::factory()->todo()->create();
+
+    SoloBoardServer::tool(StartTimerTool::class, [
+        'task_id' => $task->id,
+    ]);
+
+    $task->refresh();
+    expect($task->status)->toBe(\App\Enums\TaskStatus::Doing);
+});
+
+test('start-timer does not change status if already doing or done', function () {
+    $doingTask = Task::factory()->doing()->create();
+    $doneTask = Task::factory()->done()->create();
+
+    SoloBoardServer::tool(StartTimerTool::class, ['task_id' => $doingTask->id]);
+    SoloBoardServer::tool(StartTimerTool::class, ['task_id' => $doneTask->id]);
+
+    $doingTask->refresh();
+    $doneTask->refresh();
+
+    expect($doingTask->status)->toBe(\App\Enums\TaskStatus::Doing)
+        ->and($doneTask->status)->toBe(\App\Enums\TaskStatus::Done);
+});
+
 // StopTimerTool tests
 test('stop-timer stops running timer with notes', function () {
     $task = Task::factory()->create();

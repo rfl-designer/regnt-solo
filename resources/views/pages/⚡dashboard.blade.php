@@ -496,14 +496,14 @@ new class extends Component
             @endif
         </a>
 
-        {{-- Deep Work Hoje --}}
+        {{-- Foco Hoje --}}
         <div class="relative overflow-hidden rounded-xl border border-amber-500/20 bg-zinc-800/50 p-5">
             <div class="flex items-center gap-3">
                 <div class="flex size-10 items-center justify-center rounded-lg bg-amber-500/10">
                     <span class="text-lg">🎯</span>
                 </div>
                 <div>
-                    <flux:text class="text-xs text-zinc-400">Deep Work hoje</flux:text>
+                    <flux:text class="text-xs text-zinc-400">Foco hoje</flux:text>
                     @if ($this->deepWorkToday > 0)
                         <flux:heading size="lg">{{ $this->formatDuration($this->deepWorkToday) }}</flux:heading>
                     @else

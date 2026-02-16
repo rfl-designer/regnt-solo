@@ -72,7 +72,7 @@ new class extends Component
 
         $this->dispatch('task-moved');
 
-        Flux::toast(variant: 'success', heading: 'Movida para Backlog', text: $task->title);
+        Flux::toast(variant: 'success', heading: 'Movida para Pendentes', text: $task->title);
     }
 
     public function confirmDelete(int $taskId): void
@@ -219,7 +219,7 @@ new class extends Component
 
 <div class="flex h-full w-full flex-1 flex-col gap-6 p-6">
     <div class="flex items-center justify-between">
-        <flux:heading size="xl">Inbox</flux:heading>
+        <flux:heading size="xl">Caixa de Entrada</flux:heading>
 
         @if ($this->isAiEnabled())
             <flux:button
@@ -230,7 +230,7 @@ new class extends Component
                 wire:target="analyzeBacklog"
                 size="sm"
             >
-                <span wire:loading.remove wire:target="analyzeBacklog">Analisar backlog</span>
+                <span wire:loading.remove wire:target="analyzeBacklog">Analisar pendentes</span>
                 <span wire:loading wire:target="analyzeBacklog">Analisando...</span>
             </flux:button>
         @endif
@@ -291,7 +291,7 @@ new class extends Component
                                     wire:loading.attr="disabled"
                                     wire:target="moveToBacklog({{ $task->id }})"
                                 >
-                                    → Backlog
+                                    → Pendentes
                                 </flux:button>
 
                                 <flux:button
@@ -335,7 +335,7 @@ new class extends Component
         <flux:modal wire:model.self="showBacklogAnalysis" class="md:w-[32rem]">
             <div class="space-y-4">
                 <div>
-                    <flux:heading size="lg">Análise do Backlog</flux:heading>
+                    <flux:heading size="lg">Análise de Pendentes</flux:heading>
                     <flux:text class="mt-1">Sugestões do AI Coach para organizar suas tasks.</flux:text>
                 </div>
 

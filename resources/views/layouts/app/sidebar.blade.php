@@ -27,6 +27,7 @@
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="calendar" :href="route('weekly')" :current="request()->routeIs('weekly')" wire:navigate>
                         Semana
+                        <livewire:weekly-badge />
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="folder" :href="route('projects')" :current="request()->routeIs('projects') || request()->routeIs('project.*') || request()->routeIs('document.*')" wire:navigate>
                         Projetos

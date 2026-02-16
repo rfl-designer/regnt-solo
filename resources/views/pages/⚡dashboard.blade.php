@@ -37,6 +37,40 @@ new class extends Component
     }
 
     /**
+     * Get tasks completed this week.
+     */
+    #[Computed]
+    public function tasksCompletedThisWeek(): int
+    {
+        return Task::query()
+            ->where('status', TaskStatus::Done)
+            ->where('completed_at', '>=', Carbon::now()->startOfWeek())
+            ->count();
+    }
+
+    /**
+     * Get active tasks count (todo + doing).
+     */
+    #[Computed]
+    public function activeTasksCount(): int
+    {
+        return Task::query()
+            ->whereIn('status', [TaskStatus::Todo, TaskStatus::Doing])
+            ->count();
+    }
+
+    /**
+     * Get inbox tasks count.
+     */
+    #[Computed]
+    public function inboxCount(): int
+    {
+        return Task::query()
+            ->where('status', TaskStatus::Inbox)
+            ->count();
+    }
+
+    /**
      * Calculate average time in each status for tasks completed in the last 30 days.
      *
      * @return array<string, array{label: string, avg_minutes: float, formatted: string, color: string, hex_color: string}>
@@ -335,9 +369,16 @@ new class extends Component
     }
 
     #[On('task-updated')]
+    #[On('task-created')]
     public function refreshMetrics(): void
     {
-        unset($this->averageTimeByStatus, $this->deepWorkToday);
+        unset(
+            $this->averageTimeByStatus,
+            $this->deepWorkToday,
+            $this->tasksCompletedThisWeek,
+            $this->activeTasksCount,
+            $this->inboxCount
+        );
     }
 }
 
@@ -408,16 +449,54 @@ new class extends Component
     @endif
 
     <div class="grid auto-rows-min gap-4 md:grid-cols-3">
-        <div class="relative aspect-video overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800/50">
-            <div class="flex h-full items-center justify-center text-zinc-500">
-                <flux:icon name="chart-bar-square" class="size-8" />
+        {{-- Tasks Concluídas esta Semana --}}
+        <a
+            href="{{ route('kanban') }}?status=done"
+            wire:navigate
+            class="relative overflow-hidden rounded-xl border border-emerald-500/20 bg-zinc-800/50 p-5 transition hover:border-emerald-500/40"
+        >
+            <div class="flex items-center gap-3">
+                <div class="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10">
+                    <flux:icon name="check-circle" class="size-5 text-emerald-400" />
+                </div>
+                <div>
+                    <flux:text class="text-xs text-zinc-400">Concluídas esta semana</flux:text>
+                    @if ($this->tasksCompletedThisWeek > 0)
+                        <flux:heading size="lg">{{ $this->tasksCompletedThisWeek }} {{ $this->tasksCompletedThisWeek === 1 ? 'task' : 'tasks' }}</flux:heading>
+                    @else
+                        <flux:text class="text-sm text-zinc-500">Nenhuma ainda</flux:text>
+                    @endif
+                </div>
             </div>
-        </div>
-        <div class="relative aspect-video overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800/50">
-            <div class="flex h-full items-center justify-center text-zinc-500">
-                <flux:icon name="inbox" class="size-8" />
+        </a>
+
+        {{-- Inbox / Tasks Ativas --}}
+        <a
+            href="{{ route('inbox') }}"
+            wire:navigate
+            class="relative overflow-hidden rounded-xl border border-blue-500/20 bg-zinc-800/50 p-5 transition hover:border-blue-500/40"
+        >
+            <div class="flex items-center gap-3">
+                <div class="flex size-10 items-center justify-center rounded-lg bg-blue-500/10">
+                    <flux:icon name="inbox-stack" class="size-5 text-blue-400" />
+                </div>
+                <div>
+                    <flux:text class="text-xs text-zinc-400">Inbox</flux:text>
+                    @if ($this->inboxCount > 0)
+                        <flux:heading size="lg">{{ $this->inboxCount }} {{ $this->inboxCount === 1 ? 'task' : 'tasks' }}</flux:heading>
+                    @else
+                        <flux:text class="text-sm text-zinc-500">Inbox vazio ✨</flux:text>
+                    @endif
+                </div>
             </div>
-        </div>
+            @if ($this->activeTasksCount > 0)
+                <div class="mt-2 border-t border-zinc-700 pt-2">
+                    <flux:text class="text-xs text-zinc-500">{{ $this->activeTasksCount }} {{ $this->activeTasksCount === 1 ? 'task ativa' : 'tasks ativas' }}</flux:text>
+                </div>
+            @endif
+        </a>
+
+        {{-- Deep Work Hoje --}}
         <div class="relative overflow-hidden rounded-xl border border-amber-500/20 bg-zinc-800/50 p-5">
             <div class="flex items-center gap-3">
                 <div class="flex size-10 items-center justify-center rounded-lg bg-amber-500/10">
@@ -425,7 +504,11 @@ new class extends Component
                 </div>
                 <div>
                     <flux:text class="text-xs text-zinc-400">Deep Work hoje</flux:text>
-                    <flux:heading size="lg">{{ $this->formatDuration($this->deepWorkToday) }}</flux:heading>
+                    @if ($this->deepWorkToday > 0)
+                        <flux:heading size="lg">{{ $this->formatDuration($this->deepWorkToday) }}</flux:heading>
+                    @else
+                        <flux:text class="text-sm text-zinc-500">Inicie uma sessão de foco</flux:text>
+                    @endif
                 </div>
             </div>
         </div>

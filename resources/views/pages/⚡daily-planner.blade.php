@@ -17,6 +17,8 @@ new class extends Component
     #[Url]
     public string $date = '';
 
+    public ?int $filterProjectId = null;
+
     public string $notes = '';
 
     public bool $showCarryOver = true;
@@ -68,10 +70,28 @@ new class extends Component
 
         return Task::active()
             ->whereNotIn('id', $planTaskIds)
+            ->when($this->filterProjectId, fn ($q) => $q->where('project_id', $this->filterProjectId))
             ->with('project')
             ->orderBy('sort_order')
             ->limit(50)
             ->get();
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, \App\Models\Project>
+     */
+    #[Computed]
+    public function projects(): \Illuminate\Database\Eloquent\Collection
+    {
+        return \App\Models\Project::query()
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get();
+    }
+
+    public function updatedFilterProjectId(): void
+    {
+        unset($this->availableTasks);
     }
 
     #[Computed]
@@ -594,9 +614,19 @@ new class extends Component
         {{-- Right column: Tasks Disponíveis (2 cols) --}}
         @unless ($this->isPast)
             <div class="flex flex-col gap-3 md:col-span-2">
-                <div class="flex items-center gap-2">
-                    <flux:heading size="sm">Tasks Disponíveis</flux:heading>
-                    <flux:badge size="sm" color="zinc">{{ $this->availableTasks->count() }}</flux:badge>
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <flux:heading size="sm">Tasks Disponíveis</flux:heading>
+                        <flux:badge size="sm" color="zinc">{{ $this->availableTasks->count() }}</flux:badge>
+                    </div>
+
+                    <flux:select wire:model.live="filterProjectId" size="sm" placeholder="Todos os projetos" class="w-40">
+                        @foreach ($this->projects as $project)
+                            <flux:select.option value="{{ $project->id }}">
+                                {{ $project->emoji }} {{ $project->name }}
+                            </flux:select.option>
+                        @endforeach
+                    </flux:select>
                 </div>
 
                 <div class="rounded-xl border border-zinc-700 bg-zinc-900/50">

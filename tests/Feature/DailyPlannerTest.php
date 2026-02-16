@@ -353,3 +353,46 @@ test('daily planner handles invalid date gracefully', function () {
         ->assertSet('date', now()->toDateString())
         ->assertSuccessful();
 });
+
+test('daily planner can filter available tasks by project', function () {
+    $project1 = Project::factory()->create(['name' => 'Projeto Alpha']);
+    $project2 = Project::factory()->create(['name' => 'Projeto Beta']);
+    $task1 = Task::factory()->todo()->create(['project_id' => $project1->id, 'title' => 'Task Alpha']);
+    $task2 = Task::factory()->todo()->create(['project_id' => $project2->id, 'title' => 'Task Beta']);
+
+    $component = Livewire::test('pages::daily-planner');
+
+    $availableTasks = $component->get('availableTasks');
+    expect($availableTasks->pluck('id')->toArray())->toContain($task1->id)
+        ->and($availableTasks->pluck('id')->toArray())->toContain($task2->id);
+
+    $component->set('filterProjectId', $project1->id);
+
+    $filteredTasks = $component->get('availableTasks');
+    expect($filteredTasks->pluck('id')->toArray())->toContain($task1->id)
+        ->and($filteredTasks->pluck('id')->toArray())->not->toContain($task2->id);
+});
+
+test('daily planner shows projects in filter dropdown', function () {
+    $project = Project::factory()->create(['name' => 'Meu Projeto', 'emoji' => '🚀']);
+
+    Livewire::test('pages::daily-planner')
+        ->assertSee('🚀')
+        ->assertSee('Meu Projeto');
+});
+
+test('daily planner filter resets when clearing project selection', function () {
+    $project = Project::factory()->create();
+    $task1 = Task::factory()->todo()->create(['project_id' => $project->id]);
+    $task2 = Task::factory()->todo()->create(['project_id' => null]);
+
+    $component = Livewire::test('pages::daily-planner')
+        ->set('filterProjectId', $project->id);
+
+    expect($component->get('availableTasks')->pluck('id')->toArray())->not->toContain($task2->id);
+
+    $component->set('filterProjectId', null);
+
+    expect($component->get('availableTasks')->pluck('id')->toArray())->toContain($task1->id)
+        ->and($component->get('availableTasks')->pluck('id')->toArray())->toContain($task2->id);
+});

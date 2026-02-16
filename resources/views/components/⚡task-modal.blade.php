@@ -311,7 +311,7 @@ new class extends Component
 ?>
 
 <div>
-    <flux:modal wire:model.self="showModal" class="md:w-2xl max-h-[90vh] overflow-y-auto">
+    <flux:modal wire:model.self="showModal" class="w-3xl max-h-[90vh] overflow-y-auto">
         <div class="space-y-6">
             {{-- Header --}}
             <div>

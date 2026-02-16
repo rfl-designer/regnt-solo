@@ -1,5 +1,5 @@
 @import 'tailwindcss';
-@import '@tailwindcss/typography';
+@plugin '@tailwindcss/typography';
 @import '../../vendor/livewire/flux/dist/flux.css';
 
 @source '../views';

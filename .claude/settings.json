@@ -1,0 +1,55 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git checkout*)",
+      "Bash(git add *)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(gh pr *)",
+      "Bash(php artisan test*)",
+      "Bash(php artisan make:*)",
+      "Bash(vendor/bin/pint*)",
+      "Bash(npm run *)",
+      "Bash(composer *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "mcp__laravel-boost__*",
+      "mcp__soloboard__*",
+      "mcp__herd__*"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(DROP TABLE*)",
+      "Bash(DELETE FROM*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "vendor/bin/pint --dirty 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '\\n📊 Status: '$(git status --porcelain | wc -l | tr -d ' ')' arquivos modificados' 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}

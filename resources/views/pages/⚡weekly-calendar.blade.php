@@ -173,6 +173,24 @@ new class extends Component
     public function handleSort(int|string $id, int $position, string $groupId): void
     {
         $taskId = (int) $id;
+
+        // If dropped back to pool, remove from all plans in the week
+        if ($groupId === 'pool') {
+            $task = Task::findOrFail($taskId);
+
+            foreach ($this->days as $day) {
+                if ($day['plan']->tasks->contains('id', $taskId)) {
+                    $day['plan']->tasks()->detach($taskId);
+                }
+            }
+
+            $this->resetComputedProperties();
+
+            Flux::toast(variant: 'success', heading: 'Task removida do plano', text: $task->title);
+
+            return;
+        }
+
         $targetDate = Carbon::parse($groupId);
 
         // Don't allow changes to past dates
@@ -332,13 +350,20 @@ new class extends Component
             </div>
 
             <div class="flex-1 overflow-y-auto p-2">
-                @if ($this->availableTasks->isNotEmpty())
-                    <ul class="flex flex-col gap-2">
-                        @foreach ($this->availableTasks as $task)
-                            <li wire:key="available-{{ $task->id }}" class="rounded-lg border border-zinc-700 bg-zinc-800 p-2">
+                <ul
+                    wire:sort="handleSort"
+                    wire:sort:group="weekly-tasks"
+                    wire:sort:group-id="pool"
+                    class="flex min-h-[4rem] flex-col gap-2"
+                >
+                    @forelse ($this->availableTasks as $task)
+                        <li wire:key="available-{{ $task->id }}" wire:sort:item="{{ $task->id }}">
+                            <div class="group rounded-lg border border-zinc-700 bg-zinc-800 p-2 transition hover:border-zinc-500">
                                 <div class="flex items-start gap-2">
-                                    <flux:icon name="grip-vertical" class="mt-0.5 size-4 shrink-0 text-zinc-600" />
-                                    <div class="min-w-0 flex-1">
+                                    <div wire:sort:handle class="mt-0.5 shrink-0 cursor-grab text-zinc-600 hover:text-zinc-400">
+                                        <flux:icon name="grip-vertical" class="size-4" />
+                                    </div>
+                                    <div class="min-w-0 flex-1" wire:sort:ignore>
                                         <span class="line-clamp-2 text-xs font-medium text-zinc-200">{{ $task->title }}</span>
 
                                         <div class="mt-1.5 flex flex-wrap items-center gap-1">
@@ -363,15 +388,14 @@ new class extends Component
                                         </div>
                                     </div>
                                 </div>
-                            </li>
-                        @endforeach
-                    </ul>
-                @else
-                    <div class="py-8 text-center">
-                        <flux:icon name="check-circle" class="mx-auto mb-2 size-8 text-zinc-600" />
-                        <flux:text class="text-xs text-zinc-500">Todas as tasks estão planejadas</flux:text>
-                    </div>
-                @endif
+                            </div>
+                        </li>
+                    @empty
+                        <li class="py-8 text-center text-xs text-zinc-600">
+                            Todas as tasks estão planejadas
+                        </li>
+                    @endforelse
+                </ul>
             </div>
         </div>
 

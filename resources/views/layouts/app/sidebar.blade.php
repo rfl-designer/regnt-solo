@@ -48,7 +48,26 @@
             <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
         </flux:sidebar>
 
-        <!-- Mobile User Menu -->
+        <!-- Desktop Header -->
+        <flux:header class="hidden! lg:block! border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
+            <flux:navbar class="w-full">
+                <flux:input
+                    icon="magnifying-glass"
+                    placeholder="Buscar comandos..."
+                    kbd="⌘K"
+                    readonly
+                    x-data
+                    x-on:click="$flux.modal('command-palette').show()"
+                    class="max-w-xs cursor-pointer"
+                />
+
+                <flux:spacer />
+
+                <livewire:global-timer />
+            </flux:navbar>
+        </flux:header>
+
+        <!-- Mobile Header -->
         <flux:header class="lg:hidden">
             <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 

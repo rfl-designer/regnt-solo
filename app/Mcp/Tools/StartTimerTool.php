@@ -3,7 +3,6 @@
 namespace App\Mcp\Tools;
 
 use App\Models\Task;
-use App\Models\TimeEntry;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -30,15 +29,11 @@ class StartTimerTool extends Tool
 
         $task = Task::findOrFail($validated['task_id']);
 
-        TimeEntry::stopAllRunning();
-
         $isFocus = $validated['focus'] ?? false;
 
-        $entry = TimeEntry::create([
-            'task_id' => $task->id,
-            'started_at' => now(),
-            'is_focus_session' => $isFocus,
-        ]);
+        $entry = $task->startTimer($isFocus);
+
+        $task->refresh();
 
         $data = [
             'task_id' => $task->id,

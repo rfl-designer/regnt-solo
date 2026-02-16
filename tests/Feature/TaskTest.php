@@ -147,3 +147,85 @@ test('markAsDone stops running time entries', function () {
 
     expect($entry->stopped_at)->not->toBeNull();
 });
+
+test('startTimer creates a time entry and changes status to doing from inbox', function () {
+    $task = Task::factory()->create(['status' => TaskStatus::Inbox]);
+
+    $entry = $task->startTimer();
+    $task->refresh();
+
+    expect($entry)->toBeInstanceOf(TimeEntry::class)
+        ->and($entry->task_id)->toBe($task->id)
+        ->and($task->status)->toBe(TaskStatus::Doing);
+});
+
+test('startTimer changes status to doing from backlog', function () {
+    $task = Task::factory()->create(['status' => TaskStatus::Backlog]);
+
+    $task->startTimer();
+    $task->refresh();
+
+    expect($task->status)->toBe(TaskStatus::Doing);
+});
+
+test('startTimer changes status to doing from todo', function () {
+    $task = Task::factory()->todo()->create();
+
+    $task->startTimer();
+    $task->refresh();
+
+    expect($task->status)->toBe(TaskStatus::Doing);
+});
+
+test('startTimer does not change status if already doing', function () {
+    $task = Task::factory()->doing()->create();
+
+    $task->startTimer();
+    $task->refresh();
+
+    expect($task->status)->toBe(TaskStatus::Doing);
+});
+
+test('startTimer does not change status if done', function () {
+    $task = Task::factory()->done()->create();
+
+    $task->startTimer();
+    $task->refresh();
+
+    expect($task->status)->toBe(TaskStatus::Done);
+});
+
+test('startTimer stops other running timers', function () {
+    $task1 = Task::factory()->doing()->create();
+    $task2 = Task::factory()->doing()->create();
+    $runningEntry = TimeEntry::factory()->running()->create(['task_id' => $task1->id]);
+
+    $task2->startTimer();
+    $runningEntry->refresh();
+
+    expect($runningEntry->stopped_at)->not->toBeNull();
+});
+
+test('startTimer creates time entry with correct focus flag', function () {
+    $task = Task::factory()->doing()->create();
+
+    $normalEntry = $task->startTimer(focus: false);
+    expect($normalEntry->is_focus_session)->toBeFalse();
+
+    $focusEntry = $task->startTimer(focus: true);
+    expect($focusEntry->is_focus_session)->toBeTrue();
+});
+
+test('startTimer records status change in TaskStatusChange', function () {
+    $task = Task::factory()->todo()->create();
+    $initialCount = $task->statusChanges()->count();
+
+    $task->startTimer();
+
+    expect($task->statusChanges()->count())->toBe($initialCount + 1);
+
+    $lastChange = $task->statusChanges()->latest('id')->first();
+
+    expect($lastChange->to_status)->toBe(TaskStatus::Doing)
+        ->and($lastChange->from_status)->toBe(TaskStatus::Todo);
+});

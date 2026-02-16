@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Task;
 use App\Models\TimeEntry;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
@@ -61,13 +62,8 @@ new class extends Component
      */
     public function start(bool $focus = false): void
     {
-        TimeEntry::stopAllRunning();
-
-        TimeEntry::create([
-            'task_id' => $this->taskId,
-            'started_at' => now(),
-            'is_focus_session' => $focus,
-        ]);
+        $task = Task::findOrFail($this->taskId);
+        $task->startTimer($focus);
 
         unset($this->isRunning, $this->runningEntry, $this->isFocusSession);
 

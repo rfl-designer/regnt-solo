@@ -239,8 +239,7 @@ new class extends Component
             $running->update(['stopped_at' => now()]);
             Flux::toast(variant: 'success', heading: 'Timer parado', text: $task->title);
         } else {
-            TimeEntry::stopAllRunning();
-            TimeEntry::create(['task_id' => $task->id, 'started_at' => now()]);
+            $task->startTimer();
             Flux::toast(variant: 'success', heading: 'Timer iniciado', text: $task->title);
         }
 

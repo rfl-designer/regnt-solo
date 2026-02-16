@@ -250,7 +250,7 @@ new class extends Component
                 </div>
 
                 {{-- Mini-Kanban --}}
-                <div class="flex gap-4 overflow-x-auto pb-4">
+                <div class="flex min-h-[calc(100vh-20rem)] flex-1 gap-4 overflow-x-auto pb-4">
                     @foreach ($kanbanStatuses as $status)
                         @php
                             $tasks = $this->tasksByStatus[$status->value] ?? collect();
@@ -267,7 +267,7 @@ new class extends Component
                             </div>
 
                             {{-- Tasks List --}}
-                            <div class="flex-1 overflow-y-auto p-2" style="max-height: 28rem;">
+                            <div class="flex-1 overflow-y-auto p-2">
                                 @forelse ($tasks as $task)
                                     <div
                                         wire:key="task-{{ $task->id }}"

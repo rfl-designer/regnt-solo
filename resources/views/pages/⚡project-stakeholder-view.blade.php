@@ -9,9 +9,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-#[Layout('layouts.public')]
-#[Title('Acompanhamento de Projeto')]
-new class extends Component
+new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class extends Component
 {
     public string $token = '';
 

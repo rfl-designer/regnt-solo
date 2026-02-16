@@ -234,7 +234,7 @@ new class extends Component
     </flux:modal.trigger>
 
     {{-- Modal --}}
-    <flux:modal name="quick-add" class="md:w-96">
+    <flux:modal name="quick-add" class="md:w-[32rem]">
         <div class="space-y-4" x-data="{
             suggestions: @entangle('suggestions'),
             activePrefix: @entangle('activePrefix'),

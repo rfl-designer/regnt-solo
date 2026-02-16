@@ -228,3 +228,62 @@ test('project detail selectedDocument computed returns null when no selection', 
 
     expect($component->get('selectedDocument'))->toBeNull();
 });
+
+test('project detail tasks are ordered by sort_order then created_at desc', function () {
+    $project = Project::factory()->create();
+
+    // Create tasks with same sort_order but different created_at
+    $olderTask = Task::factory()->todo()->create([
+        'project_id' => $project->id,
+        'title' => 'Older Task',
+        'sort_order' => 1,
+        'created_at' => now()->subDays(2),
+    ]);
+    $newerTask = Task::factory()->todo()->create([
+        'project_id' => $project->id,
+        'title' => 'Newer Task',
+        'sort_order' => 1,
+        'created_at' => now(),
+    ]);
+    $priorityTask = Task::factory()->todo()->create([
+        'project_id' => $project->id,
+        'title' => 'Priority Task',
+        'sort_order' => 0,
+        'created_at' => now()->subDays(5),
+    ]);
+
+    $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
+
+    $tasksByStatus = $component->get('tasksByStatus');
+    $todoTasks = $tasksByStatus['todo']->values();
+
+    // Priority task comes first (sort_order = 0)
+    expect($todoTasks[0]->id)->toBe($priorityTask->id);
+    // Newer task comes before older task (same sort_order, desc created_at)
+    expect($todoTasks[1]->id)->toBe($newerTask->id);
+    expect($todoTasks[2]->id)->toBe($olderTask->id);
+});
+
+test('project detail getColumnTasks respects sort_order and created_at ordering', function () {
+    $project = Project::factory()->create();
+
+    $taskA = Task::factory()->backlog()->create([
+        'project_id' => $project->id,
+        'title' => 'Task A',
+        'sort_order' => 1,
+        'created_at' => now()->subHours(1),
+    ]);
+    $taskB = Task::factory()->backlog()->create([
+        'project_id' => $project->id,
+        'title' => 'Task B',
+        'sort_order' => 1,
+        'created_at' => now(),
+    ]);
+
+    $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
+    $columnTasks = $component->instance()->getColumnTasks(\App\Enums\TaskStatus::Backlog)->values();
+
+    // Task B (newer) should come before Task A (older) when same sort_order
+    expect($columnTasks[0]->id)->toBe($taskB->id);
+    expect($columnTasks[1]->id)->toBe($taskA->id);
+});

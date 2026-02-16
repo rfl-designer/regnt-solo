@@ -226,7 +226,7 @@ new class extends Component
     </div>
 
     {{-- Filters --}}
-    <div class="flex flex-wrap items-end gap-3">
+    <div class="flex flex-wrap items-center gap-3">
         <div class="w-full sm:w-auto">
             <flux:date-picker
                 wire:model.live="range"

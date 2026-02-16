@@ -52,4 +52,8 @@ Route::livewire('analytics', 'pages::analytics')
     ->middleware(['auth'])
     ->name('analytics');
 
+// Public stakeholder view (no auth required)
+Route::livewire('projects/shared/{token}', 'pages::project-stakeholder-view')
+    ->name('project.stakeholder-view');
+
 require __DIR__.'/settings.php';

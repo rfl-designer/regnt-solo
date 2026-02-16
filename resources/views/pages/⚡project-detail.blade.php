@@ -236,6 +236,14 @@ new class extends Component
                 Editar
             </flux:button>
 
+            <flux:button
+                variant="ghost"
+                icon="user-group"
+                wire:click="$dispatch('open-stakeholders-modal', { projectId: {{ $this->project->id }} })"
+            >
+                Stakeholders
+            </flux:button>
+
             @if ($this->project->status !== ProjectStatus::Archived)
                 <flux:button
                     variant="ghost"
@@ -694,4 +702,7 @@ new class extends Component
             </div>
         </flux:tab.panel>
     </flux:tab.group>
+
+    {{-- Stakeholders Modal --}}
+    <livewire:project-stakeholders-modal />
 </div>

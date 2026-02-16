@@ -4,8 +4,11 @@ namespace App\Enums;
 
 enum ProjectStatus: string
 {
+    case Backlog = 'backlog';
     case Active = 'active';
     case Paused = 'paused';
+    case Done = 'done';
+    case Maintenance = 'maintenance';
     case Archived = 'archived';
 
     /**
@@ -14,8 +17,11 @@ enum ProjectStatus: string
     public function label(): string
     {
         return match ($this) {
+            self::Backlog => 'Backlog',
             self::Active => 'Ativo',
             self::Paused => 'Pausado',
+            self::Done => 'Concluído',
+            self::Maintenance => 'Manutenção',
             self::Archived => 'Arquivado',
         };
     }
@@ -26,8 +32,11 @@ enum ProjectStatus: string
     public function color(): string
     {
         return match ($this) {
+            self::Backlog => 'zinc',
             self::Active => 'emerald',
             self::Paused => 'amber',
+            self::Done => 'sky',
+            self::Maintenance => 'violet',
             self::Archived => 'zinc',
         };
     }
@@ -38,8 +47,11 @@ enum ProjectStatus: string
     public function icon(): string
     {
         return match ($this) {
+            self::Backlog => 'inbox-stack',
             self::Active => 'play-circle',
             self::Paused => 'pause-circle',
+            self::Done => 'check-circle',
+            self::Maintenance => 'wrench-screwdriver',
             self::Archived => 'archive-box',
         };
     }

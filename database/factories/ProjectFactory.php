@@ -34,12 +34,42 @@ class ProjectFactory extends Factory
     }
 
     /**
+     * Indicate that the project is in backlog.
+     */
+    public function backlog(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => ProjectStatus::Backlog,
+        ]);
+    }
+
+    /**
      * Indicate that the project is paused.
      */
     public function paused(): static
     {
         return $this->state(fn (array $attributes) => [
             'status' => ProjectStatus::Paused,
+        ]);
+    }
+
+    /**
+     * Indicate that the project is done.
+     */
+    public function done(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => ProjectStatus::Done,
+        ]);
+    }
+
+    /**
+     * Indicate that the project is in maintenance.
+     */
+    public function maintenance(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => ProjectStatus::Maintenance,
         ]);
     }
 

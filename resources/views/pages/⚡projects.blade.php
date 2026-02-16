@@ -16,8 +16,11 @@ new class extends Component
     public function mount(): void
     {
         $this->kanbanStatuses = [
+            ProjectStatus::Backlog,
             ProjectStatus::Active,
             ProjectStatus::Paused,
+            ProjectStatus::Done,
+            ProjectStatus::Maintenance,
             ProjectStatus::Archived,
         ];
     }
@@ -157,13 +160,26 @@ new class extends Component
                             </li>
                         @empty
                             <li class="py-8 text-center text-sm text-zinc-600">
-                                @if ($status === App\Enums\ProjectStatus::Active)
-                                    Nenhum projeto ativo
-                                @elseif ($status === App\Enums\ProjectStatus::Paused)
-                                    Nenhum projeto pausado
-                                @else
-                                    Nenhum projeto arquivado
-                                @endif
+                                @switch($status)
+                                    @case(App\Enums\ProjectStatus::Backlog)
+                                        Nenhum projeto no backlog
+                                        @break
+                                    @case(App\Enums\ProjectStatus::Active)
+                                        Nenhum projeto ativo
+                                        @break
+                                    @case(App\Enums\ProjectStatus::Paused)
+                                        Nenhum projeto pausado
+                                        @break
+                                    @case(App\Enums\ProjectStatus::Done)
+                                        Nenhum projeto concluído
+                                        @break
+                                    @case(App\Enums\ProjectStatus::Maintenance)
+                                        Nenhum projeto em manutenção
+                                        @break
+                                    @case(App\Enums\ProjectStatus::Archived)
+                                        Nenhum projeto arquivado
+                                        @break
+                                @endswitch
                             </li>
                         @endforelse
                     </ul>

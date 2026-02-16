@@ -26,7 +26,7 @@ class ListProjectsTool extends Tool
         $validated = $request->validate([
             'status' => ['nullable', 'string', Rule::enum(ProjectStatus::class)],
         ], [
-            'status.Illuminate\Validation\Rules\Enum' => 'Invalid status. Valid values: active, paused, archived.',
+            'status.Illuminate\Validation\Rules\Enum' => 'Invalid status. Valid values: backlog, active, paused, done, maintenance, archived.',
         ]);
 
         $query = Project::query()
@@ -62,7 +62,7 @@ class ListProjectsTool extends Tool
     {
         return [
             'status' => $schema->string()
-                ->enum(['active', 'paused', 'archived'])
+                ->enum(['backlog', 'active', 'paused', 'done', 'maintenance', 'archived'])
                 ->description('Filter projects by status. Default: active.'),
         ];
     }

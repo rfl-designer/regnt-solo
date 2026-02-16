@@ -5,6 +5,47 @@ use App\Enums\ProjectStatus;
 use App\Models\Project;
 use App\Models\Task;
 
+test('project status enum has all expected values', function () {
+    $cases = ProjectStatus::cases();
+
+    expect($cases)->toHaveCount(6)
+        ->and(array_column($cases, 'value'))->toBe([
+            'backlog',
+            'active',
+            'paused',
+            'done',
+            'maintenance',
+            'archived',
+        ]);
+});
+
+test('project status enum has labels in PT-BR', function () {
+    expect(ProjectStatus::Backlog->label())->toBe('Backlog')
+        ->and(ProjectStatus::Active->label())->toBe('Ativo')
+        ->and(ProjectStatus::Paused->label())->toBe('Pausado')
+        ->and(ProjectStatus::Done->label())->toBe('Concluído')
+        ->and(ProjectStatus::Maintenance->label())->toBe('Manutenção')
+        ->and(ProjectStatus::Archived->label())->toBe('Arquivado');
+});
+
+test('project status enum has colors', function () {
+    expect(ProjectStatus::Backlog->color())->toBe('zinc')
+        ->and(ProjectStatus::Active->color())->toBe('emerald')
+        ->and(ProjectStatus::Paused->color())->toBe('amber')
+        ->and(ProjectStatus::Done->color())->toBe('sky')
+        ->and(ProjectStatus::Maintenance->color())->toBe('violet')
+        ->and(ProjectStatus::Archived->color())->toBe('zinc');
+});
+
+test('project status enum has icons', function () {
+    expect(ProjectStatus::Backlog->icon())->toBe('inbox-stack')
+        ->and(ProjectStatus::Active->icon())->toBe('play-circle')
+        ->and(ProjectStatus::Paused->icon())->toBe('pause-circle')
+        ->and(ProjectStatus::Done->icon())->toBe('check-circle')
+        ->and(ProjectStatus::Maintenance->icon())->toBe('wrench-screwdriver')
+        ->and(ProjectStatus::Archived->icon())->toBe('archive-box');
+});
+
 test('can create a project', function () {
     $project = Project::factory()->create([
         'name' => 'Meu Projeto',
@@ -32,6 +73,17 @@ test('project has many tasks', function () {
     expect($project->tasks)->toHaveCount(3);
 });
 
+test('backlog scope returns only backlog projects', function () {
+    Project::factory()->backlog()->create();
+    Project::factory()->create();
+    Project::factory()->paused()->create();
+
+    $backlog = Project::query()->backlog()->get();
+
+    expect($backlog)->toHaveCount(1)
+        ->and($backlog->first()->status)->toBe(ProjectStatus::Backlog);
+});
+
 test('active scope returns only active projects', function () {
     Project::factory()->create();
     Project::factory()->paused()->create();
@@ -51,6 +103,26 @@ test('paused scope returns only paused projects', function () {
 
     expect($paused)->toHaveCount(1)
         ->and($paused->first()->status)->toBe(ProjectStatus::Paused);
+});
+
+test('done scope returns only done projects', function () {
+    Project::factory()->create();
+    Project::factory()->done()->create();
+
+    $done = Project::query()->done()->get();
+
+    expect($done)->toHaveCount(1)
+        ->and($done->first()->status)->toBe(ProjectStatus::Done);
+});
+
+test('maintenance scope returns only maintenance projects', function () {
+    Project::factory()->create();
+    Project::factory()->maintenance()->create();
+
+    $maintenance = Project::query()->maintenance()->get();
+
+    expect($maintenance)->toHaveCount(1)
+        ->and($maintenance->first()->status)->toBe(ProjectStatus::Maintenance);
 });
 
 test('archived scope returns only archived projects', function () {

@@ -19,7 +19,7 @@ class SoloBoardServer extends Server
     /**
      * The MCP server's instructions for the LLM.
      */
-    protected string $instructions = 'SoloBoard is a personal productivity app for solo developers. It manages tasks, projects, time tracking, and daily planning. Use the available tools to create, read, update, and delete tasks; start and stop timers; manage daily plans; and list projects. Tasks have statuses (inbox, backlog, todo, doing, done) and priorities (urgent, high, medium, low). Projects have slugs for identification. Timers are time entries linked to tasks — only one timer can run at a time.';
+    protected string $instructions = 'SoloBoard is a personal productivity app for solo developers. It manages tasks, projects, time tracking, and daily planning. Use the available tools to create, read, update, and delete tasks; start and stop timers; manage daily plans; and list projects. Tasks have statuses (inbox, backlog, todo, doing, done) and priorities (urgent, high, medium, low). Projects have slugs for identification. Timers are time entries linked to tasks — only one timer can run at a time. Documents are markdown pages (PRDs, specs, decisions, notes) that belong to projects. Use list-documents, get-document, create-document, update-document, delete-document to manage them. Use get-project-context to get full project overview including all documents and active tasks.';
 
     /**
      * The tools registered with this MCP server.
@@ -41,6 +41,12 @@ class SoloBoardServer extends Server
         \App\Mcp\Tools\ListProjectsTool::class,
         \App\Mcp\Tools\LogCommitsTool::class,
         \App\Mcp\Tools\GetAnalyticsTool::class,
+        \App\Mcp\Tools\ListDocumentsTool::class,
+        \App\Mcp\Tools\GetDocumentTool::class,
+        \App\Mcp\Tools\CreateDocumentTool::class,
+        \App\Mcp\Tools\UpdateDocumentTool::class,
+        \App\Mcp\Tools\DeleteDocumentTool::class,
+        \App\Mcp\Tools\GetProjectContextTool::class,
     ];
 
     /**

@@ -625,6 +625,112 @@ Arquivos:
 Commit: "feat: integrate Documents in Project Detail tabs and Task Modal session fields"
 ```
 
+### Task 18.7 — MCP Tools para Documents
+
+```yaml
+Prompt: |
+    Crie as MCP Tools para gerenciamento de Documents via Claude Code/Cursor:
+
+    1. app/Mcp/Tools/ListDocumentsTool.php:
+       - Name: 'list-documents'
+       - Description: "Lists documents with optional filtering by project slug and document type."
+       - Annotation: #[IsReadOnly]
+       - Params: project_slug? (string), type? (string: prd|spec|decision|note|reference), limit? (int, default 20, max 100)
+       - Response: Array de { id, title, slug, type, project_slug, project_name, excerpt (200 chars), is_pinned, updated_at }
+       - Ordenação: pinned desc, sort_order asc, updated_at desc
+       - Se project_slug fornecido, filtrar por projeto
+       - Se type fornecido, filtrar por DocumentType enum
+
+    2. app/Mcp/Tools/GetDocumentTool.php:
+       - Name: 'get-document'
+       - Description: "Gets a single document by slug or ID with full markdown content."
+       - Annotation: #[IsReadOnly]
+       - Params: slug (string) OU document_id (int) — um dos dois obrigatório
+       - Response: { id, title, slug, type, type_label, content (markdown completo), project: { id, name, slug } | null, is_pinned, created_at, updated_at }
+       - Mensagem de erro customizada se não encontrado
+
+    3. app/Mcp/Tools/CreateDocumentTool.php:
+       - Name: 'create-document'
+       - Description: "Creates a new document. Optionally assign to a project by slug."
+       - Params:
+         - title (required string)
+         - content (required string, markdown)
+         - project_slug? (string, nullable = documento global)
+         - type? (string, default 'note': prd|spec|decision|note|reference)
+         - is_pinned? (bool, default false)
+       - Gerar slug automaticamente do título
+       - Validar project_slug existe (se fornecido)
+       - Validar type é enum válido
+       - Response: { id, slug, title, type, project_slug, message: "Document created successfully." }
+
+    4. app/Mcp/Tools/UpdateDocumentTool.php:
+       - Name: 'update-document'
+       - Description: "Updates an existing document. Provide only the fields you want to change."
+       - Params:
+         - slug (required string) OU document_id (required int)
+         - title? (string)
+         - content? (string, markdown)
+         - project_slug? (string, nullable para remover do projeto)
+         - type? (string: prd|spec|decision|note|reference)
+         - is_pinned? (bool)
+       - Atualizar slug se título mudar
+       - Response: { id, slug, title, type, updated_at, message: "Document updated successfully." }
+
+    5. app/Mcp/Tools/DeleteDocumentTool.php:
+       - Name: 'delete-document'
+       - Description: "Permanently deletes a document. This action cannot be undone."
+       - Params: slug (string) OU document_id (int)
+       - Response: { message: "Document deleted successfully." }
+
+    6. app/Mcp/Tools/GetProjectContextTool.php:
+       - Name: 'get-project-context'
+       - Description: "Gets complete project context including all documents and active tasks. Use this to understand a project before starting work."
+       - Annotation: #[IsReadOnly]
+       - Params: project_slug (required string)
+       - Response: {
+           project: { id, name, slug, description, status, priority, created_at },
+           documents: [{ id, title, slug, type, type_label, content, is_pinned }],
+           active_tasks: [{ id, title, status, priority, session_prompt, due_date, is_overdue }],
+           metrics: {
+             total_tasks: int,
+             tasks_by_status: { inbox: int, backlog: int, todo: int, doing: int, done: int },
+             total_time_minutes: int,
+             overdue_count: int
+           }
+         }
+       - active_tasks: status != done, ordenadas por priority desc, due_date asc
+
+    7. Registrar todas as tools em app/Mcp/Servers/SoloBoardServer.php:
+       - Adicionar ao array $tools na ordem: ListDocumentsTool, GetDocumentTool,
+         CreateDocumentTool, UpdateDocumentTool, DeleteDocumentTool, GetProjectContextTool
+
+    8. Atualizar $instructions do SoloBoardServer para mencionar documents:
+       - Adicionar: "Documents are markdown pages (PRDs, specs, decisions, notes) that belong to projects.
+         Use list-documents, get-document, create-document, update-document, delete-document to manage them.
+         Use get-project-context to get full project overview including all documents and active tasks."
+
+Acceptance Criteria:
+    - Todas as 6 tools funcionam via MCP
+    - Filtros de list-documents funcionam corretamente
+    - get-document aceita slug OU document_id
+    - create-document gera slug automaticamente
+    - get-project-context retorna contexto completo
+    - Validações com mensagens PT-BR úteis
+    - Teste Feature para cada tool
+
+Arquivos:
+    - app/Mcp/Tools/ListDocumentsTool.php
+    - app/Mcp/Tools/GetDocumentTool.php
+    - app/Mcp/Tools/CreateDocumentTool.php
+    - app/Mcp/Tools/UpdateDocumentTool.php
+    - app/Mcp/Tools/DeleteDocumentTool.php
+    - app/Mcp/Tools/GetProjectContextTool.php
+    - app/Mcp/Servers/SoloBoardServer.php (atualizar)
+    - tests/Feature/Mcp/DocumentToolsTest.php
+
+Commit: "feat: MCP tools for Document management and project context"
+```
+
 ---
 
 ## 7. Seed Realista (Atualizar Task 9.3)
@@ -666,25 +772,29 @@ Task 18.4: Document list + view pages ............ ~30min
 Task 18.5: Document editor page .................. ~25min
     â†“
 Task 18.6: IntegraÃ§Ã£o Project Detail + Task Modal  ~20min
+    â†"
+Task 18.7: MCP Tools para Documents .............. ~30min
 ```
 
-**Total: ~2 horas de sessÃ£o Claude Code**
+**Total: ~2.5 horas de sessÃ£o Claude Code**
 
 ---
 
-## 9. MCP Context â€” Resumo dos Endpoints
+## 9. MCP Context â€" Resumo das Tools
 
-Esses endpoints serÃ£o implementados como parte do MCP Server (F4 do market research).
-O modelo de dados desta Epic Ã© prÃ©-requisito.
+Essas tools sÃ£o implementadas na **Task 18.7** como parte do MCP Server existente (`SoloBoardServer`).
 
-| Endpoint              | Dados servidos                  | Caso de uso                               |
+| Tool                  | Dados servidos                  | Caso de uso                               |
 | --------------------- | ------------------------------- | ----------------------------------------- |
-| `list_documents`      | TÃ­tulos + tipos + excerpts     | "Quais docs tem no projeto X?"            |
-| `get_document`        | ConteÃºdo markdown completo     | "Leia o PRD do projeto X"                 |
-| `get_task_context`    | Task + prompt + docs do projeto | "Contexto completo para task #42"         |
-| `get_project_context` | Projeto + docs + tasks ativas   | "VisÃ£o geral do projeto X"               |
-| `create_document`     | â€”                             | "Crie uma spec para a task #42"           |
-| `update_document`     | â€”                             | "Atualize o PRD com as decisÃµes de hoje" |
+| `list-documents`      | TÃ­tulos + tipos + excerpts     | "Quais docs tem no projeto X?"            |
+| `get-document`        | ConteÃºdo markdown completo     | "Leia o PRD do projeto X"                 |
+| `create-document`     | â€"                             | "Crie uma spec para a task #42"           |
+| `update-document`     | â€"                             | "Atualize o PRD com as decisÃµes de hoje" |
+| `delete-document`     | â€"                             | "Delete o documento obsoleto"             |
+| `get-project-context` | Projeto + docs + tasks ativas   | "VisÃ£o geral do projeto X"               |
+
+> **Nota:** `get-task` existente jÃ¡ retorna `session_summary` com `session_prompt` e `session_result`.
+> A tool `get-project-context` complementa servindo o contexto completo do projeto.
 
 **Fluxo ideal com MCP:**
 
@@ -692,22 +802,28 @@ O modelo de dados desta Epic Ã© prÃ©-requisito.
 Dev: "Vamos trabalhar na task #42 do SoloBoard"
 
 Claude Code:
-  1. get_task_context(42)
-     â†’ { title: "Implementar autenticaÃ§Ã£o OAuth2",
-         session_prompt: "Implemente OAuth2 com...",
-         project_documents: [
-           { title: "PRD â€” API Gateway v2", slug: "prd-api-gateway-v2" },
-           { title: "Spec â€” AutenticaÃ§Ã£o OAuth2", slug: "spec-auth-oauth2" }
-         ] }
+  1. get-task(42)
+     â†' { title: "Implementar autenticaÃ§Ã£o OAuth2",
+         session_summary: {
+           prompt: "Implemente OAuth2 com...",
+           result: null
+         },
+         project: { slug: "api-gateway" } }
 
-  2. get_document("spec-auth-oauth2")
-     â†’ { content: "# Spec â€” AutenticaÃ§Ã£o OAuth2\n\n## Requisitos\n..." }
+  2. get-project-context("api-gateway")
+     â†' { project: {...},
+         documents: [
+           { title: "PRD â€" API Gateway v2", slug: "prd-api-gateway-v2", content: "..." },
+           { title: "Spec â€" OAuth2", slug: "spec-oauth2", content: "..." }
+         ],
+         active_tasks: [...],
+         metrics: { total_tasks: 12, ... } }
 
-  3. start_timer(42)
-  4. update_task(42, status: doing)
+  3. start-timer(42)
+  4. update-task(42, status: doing)
   5. [... implementaÃ§Ã£o com contexto completo ...]
-  6. stop_timer(42, notes: "OAuth2 implementado com refresh tokens")
-  7. update_task(42, status: done, session_result: "Implementado...")
+  6. stop-timer(42, notes: "OAuth2 implementado com refresh tokens")
+  7. update-task(42, status: done, session_result: "Implementado...")
 ```
 
 ---

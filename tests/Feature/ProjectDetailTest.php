@@ -156,3 +156,75 @@ test('project detail shows kanban column headers', function () {
         ->assertSee('Fazendo')
         ->assertSee('Concluída');
 });
+
+test('project detail docs tab shows documents list', function () {
+    $project = Project::factory()->create();
+    $document = \App\Models\Document::factory()->create([
+        'project_id' => $project->id,
+        'title' => 'Meu Documento de Teste',
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->set('tab', 'docs')
+        ->assertSee('Meu Documento de Teste');
+});
+
+test('project detail docs tab shows empty state when no documents', function () {
+    $project = Project::factory()->create();
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->set('tab', 'docs')
+        ->assertSee('Nenhum documento neste projeto.');
+});
+
+test('project detail can select document for preview', function () {
+    $project = Project::factory()->create();
+    $document = \App\Models\Document::factory()->create([
+        'project_id' => $project->id,
+        'title' => 'Documento Preview',
+        'content' => '# Conteúdo do documento',
+    ]);
+
+    $component = Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->set('tab', 'docs')
+        ->call('selectDocument', $document->id);
+
+    expect($component->get('selectedDocumentId'))->toBe($document->id);
+    $component->assertSee('Documento Preview');
+});
+
+test('project detail can clear document selection by setting to null', function () {
+    $project = Project::factory()->create();
+    $document = \App\Models\Document::factory()->create(['project_id' => $project->id]);
+
+    $component = Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->call('selectDocument', $document->id)
+        ->set('selectedDocumentId', null);
+
+    expect($component->get('selectedDocumentId'))->toBeNull();
+});
+
+test('project detail selectedDocument computed returns correct document', function () {
+    $project = Project::factory()->create();
+    $document = \App\Models\Document::factory()->create([
+        'project_id' => $project->id,
+        'title' => 'Documento Selecionado',
+    ]);
+
+    $component = Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->call('selectDocument', $document->id);
+
+    $selectedDocument = $component->get('selectedDocument');
+    expect($selectedDocument)->not->toBeNull();
+    expect($selectedDocument->id)->toBe($document->id);
+    expect($selectedDocument->title)->toBe('Documento Selecionado');
+});
+
+test('project detail selectedDocument computed returns null when no selection', function () {
+    $project = Project::factory()->create();
+    \App\Models\Document::factory()->create(['project_id' => $project->id]);
+
+    $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
+
+    expect($component->get('selectedDocument'))->toBeNull();
+});

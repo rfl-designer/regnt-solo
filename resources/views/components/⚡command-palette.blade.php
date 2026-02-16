@@ -360,7 +360,37 @@ new class extends Component
                     </div>
                 @elseif (str_starts_with($search, '>'))
                     {{-- Command mode --}}
-                    @if (empty($results['commands']))
+                    @if (trim($search) === '>')
+                        {{-- Show syntax help when only > is typed --}}
+                        <div class="px-4 py-3 text-sm text-zinc-400 border-b border-zinc-700">
+                            <div class="mb-2 font-medium text-zinc-300">Exemplos de Sintaxe</div>
+                            <div class="space-y-1.5 text-xs">
+                                <div class="flex items-center gap-2">
+                                    <code class="text-emerald-400">> mover "task" doing</code>
+                                    <span class="text-zinc-600">•</span>
+                                    <span class="text-zinc-500">inbox, backlog, todo, doing, done</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <code class="text-emerald-400">> prioridade "task" urgent</code>
+                                    <span class="text-zinc-600">•</span>
+                                    <span class="text-zinc-500">urgent, high, medium, low</span>
+                                </div>
+                            </div>
+                        </div>
+                        {{-- Also show available commands --}}
+                        @foreach ($results['commands'] as $cmd)
+                            <flux:command.item
+                                wire:key="cmd-{{ $loop->index }}"
+                                wire:click="executeCommand('{{ $cmd['action'] }}')"
+                                :icon="$cmd['icon']"
+                            >
+                                <div class="flex flex-col">
+                                    <span>{{ $cmd['label'] }}</span>
+                                    <span class="text-xs text-zinc-500">{{ $cmd['description'] }}</span>
+                                </div>
+                            </flux:command.item>
+                        @endforeach
+                    @elseif (empty($results['commands']))
                         <div class="px-4 py-6 text-center text-sm text-zinc-500">
                             Nenhum comando encontrado.
                             <div class="mt-2 text-xs">

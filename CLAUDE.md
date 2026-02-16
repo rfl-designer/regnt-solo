@@ -55,8 +55,8 @@
 - **Daily Planner**: checkbox muda status GLOBAL para done, carry-over banner para tasks de ontem
 - **Timer**: apenas 1 ativo por vez, mini modal de notas ao parar (bloqueia)
 - **Task Modal**: NÃO fecha ao salvar (reativa), TimeEntries editáveis inline, barra de tempo por status
-- **Quick-Add**: modal overlay (hotkey `N`), sempre cria inbox, autocomplete `#projeto` `!prioridade` `@data`
-- **Command Palette** (`Cmd+K`): busca + 6 comandos com prefixo `>`
+- **Quick-Add**: modal overlay (hotkey `Ctrl+N`), sempre cria inbox, autocomplete `#projeto` `!prioridade` `@data`
+- **Command Palette** (`Ctrl+K`): busca + 6 comandos com prefixo `>`
 - **Dashboard cards**: clicáveis, navegam para páginas filtradas + métricas de tempo médio por status
 - **Empty states**: ícone + texto + CTA + dica de atalho
 
@@ -186,17 +186,17 @@ SOLOBOARD_AI_MODEL=claude-sonnet-4-20250514  # modelo utilizado
 
 ## Keyboard Shortcuts
 
-| Atalho  | Ação                        |
-| ------- | --------------------------- |
-| `N`     | Nova task (quick-add modal) |
-| `K`     | Ir para Kanban              |
-| `D`     | Ir para Daily Planner       |
-| `I`     | Ir para Inbox               |
-| `T`     | Start/stop timer            |
-| `Esc`   | Fechar modal                |
-| `Cmd+K` | Command Palette             |
+| Atalho   | Ação                        |
+| -------- | --------------------------- |
+| `Ctrl+N` | Nova task (quick-add modal) |
+| `Ctrl+B` | Ir para Kanban (Board)      |
+| `Ctrl+D` | Ir para Daily Planner       |
+| `Ctrl+I` | Ir para Inbox               |
+| `Ctrl+T` | Start/stop timer            |
+| `Esc`    | Fechar modal                |
+| `Ctrl+K` | Command Palette             |
 
-Ignorar quando foco em `input`/`textarea`/`select`/`[contenteditable]`.
+Todos os atalhos requerem `Ctrl` (ou `Cmd` no Mac). Ignorar quando foco em `input`/`textarea`/`select`/`[contenteditable]`.
 
 ## Regras Gerais
 

@@ -41,6 +41,7 @@ class DatabaseSeeder extends Seeder
         $this->createTaskCommits($tasks);
         $this->createDocuments($projects);
         $this->createWeeklyReviews();
+        $this->createStakeholders($projects);
     }
 
     /**
@@ -481,6 +482,37 @@ class DatabaseSeeder extends Seeder
             'notes' => 'Sprint focada em autenticação e setup do mobile. Boa velocidade de entrega.',
             'reflection' => 'JWT implementado com sucesso. React Native setup demorou mais que o esperado. Preciso estimar melhor tasks de setup/infra. Focus sessions ajudaram muito na concentração.',
             'generated_at' => $twoWeeksStart->copy()->endOfWeek(),
+        ]);
+    }
+
+    /**
+     * Create stakeholders for projects.
+     *
+     * @param  array<string, Project>  $projects
+     */
+    private function createStakeholders(array $projects): void
+    {
+        // API Gateway - cliente acompanhando o projeto
+        Stakeholder::create([
+            'project_id' => $projects['api']->id,
+            'name' => 'Carlos Mendes',
+            'email' => 'carlos@cliente.com',
+            'last_accessed_at' => now()->subHours(2),
+        ]);
+
+        Stakeholder::create([
+            'project_id' => $projects['api']->id,
+            'name' => 'Ana Costa',
+            'email' => 'ana@cliente.com',
+            'last_accessed_at' => null,
+        ]);
+
+        // Landing Page - marketing acompanhando
+        Stakeholder::create([
+            'project_id' => $projects['landing']->id,
+            'name' => 'Mariana Silva',
+            'email' => 'mariana@marketing.com',
+            'last_accessed_at' => now()->subDays(1),
         ]);
     }
 }

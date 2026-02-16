@@ -28,36 +28,32 @@ test('projects component renders successfully and shows heading', function () {
         ->assertSee('Projetos');
 });
 
-test('projects lists active projects by default', function () {
-    $active = Project::factory()->create(['name' => 'Projeto Ativo']);
+test('projects kanban shows all status columns', function () {
+    Livewire::test('pages::projects')
+        ->assertSee('Ativo')
+        ->assertSee('Pausado')
+        ->assertSee('Arquivado');
+});
+
+test('projects kanban shows projects in correct columns', function () {
+    Project::factory()->create(['name' => 'Projeto Ativo']);
     Project::factory()->paused()->create(['name' => 'Projeto Pausado']);
     Project::factory()->archived()->create(['name' => 'Projeto Arquivado']);
 
     Livewire::test('pages::projects')
-        ->assertSet('statusFilter', 'active')
         ->assertSee('Projeto Ativo')
-        ->assertDontSee('Projeto Pausado')
-        ->assertDontSee('Projeto Arquivado');
-});
-
-test('projects filters by paused status', function () {
-    Project::factory()->create(['name' => 'Projeto Ativo']);
-    Project::factory()->paused()->create(['name' => 'Projeto Pausado']);
-
-    Livewire::test('pages::projects')
-        ->set('statusFilter', 'paused')
         ->assertSee('Projeto Pausado')
-        ->assertDontSee('Projeto Ativo');
+        ->assertSee('Projeto Arquivado');
 });
 
-test('projects filters by archived status', function () {
-    Project::factory()->create(['name' => 'Projeto Ativo']);
-    Project::factory()->archived()->create(['name' => 'Projeto Arquivado']);
+test('projects kanban can drag project to change status', function () {
+    $project = Project::factory()->create(['status' => ProjectStatus::Active]);
 
     Livewire::test('pages::projects')
-        ->set('statusFilter', 'archived')
-        ->assertSee('Projeto Arquivado')
-        ->assertDontSee('Projeto Ativo');
+        ->call('handleSort', $project->id, 0, 'paused')
+        ->assertDispatched('project-updated');
+
+    expect($project->fresh()->status)->toBe(ProjectStatus::Paused);
 });
 
 test('projects shows project card with emoji, name, and status badge', function () {
@@ -79,7 +75,7 @@ test('projects shows active tasks count', function () {
     Task::factory()->done()->count(2)->create(['project_id' => $project->id]);
 
     Livewire::test('pages::projects')
-        ->assertSee('3 tasks ativas');
+        ->assertSee('3 tasks');
 });
 
 test('projects openProject redirects to project detail', function () {
@@ -92,7 +88,9 @@ test('projects openProject redirects to project detail', function () {
 
 test('projects shows empty state when no projects', function () {
     Livewire::test('pages::projects')
-        ->assertSee('Nenhum projeto encontrado');
+        ->assertSee('Nenhum projeto ativo')
+        ->assertSee('Nenhum projeto pausado')
+        ->assertSee('Nenhum projeto arquivado');
 });
 
 test('projects listens to project-created event', function () {
@@ -117,5 +115,5 @@ test('projects shows single active task label correctly', function () {
     Task::factory()->todo()->create(['project_id' => $project->id]);
 
     Livewire::test('pages::projects')
-        ->assertSee('1 task ativa');
+        ->assertSee('1 task');
 });

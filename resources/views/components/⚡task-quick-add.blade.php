@@ -28,6 +28,9 @@ new class extends Component
 
     public string $prefixSearch = '';
 
+    /** @var array<int, array{value: string, label: string}> */
+    public array $suggestions = [];
+
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Project>
      */
@@ -37,17 +40,20 @@ new class extends Component
         return Project::active()->orderBy('name')->get();
     }
 
+    public function updatedRawInput(): void
+    {
+        $this->detectActivePrefix();
+        $this->updateSuggestions();
+    }
+
     /**
-     * Get filtered suggestions based on the active prefix.
-     *
-     * @return array<int, array{value: string, label: string}>
+     * Update the suggestions array based on the active prefix.
      */
-    #[Computed]
-    public function filteredSuggestions(): array
+    private function updateSuggestions(): void
     {
         $search = mb_strtolower($this->prefixSearch);
 
-        return match ($this->activePrefix) {
+        $this->suggestions = match ($this->activePrefix) {
             '#' => $this->projects
                 ->filter(fn (Project $project) => $search === '' || str_contains(mb_strtolower($project->slug), $search))
                 ->map(fn (Project $project) => [
@@ -73,11 +79,6 @@ new class extends Component
 
             default => [],
         };
-    }
-
-    public function updatedRawInput(): void
-    {
-        $this->detectActivePrefix();
     }
 
     public function selectSuggestion(string $value): void
@@ -235,14 +236,13 @@ new class extends Component
     {{-- Modal --}}
     <flux:modal name="quick-add" class="md:w-96">
         <div class="space-y-4" x-data="{
-            suggestions: @js($this->filteredSuggestions),
+            suggestions: @entangle('suggestions'),
             activePrefix: @entangle('activePrefix'),
             highlightIndex: 0,
             get showSuggestions() {
                 return this.activePrefix !== '' && this.suggestions.length > 0;
             }
         }"
-        x-effect="suggestions = @js($this->filteredSuggestions)"
         x-on:keydown.arrow-down.prevent="highlightIndex = Math.min(highlightIndex + 1, suggestions.length - 1)"
         x-on:keydown.arrow-up.prevent="highlightIndex = Math.max(highlightIndex - 1, 0)"
         x-on:keydown.enter.prevent="
@@ -279,16 +279,14 @@ new class extends Component
                     class="absolute z-50 mt-1 w-full overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800 shadow-lg"
                 >
                     <ul class="max-h-48 overflow-y-auto py-1">
-                        @foreach ($this->filteredSuggestions as $index => $suggestion)
+                        <template x-for="(suggestion, index) in suggestions" :key="index">
                             <li
-                                wire:key="suggestion-{{ $index }}"
-                                x-on:click="$wire.selectSuggestion('{{ $suggestion['value'] }}'); highlightIndex = 0;"
-                                x-bind:class="highlightIndex === {{ $index }} ? 'bg-zinc-700' : ''"
+                                x-on:click="$wire.selectSuggestion(suggestion.value); highlightIndex = 0;"
+                                x-bind:class="highlightIndex === index ? 'bg-zinc-700' : ''"
                                 class="cursor-pointer px-3 py-2 text-sm hover:bg-zinc-700"
-                            >
-                                {{ $suggestion['label'] }}
-                            </li>
-                        @endforeach
+                                x-text="suggestion.label"
+                            ></li>
+                        </template>
                     </ul>
                 </div>
             </div>

@@ -51,15 +51,15 @@
         <!-- Desktop Header -->
         <flux:header class="hidden! lg:block! border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
             <flux:navbar class="w-full">
-                <flux:input
-                    icon="magnifying-glass"
-                    placeholder="Buscar comandos..."
-                    kbd="⌘K"
-                    readonly
-                    x-data
-                    x-on:click="$flux.modal('command-palette').show()"
-                    class="max-w-xs cursor-pointer"
-                />
+                <flux:modal.trigger name="command-palette" shortcut="cmd.k">
+                    <flux:input
+                        as="button"
+                        icon="magnifying-glass"
+                        placeholder="Buscar comandos..."
+                        kbd="⌘K"
+                        class="max-w-xs"
+                    />
+                </flux:modal.trigger>
 
                 <flux:spacer />
 

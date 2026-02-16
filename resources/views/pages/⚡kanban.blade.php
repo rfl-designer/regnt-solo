@@ -264,7 +264,7 @@ new class extends Component
                                         <div wire:sort:handle class="mt-0.5 shrink-0 cursor-grab text-zinc-600 hover:text-zinc-400">
                                             <flux:icon name="grip-vertical" class="size-4" />
                                         </div>
-                                        <span class="flex-1 text-sm font-medium text-zinc-200">{{ $task->title }}</span>
+                                        <span class="line-clamp-2 flex-1 text-sm font-medium text-zinc-200">{{ $task->title }}</span>
                                     </div>
 
                                     {{-- Project Info --}}
@@ -356,7 +356,7 @@ new class extends Component
                                                 <div wire:sort:handle class="mt-0.5 shrink-0 cursor-grab text-zinc-600 hover:text-zinc-400">
                                                     <flux:icon name="grip-vertical" class="size-4" />
                                                 </div>
-                                                <span class="flex-1 text-sm font-medium text-zinc-300">{{ $task->title }}</span>
+                                                <span class="line-clamp-2 flex-1 text-sm font-medium text-zinc-300">{{ $task->title }}</span>
                                             </div>
 
                                             {{-- Badges Row --}}

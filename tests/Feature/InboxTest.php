@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
 use App\Models\Project;
 use App\Models\Task;
@@ -176,4 +177,30 @@ test('inbox badge updates on task-moved event', function () {
 
     $badge->dispatch('task-moved')
         ->assertDontSeeHtml('data-flux-badge');
+});
+
+test('update priority changes task priority', function () {
+    $task = Task::factory()->create(['priority' => TaskPriority::Medium]);
+
+    Livewire::test('pages::inbox')
+        ->call('updatePriority', $task->id, 'high');
+
+    expect($task->fresh()->priority)->toBe(TaskPriority::High);
+});
+
+test('update priority only works for inbox tasks', function () {
+    $task = Task::factory()->backlog()->create();
+
+    $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
+    Livewire::test('pages::inbox')
+        ->call('updatePriority', $task->id, 'urgent');
+});
+
+test('inbox shows priority dropdown for each task', function () {
+    Task::factory()->create(['priority' => TaskPriority::High]);
+
+    Livewire::test('pages::inbox')
+        ->assertSee('Alta')
+        ->assertSee('Prioridade');
 });

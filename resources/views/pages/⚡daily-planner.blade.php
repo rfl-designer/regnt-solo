@@ -28,6 +28,9 @@ new class extends Component
 
     public bool $aiLoading = false;
 
+    /** @var array<int, int> */
+    public array $selectedYesterdayTasks = [];
+
     public function mount(): void
     {
         if ($this->date === '' || ! $this->isValidDate($this->date)) {
@@ -235,9 +238,44 @@ new class extends Component
             ]);
         }
 
+        $this->selectedYesterdayTasks = [];
+
         unset($this->plan, $this->availableTasks, $this->completionRate, $this->yesterdayIncompleteTasks);
 
         Flux::toast(variant: 'success', heading: 'Tasks movidas', text: $tasks->count().' tasks adicionadas ao plano de hoje');
+    }
+
+    public function carryOverSelected(): void
+    {
+        if (! $this->isToday || empty($this->selectedYesterdayTasks)) {
+            return;
+        }
+
+        $tasks = $this->yesterdayIncompleteTasks->whereIn('id', $this->selectedYesterdayTasks);
+        $maxOrder = $this->plan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+
+        foreach ($tasks as $index => $task) {
+            $this->plan->tasks()->syncWithoutDetaching([
+                $task->id => ['sort_order' => $maxOrder + 1 + $index],
+            ]);
+        }
+
+        $count = $tasks->count();
+        $this->selectedYesterdayTasks = [];
+
+        unset($this->plan, $this->availableTasks, $this->completionRate, $this->yesterdayIncompleteTasks);
+
+        Flux::toast(variant: 'success', heading: 'Tasks movidas', text: $count.' tasks adicionadas ao plano de hoje');
+    }
+
+    public function selectAllYesterday(): void
+    {
+        $this->selectedYesterdayTasks = $this->yesterdayIncompleteTasks->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    public function deselectAllYesterday(): void
+    {
+        $this->selectedYesterdayTasks = [];
     }
 
     public function moveToToday(int $taskId): void
@@ -432,8 +470,6 @@ new class extends Component
 
         @if ($this->isPast)
             <flux:badge color="zinc" icon="lock-closed" class="w-fit">Plano passado (somente leitura)</flux:badge>
-        @elseif ($this->isToday)
-            <flux:badge color="emerald" icon="check-circle" class="w-fit">Hoje</flux:badge>
         @endif
     </div>
 
@@ -472,102 +508,210 @@ new class extends Component
                 </div>
             </div>
 
-            <div class="rounded-xl border border-zinc-700 bg-zinc-900/50">
+            <div
+                x-data="{
+                    completedCollapsed: localStorage.getItem('daily-completed-collapsed') === 'true',
+                    toggleCompleted() {
+                        this.completedCollapsed = !this.completedCollapsed;
+                        localStorage.setItem('daily-completed-collapsed', this.completedCollapsed);
+                    }
+                }"
+                class="rounded-xl border border-zinc-700 bg-zinc-900/50"
+            >
                 @if ($this->plan->tasks->isNotEmpty())
-                    <ul wire:sort="handleSort" class="divide-y divide-zinc-700/50">
-                        @foreach ($this->plan->tasks as $task)
-                            @php
-                                $isCompleted = $task->pivot->completed_at !== null;
-                            @endphp
+                    @php
+                        $pendingTasks = $this->plan->tasks->filter(fn ($t) => $t->pivot->completed_at === null);
+                        $completedTasks = $this->plan->tasks->filter(fn ($t) => $t->pivot->completed_at !== null);
+                    @endphp
 
-                            <li wire:key="task-{{ $task->id }}" wire:sort:item="{{ $task->id }}" class="flex items-center gap-3 px-4 py-3">
-                                {{-- Drag handle --}}
-                                @unless ($this->isPast)
-                                    <div wire:sort:handle class="shrink-0 cursor-grab text-zinc-600 hover:text-zinc-400">
-                                        <flux:icon name="grip-vertical" class="size-4" />
-                                    </div>
-                                @endunless
-
-                                <div wire:sort:ignore class="flex min-w-0 flex-1 items-center gap-3">
-                                    {{-- Checkbox --}}
-                                    @if (! $this->isPast)
-                                        <flux:checkbox
-                                            wire:click="toggleTask({{ $task->id }})"
-                                            :checked="$isCompleted"
-                                        />
-                                    @else
-                                        <flux:checkbox
-                                            :checked="$isCompleted"
-                                            disabled
-                                        />
-                                    @endif
-
-                                    {{-- Task info --}}
-                                    <div class="flex min-w-0 flex-1 flex-col gap-1">
-                                        <span class="truncate text-sm font-medium {{ $isCompleted ? 'text-zinc-500 line-through opacity-50' : 'text-zinc-200' }}">
-                                            {{ $task->title }}
-                                        </span>
-
-                                        <div class="flex flex-wrap items-center gap-1.5">
-                                            {{-- Project badge --}}
-                                            @if ($task->project)
-                                                <div class="flex items-center gap-1 border-l-2 pl-1.5" style="border-color: {{ $task->project->color }}">
-                                                    <span class="text-xs">{{ $task->project->emoji }}</span>
-                                                    <span class="truncate text-xs text-zinc-400">{{ $task->project->name }}</span>
-                                                </div>
-                                            @endif
-
-                                            {{-- Priority badge --}}
-                                            @if ($task->priority)
-                                                <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
-                                                    {{ $task->priority->label() }}
-                                                </flux:badge>
-                                            @endif
-
-                                            {{-- Estimate badge --}}
-                                            @if ($task->estimated_minutes)
-                                                <flux:badge size="sm" color="zinc" icon="clock">
-                                                    {{ $task->estimated_minutes }}m
-                                                </flux:badge>
-                                            @endif
-
-                                            {{-- Overdue badge --}}
-                                            @if ($task->isOverdue())
-                                                <flux:badge size="sm" color="red" icon="exclamation-triangle">
-                                                    {{ $task->due_date->diffForHumans() }}
-                                                </flux:badge>
-                                            @endif
+                    {{-- Pending Tasks --}}
+                    @if ($pendingTasks->isNotEmpty())
+                        <ul wire:sort="handleSort" class="divide-y divide-zinc-700/50">
+                            @foreach ($pendingTasks as $task)
+                                <li wire:key="task-{{ $task->id }}" wire:sort:item="{{ $task->id }}" class="flex items-center gap-3 px-4 py-3">
+                                    {{-- Drag handle --}}
+                                    @unless ($this->isPast)
+                                        <div wire:sort:handle class="shrink-0 cursor-grab text-zinc-600 hover:text-zinc-400">
+                                            <flux:icon name="grip-vertical" class="size-4" />
                                         </div>
-                                    </div>
+                                    @endunless
 
-                                    {{-- Actions --}}
-                                    @if ($this->isPast && ! $isCompleted)
-                                        <flux:button
-                                            wire:click="moveToToday({{ $task->id }})"
-                                            wire:loading.attr="disabled"
-                                            wire:target="moveToToday({{ $task->id }})"
-                                            size="sm"
-                                            variant="ghost"
-                                            icon="arrow-right"
-                                            class="shrink-0"
-                                        >
-                                            Hoje
-                                        </flux:button>
-                                    @elseif (! $this->isPast)
-                                        <flux:button
-                                            wire:click="removeFromPlan({{ $task->id }})"
-                                            wire:loading.attr="disabled"
-                                            wire:target="removeFromPlan({{ $task->id }})"
-                                            size="sm"
-                                            variant="ghost"
-                                            icon="x-mark"
-                                            class="shrink-0 text-zinc-500 hover:text-red-400"
-                                        />
-                                    @endif
+                                    <div wire:sort:ignore class="flex min-w-0 flex-1 items-center gap-3">
+                                        {{-- Checkbox --}}
+                                        @if (! $this->isPast)
+                                            <flux:checkbox
+                                                wire:click="toggleTask({{ $task->id }})"
+                                                :checked="false"
+                                            />
+                                        @else
+                                            <flux:checkbox
+                                                :checked="false"
+                                                disabled
+                                            />
+                                        @endif
+
+                                        {{-- Task info --}}
+                                        <div class="flex min-w-0 flex-1 flex-col gap-1">
+                                            <span class="truncate text-sm font-medium text-zinc-200">
+                                                {{ $task->title }}
+                                            </span>
+
+                                            <div class="flex flex-wrap items-center gap-1.5">
+                                                {{-- Project badge --}}
+                                                @if ($task->project)
+                                                    <div class="flex items-center gap-1 border-l-2 pl-1.5" style="border-color: {{ $task->project->color }}">
+                                                        <span class="text-xs">{{ $task->project->emoji }}</span>
+                                                        <span class="truncate text-xs text-zinc-400">{{ $task->project->name }}</span>
+                                                    </div>
+                                                @endif
+
+                                                {{-- Priority badge --}}
+                                                @if ($task->priority)
+                                                    <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
+                                                        {{ $task->priority->label() }}
+                                                    </flux:badge>
+                                                @endif
+
+                                                {{-- Estimate badge --}}
+                                                @if ($task->estimated_minutes)
+                                                    <flux:badge size="sm" color="zinc" icon="clock">
+                                                        {{ $task->estimated_minutes }}m
+                                                    </flux:badge>
+                                                @endif
+
+                                                {{-- Overdue badge --}}
+                                                @if ($task->isOverdue())
+                                                    <flux:badge size="sm" color="red" icon="exclamation-triangle">
+                                                        {{ $task->due_date->diffForHumans() }}
+                                                    </flux:badge>
+                                                @endif
+                                            </div>
+                                        </div>
+
+                                        {{-- Actions --}}
+                                        @if ($this->isPast)
+                                            <flux:button
+                                                wire:click="moveToToday({{ $task->id }})"
+                                                wire:loading.attr="disabled"
+                                                wire:target="moveToToday({{ $task->id }})"
+                                                size="sm"
+                                                variant="ghost"
+                                                icon="arrow-right"
+                                                class="shrink-0"
+                                            >
+                                                Hoje
+                                            </flux:button>
+                                        @else
+                                            <flux:button
+                                                wire:click="removeFromPlan({{ $task->id }})"
+                                                wire:loading.attr="disabled"
+                                                wire:target="removeFromPlan({{ $task->id }})"
+                                                size="sm"
+                                                variant="ghost"
+                                                icon="x-mark"
+                                                class="shrink-0 text-zinc-500 hover:text-red-400"
+                                            />
+                                        @endif
+                                    </div>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+
+                    {{-- Completed Tasks (Collapsible) --}}
+                    @if ($completedTasks->isNotEmpty())
+                        <div class="border-t border-zinc-700/50">
+                            {{-- Collapsible Header --}}
+                            <button
+                                type="button"
+                                @click="toggleCompleted()"
+                                class="flex w-full items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-zinc-800/50"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <flux:icon name="check-circle" class="size-4 text-emerald-500" />
+                                    <span class="text-sm font-medium text-zinc-400">Concluídas</span>
+                                    <flux:badge size="sm" color="emerald">{{ $completedTasks->count() }}</flux:badge>
                                 </div>
-                            </li>
-                        @endforeach
-                    </ul>
+                                <flux:icon
+                                    name="chevron-down"
+                                    class="size-4 text-zinc-500 transition-transform duration-200"
+                                    x-bind:class="completedCollapsed ? '' : 'rotate-180'"
+                                />
+                            </button>
+
+                            {{-- Collapsible Content --}}
+                            <div
+                                x-show="!completedCollapsed"
+                                x-collapse
+                                x-cloak
+                            >
+                                <ul wire:sort="handleSort" class="divide-y divide-zinc-700/30 border-t border-zinc-700/30">
+                                    @foreach ($completedTasks as $task)
+                                        <li wire:key="task-{{ $task->id }}" wire:sort:item="{{ $task->id }}" class="flex items-center gap-3 px-4 py-3 opacity-60">
+                                            {{-- Drag handle --}}
+                                            @unless ($this->isPast)
+                                                <div wire:sort:handle class="shrink-0 cursor-grab text-zinc-600 hover:text-zinc-400">
+                                                    <flux:icon name="grip-vertical" class="size-4" />
+                                                </div>
+                                            @endunless
+
+                                            <div wire:sort:ignore class="flex min-w-0 flex-1 items-center gap-3">
+                                                {{-- Checkbox --}}
+                                                @if (! $this->isPast)
+                                                    <flux:checkbox
+                                                        wire:click="toggleTask({{ $task->id }})"
+                                                        :checked="true"
+                                                    />
+                                                @else
+                                                    <flux:checkbox
+                                                        :checked="true"
+                                                        disabled
+                                                    />
+                                                @endif
+
+                                                {{-- Task info --}}
+                                                <div class="flex min-w-0 flex-1 flex-col gap-1">
+                                                    <span class="truncate text-sm font-medium text-zinc-500 line-through">
+                                                        {{ $task->title }}
+                                                    </span>
+
+                                                    <div class="flex flex-wrap items-center gap-1.5">
+                                                        {{-- Project badge --}}
+                                                        @if ($task->project)
+                                                            <div class="flex items-center gap-1 border-l-2 pl-1.5" style="border-color: {{ $task->project->color }}">
+                                                                <span class="text-xs">{{ $task->project->emoji }}</span>
+                                                                <span class="truncate text-xs text-zinc-500">{{ $task->project->name }}</span>
+                                                            </div>
+                                                        @endif
+
+                                                        {{-- Priority badge --}}
+                                                        @if ($task->priority)
+                                                            <flux:badge size="sm" color="zinc" icon="{{ $task->priority->icon() }}">
+                                                                {{ $task->priority->label() }}
+                                                            </flux:badge>
+                                                        @endif
+                                                    </div>
+                                                </div>
+
+                                                {{-- Actions --}}
+                                                @unless ($this->isPast)
+                                                    <flux:button
+                                                        wire:click="removeFromPlan({{ $task->id }})"
+                                                        wire:loading.attr="disabled"
+                                                        wire:target="removeFromPlan({{ $task->id }})"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        icon="x-mark"
+                                                        class="shrink-0 text-zinc-500 hover:text-red-400"
+                                                    />
+                                                @endunless
+                                            </div>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        </div>
+                    @endif
                 @else
                     <div class="py-12 text-center">
                         <flux:icon name="calendar" class="mx-auto mb-2 size-8 text-zinc-600" />
@@ -599,22 +743,59 @@ new class extends Component
                             <flux:badge size="sm" color="amber">{{ $this->yesterdayIncompleteTasks->count() }}</flux:badge>
                         </div>
 
-                        <flux:button
-                            wire:click="carryOver"
-                            wire:loading.attr="disabled"
-                            wire:target="carryOver"
-                            size="sm"
-                            variant="subtle"
-                            icon="plus"
-                        >
-                            Adicionar todas
-                        </flux:button>
+                        <div class="flex items-center gap-2">
+                            @if (count($selectedYesterdayTasks) > 0)
+                                <flux:button
+                                    wire:click="carryOverSelected"
+                                    wire:loading.attr="disabled"
+                                    wire:target="carryOverSelected"
+                                    size="sm"
+                                    variant="primary"
+                                    icon="plus"
+                                >
+                                    Adicionar {{ count($selectedYesterdayTasks) }}
+                                </flux:button>
+                            @else
+                                <flux:button
+                                    wire:click="carryOver"
+                                    wire:loading.attr="disabled"
+                                    wire:target="carryOver"
+                                    size="sm"
+                                    variant="subtle"
+                                    icon="plus"
+                                >
+                                    Adicionar todas
+                                </flux:button>
+                            @endif
+                        </div>
                     </div>
 
                     <div class="rounded-xl border border-amber-700/50 bg-amber-950/20">
+                        {{-- Select All Bar --}}
+                        <div class="flex items-center gap-3 border-b border-amber-700/30 px-4 py-2">
+                            @php
+                                $allYesterdaySelected = count($selectedYesterdayTasks) === $this->yesterdayIncompleteTasks->count() && $this->yesterdayIncompleteTasks->count() > 0;
+                                $someYesterdaySelected = count($selectedYesterdayTasks) > 0 && count($selectedYesterdayTasks) < $this->yesterdayIncompleteTasks->count();
+                            @endphp
+                            <flux:checkbox
+                                :checked="$allYesterdaySelected"
+                                :indeterminate="$someYesterdaySelected"
+                                wire:click="{{ $allYesterdaySelected ? 'deselectAllYesterday' : 'selectAllYesterday' }}"
+                            />
+                            <span class="text-xs text-zinc-400">
+                                @if (count($selectedYesterdayTasks) > 0)
+                                    {{ count($selectedYesterdayTasks) }} selecionada(s)
+                                @else
+                                    Selecionar todas
+                                @endif
+                            </span>
+                        </div>
+
                         <ul class="divide-y divide-amber-700/30">
                             @foreach ($this->yesterdayIncompleteTasks as $task)
                                 <li wire:key="yesterday-{{ $task->id }}" class="flex items-center gap-3 px-4 py-3">
+                                    <flux:checkbox wire:model.live="selectedYesterdayTasks" value="{{ $task->id }}" />
+
                                     <div class="flex min-w-0 flex-1 flex-col gap-1">
                                         <span class="truncate text-sm font-medium text-zinc-200">{{ $task->title }}</span>
 

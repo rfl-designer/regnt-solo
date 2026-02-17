@@ -62,17 +62,40 @@ new class extends Component
         Flux::toast(variant: 'success', heading: 'Projeto atualizado', text: $task->title);
     }
 
-    public function moveToBacklog(int $taskId): void
+    /**
+     * Get statuses available to move tasks to (all except Inbox).
+     *
+     * @return array<TaskStatus>
+     */
+    public function availableStatuses(): array
+    {
+        return [
+            TaskStatus::Backlog,
+            TaskStatus::Todo,
+            TaskStatus::Doing,
+            TaskStatus::Done,
+        ];
+    }
+
+    public function moveToStatus(int $taskId, string $status): void
     {
         $task = Task::inbox()->findOrFail($taskId);
 
-        $task->update(['status' => TaskStatus::Backlog]);
+        $newStatus = TaskStatus::from($status);
+
+        $updateData = ['status' => $newStatus];
+
+        if ($newStatus === TaskStatus::Done) {
+            $updateData['completed_at'] = now();
+        }
+
+        $task->update($updateData);
 
         unset($this->tasks);
 
         $this->dispatch('task-moved');
 
-        Flux::toast(variant: 'success', heading: 'Movida para Backlog', text: $task->title);
+        Flux::toast(variant: 'success', heading: 'Movida para '.$newStatus->label(), text: $task->title);
     }
 
     public function confirmDelete(int $taskId): void
@@ -284,15 +307,22 @@ new class extends Component
 
                         <flux:table.cell>
                             <div class="flex items-center justify-end gap-2">
-                                <flux:button
-                                    variant="ghost"
-                                    size="sm"
-                                    wire:click="moveToBacklog({{ $task->id }})"
-                                    wire:loading.attr="disabled"
-                                    wire:target="moveToBacklog({{ $task->id }})"
-                                >
-                                    → Backlog
-                                </flux:button>
+                                <flux:dropdown>
+                                    <flux:button variant="ghost" size="sm" icon-trailing="chevron-down">
+                                        Mover para
+                                    </flux:button>
+
+                                    <flux:menu>
+                                        @foreach ($this->availableStatuses() as $status)
+                                            <flux:menu.item
+                                                wire:click="moveToStatus({{ $task->id }}, '{{ $status->value }}')"
+                                                icon="{{ $status->icon() }}"
+                                            >
+                                                {{ $status->label() }}
+                                            </flux:menu.item>
+                                        @endforeach
+                                    </flux:menu>
+                                </flux:dropdown>
 
                                 <flux:button
                                     variant="ghost"

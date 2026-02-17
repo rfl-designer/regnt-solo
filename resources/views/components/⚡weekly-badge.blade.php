@@ -7,14 +7,12 @@ use Livewire\Component;
 new class extends Component
 {
     #[Computed]
-    public function weekNumber(): string
+    public function weekLabel(): string
     {
-        return 'S' . str_pad((string) Carbon::now()->weekOfYear, 2, '0', STR_PAD_LEFT);
+        return 'Semana ' . Carbon::now()->weekOfYear;
     }
 }
 
 ?>
 
-<span>
-    <flux:badge size="sm" color="zinc">{{ $this->weekNumber }}</flux:badge>
-</span>
+<flux:badge size="sm" color="zinc">{{ $this->weekLabel }}</flux:badge>

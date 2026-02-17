@@ -250,6 +250,9 @@ new class extends Component
             >
                 <span class="hidden sm:inline">Atrasadas</span>
             </flux:button>
+
+            {{-- Color legend --}}
+            <x-color-legend />
         </div>
     </div>
 

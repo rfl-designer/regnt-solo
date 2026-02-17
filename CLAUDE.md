@@ -60,6 +60,44 @@
 - **Dashboard cards**: clicáveis, navegam para páginas filtradas + métricas de tempo médio por status
 - **Empty states**: ícone + texto + CTA + dica de atalho
 
+## Padrões Visuais
+
+### Cards e Containers
+
+| Tipo | Classes Tailwind | Uso |
+|------|------------------|-----|
+| **Container** | `rounded-xl border border-zinc-700 bg-zinc-900/50` | Seções principais, colunas, painéis |
+| **Item** | `rounded-lg border border-zinc-700 bg-zinc-800` | Cards de task, itens de lista, linhas |
+| **Accent** | `rounded-xl border border-{cor}-500/20 bg-zinc-800/50` | Cards de métricas com destaque colorido |
+| **Interactive** | `hover:border-zinc-500` ou `hover:border-{cor}-500/40` | Estados de hover |
+
+### Sistema de Cores
+
+#### Status (TaskStatus)
+
+| Status | Cor | Hex | Uso |
+|--------|-----|-----|-----|
+| Inbox | `zinc` | `#a1a1aa` | Tasks não triadas |
+| Backlog | `slate` | `#94a3b8` | Tasks para depois |
+| Todo | `blue` | `#60a5fa` | Tasks prontas para fazer |
+| Doing | `amber` | `#fbbf24` | Tasks em progresso |
+| Done | `emerald` | `#34d399` | Tasks concluídas |
+
+#### Prioridade (TaskPriority)
+
+| Prioridade | Cor | Ícone | Uso |
+|------------|-----|-------|-----|
+| Urgent | `red` | `exclamation-circle` | Crítico, resolver imediatamente |
+| High | `orange` | `arrow-up` | Alta prioridade |
+| Medium | `blue` | `minus` | Prioridade padrão |
+| Low | `zinc` | `arrow-down` | Pode esperar |
+
+### Sidebar
+
+- Organizada em categorias: **Planejamento**, **Acompanhamento**, **Análise**
+- Dashboard fica separado no topo (sem heading)
+- Badge de semana exibe "Semana X" (ex: "Semana 8")
+
 ## Status Time Tracking (Epic 11)
 
 Rastreamento automático de quanto tempo cada task passa em cada status (Inbox → Backlog → Todo → Doing → Done). Inspirado no Linear — sem ação do usuário.

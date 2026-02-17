@@ -440,7 +440,10 @@ new class extends Component
 ?>
 
 <div class="flex h-full w-full flex-1 flex-col gap-4 p-4 sm:gap-6 sm:p-6">
-    <flux:heading size="xl">Dashboard</flux:heading>
+    <div class="flex items-center justify-between">
+        <flux:heading size="xl">Dashboard</flux:heading>
+        <x-color-legend />
+    </div>
 
     {{-- AI Insights Section --}}
     @if ($this->isAiEnabled())

@@ -71,23 +71,88 @@ new class extends Component
     }
 
     /**
-     * Calculate average time in each status for tasks completed in the last 30 days.
+     * Calculate average time in each status for tasks completed in the last 30 days,
+     * with trend indicators comparing to the previous 30-day period.
      *
-     * @return array<string, array{label: string, avg_minutes: float, formatted: string, color: string, hex_color: string}>
+     * @return array<string, array{label: string, avg_minutes: float, formatted: string, color: string, hex_color: string, prev_avg_minutes: float|null, prev_formatted: string|null, trend_direction: string|null, trend_pct: float|null}>
      */
     #[Computed]
     public function averageTimeByStatus(): array
     {
-        $doneTasks = Task::query()
+        $now = Carbon::now();
+
+        $currentPeriodTasks = Task::query()
             ->where('status', TaskStatus::Done)
-            ->where('completed_at', '>=', Carbon::now()->subDays(30))
+            ->where('completed_at', '>=', $now->copy()->subDays(30))
             ->with('statusChanges')
             ->get();
 
-        if ($doneTasks->isEmpty()) {
+        $previousPeriodTasks = Task::query()
+            ->where('status', TaskStatus::Done)
+            ->where('completed_at', '>=', $now->copy()->subDays(60))
+            ->where('completed_at', '<', $now->copy()->subDays(30))
+            ->with('statusChanges')
+            ->get();
+
+        if ($currentPeriodTasks->isEmpty()) {
             return [];
         }
 
+        $currentAverages = $this->calculateAveragesForTasks($currentPeriodTasks);
+        $previousAverages = $this->calculateAveragesForTasks($previousPeriodTasks);
+
+        $averages = [];
+
+        foreach (TaskStatus::cases() as $status) {
+            $statusValue = $status->value;
+
+            if (! isset($currentAverages[$statusValue])) {
+                continue;
+            }
+
+            $avgMinutes = $currentAverages[$statusValue];
+            $prevAvgMinutes = $previousAverages[$statusValue] ?? null;
+
+            $trendDirection = null;
+            $trendPct = null;
+
+            if ($prevAvgMinutes !== null && $prevAvgMinutes > 0) {
+                $diff = $avgMinutes - $prevAvgMinutes;
+                $trendPct = round(($diff / $prevAvgMinutes) * 100, 1);
+
+                if ($trendPct < -1) {
+                    $trendDirection = 'down';
+                } elseif ($trendPct > 1) {
+                    $trendDirection = 'up';
+                } else {
+                    $trendDirection = 'neutral';
+                }
+            }
+
+            $averages[$statusValue] = [
+                'label' => $status->label(),
+                'avg_minutes' => round($avgMinutes, 1),
+                'formatted' => $this->formatDuration($avgMinutes),
+                'color' => $status->color(),
+                'hex_color' => $status->hexColor(),
+                'prev_avg_minutes' => $prevAvgMinutes !== null ? round($prevAvgMinutes, 1) : null,
+                'prev_formatted' => $prevAvgMinutes !== null ? $this->formatDuration($prevAvgMinutes) : null,
+                'trend_direction' => $trendDirection,
+                'trend_pct' => $trendPct,
+            ];
+        }
+
+        return $averages;
+    }
+
+    /**
+     * Calculate average time in each status for a collection of tasks.
+     *
+     * @param  \Illuminate\Support\Collection<int, Task>  $tasks
+     * @return array<string, float>
+     */
+    private function calculateAveragesForTasks($tasks): array
+    {
         $totals = [];
         $counts = [];
 
@@ -96,7 +161,7 @@ new class extends Component
             $counts[$status->value] = 0;
         }
 
-        foreach ($doneTasks as $task) {
+        foreach ($tasks as $task) {
             $timeInStatus = $task->time_in_status;
 
             foreach ($timeInStatus as $statusValue => $minutes) {
@@ -112,19 +177,9 @@ new class extends Component
         foreach (TaskStatus::cases() as $status) {
             $count = $counts[$status->value];
 
-            if ($count === 0) {
-                continue;
+            if ($count > 0) {
+                $averages[$status->value] = $totals[$status->value] / $count;
             }
-
-            $avgMinutes = $totals[$status->value] / $count;
-
-            $averages[$status->value] = [
-                'label' => $status->label(),
-                'avg_minutes' => round($avgMinutes, 1),
-                'formatted' => $this->formatDuration($avgMinutes),
-                'color' => $status->color(),
-                'hex_color' => $status->hexColor(),
-            ];
         }
 
         return $averages;
@@ -525,12 +580,35 @@ new class extends Component
         @if (count($this->averageTimeByStatus) > 0)
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
                 @foreach ($this->averageTimeByStatus as $statusValue => $data)
-                    <div class="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
+                    <div
+                        class="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3"
+                        @if ($data['prev_formatted'])
+                            x-data
+                            x-tooltip.raw="Período anterior: {{ $data['prev_formatted'] }}"
+                        @endif
+                    >
                         <div class="mb-1 flex items-center gap-1.5">
                             <div class="size-2.5 rounded-full" style="background-color: {{ $data['hex_color'] }};"></div>
                             <flux:text class="text-xs text-zinc-400">{{ $data['label'] }}</flux:text>
                         </div>
-                        <flux:heading size="sm">{{ $data['formatted'] }}</flux:heading>
+                        <div class="flex items-center gap-2">
+                            <flux:heading size="sm">{{ $data['formatted'] }}</flux:heading>
+                            @if ($data['trend_direction'] === 'down')
+                                <span class="flex items-center gap-0.5 text-xs font-medium text-emerald-400" title="Melhorou {{ abs($data['trend_pct']) }}% vs período anterior">
+                                    <flux:icon name="arrow-trending-down" class="size-3.5" />
+                                    <span>{{ abs($data['trend_pct']) }}%</span>
+                                </span>
+                            @elseif ($data['trend_direction'] === 'up')
+                                <span class="flex items-center gap-0.5 text-xs font-medium text-red-400" title="Piorou {{ abs($data['trend_pct']) }}% vs período anterior">
+                                    <flux:icon name="arrow-trending-up" class="size-3.5" />
+                                    <span>+{{ abs($data['trend_pct']) }}%</span>
+                                </span>
+                            @elseif ($data['trend_direction'] === 'neutral')
+                                <span class="flex items-center gap-0.5 text-xs font-medium text-zinc-500" title="Estável vs período anterior">
+                                    <flux:icon name="minus" class="size-3.5" />
+                                </span>
+                            @endif
+                        </div>
                     </div>
                 @endforeach
             </div>

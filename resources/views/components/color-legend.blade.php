@@ -5,15 +5,15 @@
         Legenda
     </flux:button>
 
-    <flux:menu class="w-64">
+    <flux:menu class="min-w-72">
         @if ($type === 'status' || $type === 'all')
             <flux:menu.group heading="Status">
                 @foreach (\App\Enums\TaskStatus::cases() as $status)
-                    <div class="flex items-center gap-2 px-3 py-1.5">
-                        <flux:badge size="sm" color="{{ $status->color() }}" icon="{{ $status->icon() }}" class="w-24 justify-center">
+                    <div class="flex items-center gap-3 px-3 py-1.5">
+                        <flux:badge size="sm" color="{{ $status->color() }}" icon="{{ $status->icon() }}" class="w-32 shrink-0 justify-center">
                             {{ $status->label() }}
                         </flux:badge>
-                        <flux:text size="xs" class="text-zinc-500">
+                        <flux:text size="xs" class="whitespace-nowrap text-zinc-500">
                             @switch($status)
                                 @case(\App\Enums\TaskStatus::Inbox)
                                     Não triada
@@ -44,14 +44,14 @@
 
             <flux:menu.group heading="Prioridade">
                 @foreach (\App\Enums\TaskPriority::cases() as $priority)
-                    <div class="flex items-center gap-2 px-3 py-1.5">
-                        <flux:badge size="sm" color="{{ $priority->color() }}" icon="{{ $priority->icon() }}" class="w-24 justify-center">
+                    <div class="flex items-center gap-3 px-3 py-1.5">
+                        <flux:badge size="sm" color="{{ $priority->color() }}" icon="{{ $priority->icon() }}" class="w-32 shrink-0 justify-center">
                             {{ $priority->label() }}
                         </flux:badge>
-                        <flux:text size="xs" class="text-zinc-500">
+                        <flux:text size="xs" class="whitespace-nowrap text-zinc-500">
                             @switch($priority)
                                 @case(\App\Enums\TaskPriority::Urgent)
-                                    Resolver imediatamente
+                                    Crítico
                                     @break
                                 @case(\App\Enums\TaskPriority::High)
                                     Alta prioridade

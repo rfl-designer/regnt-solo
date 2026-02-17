@@ -25,7 +25,7 @@ test('inbox page renders correctly for authenticated users', function () {
 test('inbox component renders successfully', function () {
     Livewire::test('pages::inbox')
         ->assertSuccessful()
-        ->assertSee('Inbox');
+        ->assertSee('Caixa de Entrada');
 });
 
 test('inbox lists tasks with inbox status', function () {

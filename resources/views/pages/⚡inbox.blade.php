@@ -26,6 +26,11 @@ new class extends Component
 
     public bool $aiLoading = false;
 
+    /** @var array<int, int> */
+    public array $selectedTasks = [];
+
+    public bool $showBulkDeleteModal = false;
+
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Task>
      */
@@ -77,6 +82,71 @@ new class extends Component
         ];
     }
 
+    public function selectAll(): void
+    {
+        $this->selectedTasks = $this->tasks->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    public function deselectAll(): void
+    {
+        $this->selectedTasks = [];
+    }
+
+    public function bulkMoveToStatus(string $status): void
+    {
+        if (empty($this->selectedTasks)) {
+            return;
+        }
+
+        $newStatus = TaskStatus::from($status);
+        $updateData = ['status' => $newStatus];
+
+        if ($newStatus === TaskStatus::Done) {
+            $updateData['completed_at'] = now();
+        }
+
+        Task::inbox()
+            ->whereIn('id', $this->selectedTasks)
+            ->get()
+            ->each(fn (Task $task) => $task->update($updateData));
+
+        $count = count($this->selectedTasks);
+        $this->selectedTasks = [];
+
+        unset($this->tasks);
+        $this->dispatch('task-moved');
+
+        Flux::toast(variant: 'success', heading: "{$count} tasks movidas", text: "Para: {$newStatus->label()}");
+    }
+
+    public function confirmBulkDelete(): void
+    {
+        if (empty($this->selectedTasks)) {
+            return;
+        }
+
+        $this->showBulkDeleteModal = true;
+    }
+
+    public function bulkDelete(): void
+    {
+        if (empty($this->selectedTasks)) {
+            return;
+        }
+
+        $count = count($this->selectedTasks);
+
+        Task::inbox()->whereIn('id', $this->selectedTasks)->get()->each(fn (Task $task) => $task->delete());
+
+        $this->selectedTasks = [];
+        $this->showBulkDeleteModal = false;
+
+        unset($this->tasks);
+        $this->dispatch('task-moved');
+
+        Flux::toast(text: 'Tasks removidas da caixa de entrada', variant: 'success', heading: "{$count} tasks excluídas");
+    }
+
     public function moveToStatus(int $taskId, string $status): void
     {
         $task = Task::inbox()->findOrFail($taskId);
@@ -95,7 +165,7 @@ new class extends Component
 
         $this->dispatch('task-moved');
 
-        Flux::toast(variant: 'success', heading: 'Movida para Pendentes', text: $task->title);
+        Flux::toast(variant: 'success', heading: "Movida para {$newStatus->label()}", text: $task->title);
     }
 
     public function confirmDelete(int $taskId): void
@@ -268,8 +338,62 @@ new class extends Component
             </div>
         </div>
     @else
+        {{-- Bulk Actions Bar --}}
+        @if (count($selectedTasks) > 0)
+            <div class="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5">
+                <flux:text class="text-sm font-medium text-zinc-300">
+                    {{ count($selectedTasks) }} {{ count($selectedTasks) === 1 ? 'task selecionada' : 'tasks selecionadas' }}
+                </flux:text>
+
+                <flux:separator vertical class="h-4" />
+
+                <flux:dropdown>
+                    <flux:button variant="ghost" size="sm" icon-trailing="chevron-down">
+                        Mover para
+                    </flux:button>
+                    <flux:menu>
+                        @foreach ($this->availableStatuses() as $status)
+                            <flux:menu.item
+                                wire:click="bulkMoveToStatus('{{ $status->value }}')"
+                                icon="{{ $status->icon() }}"
+                            >
+                                {{ $status->label() }}
+                            </flux:menu.item>
+                        @endforeach
+                    </flux:menu>
+                </flux:dropdown>
+
+                <flux:button
+                    variant="ghost"
+                    size="sm"
+                    icon="trash"
+                    wire:click="confirmBulkDelete"
+                    class="text-red-400 hover:text-red-300"
+                >
+                    Excluir
+                </flux:button>
+
+                <div class="ml-auto">
+                    <flux:button variant="ghost" size="sm" wire:click="deselectAll">
+                        Limpar seleção
+                    </flux:button>
+                </div>
+            </div>
+        @endif
+
         <flux:table>
             <flux:table.columns>
+                <flux:table.column class="w-10">
+                    @php
+                        $allSelected = count($selectedTasks) === $this->tasks->count() && $this->tasks->count() > 0;
+                        $someSelected = count($selectedTasks) > 0 && count($selectedTasks) < $this->tasks->count();
+                    @endphp
+                    <flux:checkbox
+                        :checked="$allSelected"
+                        :indeterminate="$someSelected"
+                        wire:click="{{ $allSelected ? 'deselectAll' : 'selectAll' }}"
+                    />
+                </flux:table.column>
                 <flux:table.column>Task</flux:table.column>
                 <flux:table.column>Projeto</flux:table.column>
                 <flux:table.column>Criada</flux:table.column>
@@ -279,6 +403,9 @@ new class extends Component
             <flux:table.rows>
                 @foreach ($this->tasks as $task)
                     <flux:table.row :key="$task->id">
+                        <flux:table.cell>
+                            <flux:checkbox wire:model.live="selectedTasks" value="{{ $task->id }}" />
+                        </flux:table.cell>
                         <flux:table.cell variant="strong">
                             {{ $task->title }}
                         </flux:table.cell>
@@ -307,15 +434,21 @@ new class extends Component
 
                         <flux:table.cell>
                             <div class="flex items-center justify-end gap-2">
-                                <flux:button
-                                    variant="ghost"
-                                    size="sm"
-                                    wire:click="moveToBacklog({{ $task->id }})"
-                                    wire:loading.attr="disabled"
-                                    wire:target="moveToBacklog({{ $task->id }})"
-                                >
-                                    → Pendentes
-                                </flux:button>
+                                <flux:dropdown>
+                                    <flux:button variant="ghost" size="sm" icon-trailing="chevron-down">
+                                        Mover
+                                    </flux:button>
+                                    <flux:menu>
+                                        @foreach ($this->availableStatuses() as $status)
+                                            <flux:menu.item
+                                                wire:click="moveToStatus({{ $task->id }}, '{{ $status->value }}')"
+                                                icon="{{ $status->icon() }}"
+                                            >
+                                                {{ $status->label() }}
+                                            </flux:menu.item>
+                                        @endforeach
+                                    </flux:menu>
+                                </flux:dropdown>
 
                                 <flux:button
                                     variant="ghost"
@@ -348,6 +481,28 @@ new class extends Component
                 <flux:button variant="danger" wire:click="deleteTask" wire:loading.attr="disabled">
                     <span wire:loading.remove wire:target="deleteTask">Excluir</span>
                     <span wire:loading wire:target="deleteTask">Excluindo...</span>
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
+
+    {{-- Bulk Delete confirmation modal --}}
+    <flux:modal wire:model.self="showBulkDeleteModal" class="md:w-96">
+        <div class="space-y-4">
+            <div>
+                <flux:heading size="lg">Excluir tasks</flux:heading>
+                <flux:text class="mt-1">
+                    Tem certeza que deseja excluir <strong>{{ count($selectedTasks) }} tasks</strong>? Esta ação não pode ser desfeita.
+                </flux:text>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="ghost">Cancelar</flux:button>
+                </flux:modal.close>
+                <flux:button variant="danger" wire:click="bulkDelete" wire:loading.attr="disabled">
+                    <span wire:loading.remove wire:target="bulkDelete">Excluir {{ count($selectedTasks) }}</span>
+                    <span wire:loading wire:target="bulkDelete">Excluindo...</span>
                 </flux:button>
             </div>
         </div>

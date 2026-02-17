@@ -98,3 +98,46 @@ select:focus[data-flux-control] {
 .markdown-viewer td {
     @apply border border-zinc-700 px-3 py-2;
 }
+
+/* Kanban Drag-and-Drop Styles */
+.kanban-card {
+    @apply transition-all duration-200;
+}
+
+/* Card being dragged - SortableJS adds .sortable-drag class */
+.kanban-card.sortable-drag {
+    @apply opacity-90 scale-[1.02] rotate-1 z-50;
+}
+
+.kanban-card.sortable-drag > div {
+    @apply !border-indigo-500 !shadow-xl !shadow-indigo-500/30;
+}
+
+/* Ghost placeholder where card will be dropped */
+.kanban-card.sortable-ghost {
+    @apply opacity-30;
+}
+
+.kanban-card.sortable-ghost > div {
+    @apply !border-dashed !border-indigo-500/50 !bg-indigo-500/5;
+}
+
+/* Chosen card (selected but not yet dragged) */
+.kanban-card.sortable-chosen > div {
+    @apply !border-indigo-500/70;
+}
+
+/* Drop zone highlight when dragging over */
+.kanban-dropzone:has(.sortable-ghost) {
+    @apply bg-indigo-500/5 ring-1 ring-inset ring-indigo-500/20;
+}
+
+/* Handle cursor states */
+[wire\:sort\:handle] {
+    @apply cursor-grab;
+}
+
+[wire\:sort\:handle]:active,
+.kanban-card.sortable-drag [wire\:sort\:handle] {
+    @apply cursor-grabbing;
+}

@@ -83,6 +83,37 @@ new class extends Component
     }
 
     /**
+     * Get total estimated minutes for a column.
+     */
+    public function getColumnEstimate(TaskStatus $status): int
+    {
+        return (int) $this->buildColumnQuery($status)->sum('estimated_minutes');
+    }
+
+    /**
+     * Format minutes as human-readable duration (e.g., "2h 30m" or "45m").
+     */
+    public function formatDuration(int $minutes): string
+    {
+        if ($minutes === 0) {
+            return '';
+        }
+
+        $hours = intdiv($minutes, 60);
+        $mins = $minutes % 60;
+
+        if ($hours > 0 && $mins > 0) {
+            return "{$hours}h {$mins}m";
+        }
+
+        if ($hours > 0) {
+            return "{$hours}h";
+        }
+
+        return "{$mins}m";
+    }
+
+    /**
      * Check if a column has unassigned tasks.
      */
     public function hasUnassignedTasks(TaskStatus $status): bool
@@ -231,6 +262,8 @@ new class extends Component
                 $tasks = $this->getColumnTasks($status, withProject: true);
                 $unassignedTasks = $this->getColumnTasks($status, withProject: false);
                 $total = $this->getColumnTotal($status);
+                $estimate = $this->getColumnEstimate($status);
+                $estimateFormatted = $this->formatDuration($estimate);
                 $limit = $limits[$status->value];
                 $hasMore = $total > $limit;
             @endphp
@@ -242,7 +275,12 @@ new class extends Component
                         <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
                         <flux:heading size="sm">{{ $status->label() }}</flux:heading>
                     </div>
-                    <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                    <div class="flex items-center gap-2">
+                        @if ($estimateFormatted)
+                            <flux:badge size="sm" color="zinc" icon="clock">{{ $estimateFormatted }}</flux:badge>
+                        @endif
+                        <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                    </div>
                 </div>
 
                 {{-- Tasks List --}}

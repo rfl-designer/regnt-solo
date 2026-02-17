@@ -74,6 +74,11 @@
 
             <flux:spacer />
 
+            {{-- Command Palette trigger for mobile --}}
+            <flux:modal.trigger name="command-palette">
+                <flux:button variant="ghost" size="sm" icon="magnifying-glass" class="shrink-0" />
+            </flux:modal.trigger>
+
             <livewire:global-timer />
 
             <flux:dropdown position="top" align="end">

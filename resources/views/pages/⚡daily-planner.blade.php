@@ -405,43 +405,43 @@ new class extends Component
 
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-4 p-6">
+<div class="flex h-full w-full flex-1 flex-col gap-4 p-4 sm:p-6">
     {{-- Header --}}
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div class="flex items-center gap-4">
+    <div class="flex flex-col gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
             <flux:heading size="xl">Daily Planner</flux:heading>
 
-            @if ($this->isPast)
-                <flux:badge color="zinc" icon="lock-closed">Plano passado (somente leitura)</flux:badge>
-            @elseif ($this->isToday)
-                <flux:badge color="emerald" icon="check-circle">Hoje</flux:badge>
-            @endif
+            <div class="flex items-center gap-2">
+                @if ($this->isAiEnabled())
+                    <flux:button
+                        variant="subtle"
+                        icon="sparkles"
+                        wire:click="suggestDailyPlan"
+                        wire:loading.attr="disabled"
+                        wire:target="suggestDailyPlan"
+                        size="sm"
+                    >
+                        <span wire:loading.remove wire:target="suggestDailyPlan" class="hidden sm:inline">Sugerir plano</span>
+                        <span wire:loading wire:target="suggestDailyPlan" class="hidden sm:inline">Analisando...</span>
+                    </flux:button>
+                @endif
+
+                <flux:date-picker wire:model.live="date" with-today locale="pt-BR" />
+            </div>
         </div>
 
-        <div class="flex items-center gap-3">
-            @if ($this->isAiEnabled())
-                <flux:button
-                    variant="subtle"
-                    icon="sparkles"
-                    wire:click="suggestDailyPlan"
-                    wire:loading.attr="disabled"
-                    wire:target="suggestDailyPlan"
-                    size="sm"
-                >
-                    <span wire:loading.remove wire:target="suggestDailyPlan">Sugerir plano</span>
-                    <span wire:loading wire:target="suggestDailyPlan">Analisando...</span>
-                </flux:button>
-            @endif
-
-            <flux:date-picker wire:model.live="date" with-today locale="pt-BR" />
-        </div>
+        @if ($this->isPast)
+            <flux:badge color="zinc" icon="lock-closed" class="w-fit">Plano passado (somente leitura)</flux:badge>
+        @elseif ($this->isToday)
+            <flux:badge color="emerald" icon="check-circle" class="w-fit">Hoje</flux:badge>
+        @endif
     </div>
 
     {{-- Date display + Progress --}}
-    <div class="flex flex-col gap-3 rounded-xl border border-zinc-700 bg-zinc-900/50 p-4">
-        <div class="flex items-center justify-between">
+    <div class="flex flex-col gap-3 rounded-xl border border-zinc-700 bg-zinc-900/50 p-3 sm:p-4">
+        <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <flux:text class="text-sm capitalize text-zinc-300">
-                {{ Carbon::parse($this->date)->translatedFormat('l, d \d\e F \d\e Y') }}
+                {{ Carbon::parse($this->date)->translatedFormat('l, d \d\e F') }}
             </flux:text>
 
             @if ($this->plan->tasks->isNotEmpty())

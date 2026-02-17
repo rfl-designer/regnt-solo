@@ -383,12 +383,13 @@ new class extends Component
         <flux:heading size="xl">Templates e Recorrentes</flux:heading>
     </div>
 
-    <flux:tabs wire:model="tab">
-        <flux:tab name="templates" icon="clipboard-document-list">Templates</flux:tab>
-        <flux:tab name="recurring" icon="arrow-path">Recorrentes</flux:tab>
-    </flux:tabs>
+    <flux:tab.group>
+        <flux:tabs wire:model="tab">
+            <flux:tab name="templates" icon="clipboard-document-list">Templates</flux:tab>
+            <flux:tab name="recurring" icon="arrow-path">Recorrentes</flux:tab>
+        </flux:tabs>
 
-    <flux:tab.panel name="templates">
+        <flux:tab.panel name="templates">
         <div class="space-y-4">
             <div class="flex items-center justify-between">
                 <flux:text class="text-zinc-400">Templates são modelos reutilizáveis para criar tasks rapidamente.</flux:text>
@@ -590,7 +591,8 @@ new class extends Component
                 </flux:table>
             @endif
         </div>
-    </flux:tab.panel>
+        </flux:tab.panel>
+    </flux:tab.group>
 
     {{-- Template Form Modal --}}
     <flux:modal wire:model.self="showTemplateForm" class="md:w-[32rem]">

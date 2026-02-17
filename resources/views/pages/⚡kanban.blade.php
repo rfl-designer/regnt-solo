@@ -353,17 +353,17 @@ new class extends Component
                         wire:sort="handleSort"
                         wire:sort:group="tasks"
                         wire:sort:group-id="{{ $status->value }}"
-                        class="flex min-h-[2rem] flex-col gap-2"
+                        class="kanban-dropzone flex min-h-[2rem] flex-col gap-2 rounded-lg transition-colors duration-200"
                     >
                         @forelse ($tasks as $task)
-                            <li wire:key="task-{{ $task->id }}" wire:sort:item="{{ $task->id }}">
+                            <li wire:key="task-{{ $task->id }}" wire:sort:item="{{ $task->id }}" class="kanban-card">
                                 <div
-                                    class="group cursor-pointer rounded-lg border border-zinc-700 bg-zinc-800 p-3 transition hover:border-zinc-500"
+                                    class="group cursor-pointer rounded-lg border border-zinc-700 bg-zinc-800 p-3 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
                                     wire:click="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
                                 >
                                     {{-- Card Top: Handle + Title --}}
                                     <div class="flex items-start gap-2">
-                                        <div wire:sort:handle class="mt-0.5 shrink-0 cursor-grab text-zinc-600 hover:text-zinc-400">
+                                        <div wire:sort:handle class="mt-0.5 shrink-0 cursor-grab text-zinc-600 transition-colors hover:text-zinc-300 active:cursor-grabbing">
                                             <flux:icon name="grip-vertical" class="size-4" />
                                         </div>
                                         <span class="line-clamp-2 flex-1 text-sm font-medium text-zinc-200">{{ $task->title }}</span>
@@ -445,17 +445,17 @@ new class extends Component
                                 wire:sort="handleSort"
                                 wire:sort:group="tasks"
                                 wire:sort:group-id="{{ $status->value }}"
-                                class="flex flex-col gap-2"
+                                class="kanban-dropzone flex flex-col gap-2 rounded-lg transition-colors duration-200"
                             >
                                 @foreach ($unassignedTasks as $task)
-                                    <li wire:key="task-{{ $task->id }}" wire:sort:item="{{ $task->id }}">
+                                    <li wire:key="task-{{ $task->id }}" wire:sort:item="{{ $task->id }}" class="kanban-card">
                                         <div
-                                            class="group cursor-pointer rounded-lg border border-zinc-700/50 bg-zinc-800/50 p-3 transition hover:border-zinc-500"
+                                            class="group cursor-pointer rounded-lg border border-zinc-700/50 bg-zinc-800/50 p-3 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
                                             wire:click="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
                                         >
                                             {{-- Card Top: Handle + Title --}}
                                             <div class="flex items-start gap-2">
-                                                <div wire:sort:handle class="mt-0.5 shrink-0 cursor-grab text-zinc-600 hover:text-zinc-400">
+                                                <div wire:sort:handle class="mt-0.5 shrink-0 cursor-grab text-zinc-600 transition-colors hover:text-zinc-300 active:cursor-grabbing">
                                                     <flux:icon name="grip-vertical" class="size-4" />
                                                 </div>
                                                 <span class="line-clamp-2 flex-1 text-sm font-medium text-zinc-300">{{ $task->title }}</span>

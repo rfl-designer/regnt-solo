@@ -313,7 +313,7 @@ new class extends Component
                                         class="ml-1 rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
                                         title="Colapsar coluna"
                                     >
-                                        <flux:icon name="chevron-right" class="size-4" />
+                                        <flux:icon name="chevron-left" class="size-4" />
                                     </button>
                                 </div>
                             </div>
@@ -324,7 +324,7 @@ new class extends Component
                             <div class="flex flex-col items-center gap-2">
                                 <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
                                 <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
-                                <flux:icon name="chevron-left" class="size-4 text-zinc-500" />
+                                <flux:icon name="chevron-right" class="size-4 text-zinc-500" />
                             </div>
                         </template>
                     </div>

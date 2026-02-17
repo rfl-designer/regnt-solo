@@ -39,7 +39,7 @@
 
 ## Models & Enums
 
-- Models: `App\Models\` — Project, Task, TimeEntry, DailyPlan, TaskStatusChange, WeeklyReview
+- Models: `App\Models\` — Project, Task, TimeEntry, DailyPlan, TaskStatusChange, WeeklyReview, RecurringTask, TaskTemplate
 - Enums: `App\Enums\` (PHP native enums) — cada enum implementa `label()` (PT-BR), `color()`, `icon()`
 - `Task.completed_at`: preenchido ao marcar done
 - `Task.sort_order`: por coluna (por status)
@@ -223,6 +223,64 @@ SOLOBOARD_AI_MODEL=claude-sonnet-4-20250514  # modelo utilizado
 - `tests/Feature/AiIntegrationTest.php` — testes de integração no Daily Planner e Inbox
 - `tests/Feature/AiInsightsTest.php` — testes dos insights no Dashboard
 
+## Recurring Tasks & Templates (Epic 17)
+
+Tasks recorrentes e templates para automatizar atividades repetitivas e manter consistência nos workflows.
+
+### Model RecurringTask
+
+- **Campos**: `title`, `description`, `frequency` (enum), `day_of_week`, `day_of_month`, `priority`, `next_run`, `last_run`, `is_active`, `estimated_minutes`, `project_id`
+- **Enum RecurrenceFrequency**: `daily`, `weekdays`, `weekly`, `biweekly`, `monthly`
+- **Relacionamentos**: `belongsTo Project`, `hasMany Task`
+- **Métodos**:
+  - `isDue(): bool` — verifica se está pendente (next_run <= hoje e is_active)
+  - `createTask(): Task` — cria task a partir da recurring task
+  - `calculateNextRun(): Carbon` — calcula próxima execução baseada na frequência
+  - `process(): Task` — cria task e atualiza next_run/last_run
+
+### Model TaskTemplate
+
+- **Campos**: `name`, `slug` (auto-gerado), `description`, `default_priority`, `default_estimated_minutes`, `icon`, `color`, `is_system`
+- **Relacionamentos**: `hasMany Task`
+- **Métodos**:
+  - `createTask(array $overrides = []): Task` — cria task a partir do template
+- **Scopes**: `system()`, `custom()`
+- **Templates de Sistema**: Code Review, Deploy Checklist, Bug Investigation, Daily Standup, Sprint Planning, Feature Research
+
+### Artisan Command
+
+- `soloboard:process-recurring` — processa recurring tasks pendentes
+  - `--dry-run` — simula sem criar tasks
+  - Roda via scheduler diariamente às 06:00
+
+### Página Templates
+
+- **Rota**: `/templates` (`routes/web.php`)
+- **Componente**: `resources/views/pages/⚡templates.blade.php`
+- **Abas**:
+  - **Templates**: CRUD de templates, usar template para criar task
+  - **Recorrentes**: CRUD de recurring tasks, toggle ativo/pausado, executar agora
+
+### Task Relationships
+
+- `Task.recurring_task_id` — FK para recurring task de origem (nullable)
+- `Task.task_template_id` — FK para template de origem (nullable)
+- Métodos: `isFromRecurring(): bool`, `isFromTemplate(): bool`
+
+### MCP Tools
+
+- `list-templates` — lista templates disponíveis
+- `apply-template` — cria task a partir de template
+- `list-recurring-tasks` — lista recurring tasks
+- `create-recurring-task` — cria nova recurring task
+- `toggle-recurring-task` — ativa/pausa recurring task
+
+### Testes
+
+- `tests/Feature/RecurringTaskTest.php` — model, command, cálculos de next_run
+- `tests/Feature/TaskTemplateTest.php` — model, factory, seeder
+- `tests/Feature/TemplatesPageTest.php` — UI, CRUD, integração
+
 ## Keyboard Shortcuts
 
 | Atalho   | Ação                        |
@@ -303,7 +361,7 @@ This project has domain-specific skills available. You MUST activate the relevan
 - `mcp-development` — Develops MCP servers, tools, resources, and prompts. Activates when creating MCP tools, resources, or prompts; setting up AI integrations; debugging MCP connections; working with routes/ai.php; or when the user mentions MCP, Model Context Protocol, AI tools, AI server, or building tools for AI assistants.
 - `fluxui-development` — Develops UIs with Flux UI Pro components. Activates when creating buttons, forms, modals, inputs, tables, charts, date pickers, or UI components; replacing HTML elements with Flux; working with flux: components; or when the user mentions Flux, component library, UI components, form fields, or asks about available Flux components.
 - `livewire-development` — Develops reactive Livewire 4 components. Activates when creating, updating, or modifying Livewire components; working with wire:model, wire:click, wire:loading, or any wire: directives; adding real-time updates, loading states, or reactivity; debugging component behavior; writing Livewire tests; or when the user mentions Livewire, component, counter, or reactive UI.
-- `pest-testing` — Tests applications using the Pest 4 PHP framework. Activates when writing tests, creating unit or feature tests, adding assertions, testing Livewire components, browser testing, debugging test failures, working with datasets or mocking; or when the user mentions test, spec, TDD, expects, assertion, coverage, or needs to verify functionality works.
+- `pest-testing` — Tests applications using the Pest 4 PHP framework. Activates when writing tests, creating unit or feature tests, adding assertions, testing Livewire components, browser testing, debugging test failures, working with datasets or mocking; or when the user mentions test, spec, TDD, expects, assertion, coverage, or needs to verify functionality works. ALSO activates when: running 'php artisan test', creating test files, fixing failing tests, adding test coverage, implementing red-green-refactor, writing it() or test() blocks, using Livewire::test(), or when any implementation needs verification through automated tests.
 - `tailwindcss-development` — Styles applications using Tailwind CSS v4 utilities. Activates when adding styles, restyling components, working with gradients, spacing, layout, flex, grid, responsive design, dark mode, colors, typography, or borders; or when the user mentions CSS, styling, classes, Tailwind, restyle, hero section, cards, buttons, or any visual/UI changes.
 - `developing-with-fortify` — Laravel Fortify headless authentication backend development. Activate when implementing authentication features including login, registration, password reset, email verification, two-factor authentication (2FA/TOTP), profile updates, headless auth, authentication scaffolding, or auth guards in Laravel applications.
 

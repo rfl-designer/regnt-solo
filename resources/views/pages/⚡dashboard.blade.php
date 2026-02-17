@@ -439,7 +439,7 @@ new class extends Component
 
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-6 p-6">
+<div class="flex h-full w-full flex-1 flex-col gap-4 p-4 sm:gap-6 sm:p-6">
     <flux:heading size="xl">Dashboard</flux:heading>
 
     {{-- AI Insights Section --}}
@@ -503,7 +503,7 @@ new class extends Component
         @endif
     @endif
 
-    <div class="grid auto-rows-min gap-4 md:grid-cols-3">
+    <div class="grid auto-rows-min gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {{-- Tasks Concluídas esta Semana --}}
         <a
             href="{{ route('kanban') }}?status=done"
@@ -514,10 +514,10 @@ new class extends Component
                 <div class="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10">
                     <flux:icon name="check-circle" class="size-5 text-emerald-400" />
                 </div>
-                <div>
+                <div class="min-w-0">
                     <flux:text class="text-xs text-zinc-400">Concluídas esta semana</flux:text>
                     @if ($this->tasksCompletedThisWeek > 0)
-                        <flux:heading size="lg">{{ $this->tasksCompletedThisWeek }} {{ $this->tasksCompletedThisWeek === 1 ? 'task' : 'tasks' }}</flux:heading>
+                        <flux:heading size="lg" class="truncate">{{ $this->tasksCompletedThisWeek }} {{ $this->tasksCompletedThisWeek === 1 ? 'task' : 'tasks' }}</flux:heading>
                     @else
                         <flux:text class="text-sm text-zinc-500">Nenhuma ainda</flux:text>
                     @endif
@@ -535,10 +535,10 @@ new class extends Component
                 <div class="flex size-10 items-center justify-center rounded-lg bg-blue-500/10">
                     <flux:icon name="inbox-stack" class="size-5 text-blue-400" />
                 </div>
-                <div>
+                <div class="min-w-0">
                     <flux:text class="text-xs text-zinc-400">Inbox</flux:text>
                     @if ($this->inboxCount > 0)
-                        <flux:heading size="lg">{{ $this->inboxCount }} {{ $this->inboxCount === 1 ? 'task' : 'tasks' }}</flux:heading>
+                        <flux:heading size="lg" class="truncate">{{ $this->inboxCount }} {{ $this->inboxCount === 1 ? 'task' : 'tasks' }}</flux:heading>
                     @else
                         <flux:text class="text-sm text-zinc-500">Inbox vazio ✨</flux:text>
                     @endif
@@ -557,10 +557,10 @@ new class extends Component
                 <div class="flex size-10 items-center justify-center rounded-lg bg-amber-500/10">
                     <span class="text-lg">🎯</span>
                 </div>
-                <div>
+                <div class="min-w-0">
                     <flux:text class="text-xs text-zinc-400">Foco hoje</flux:text>
                     @if ($this->deepWorkToday > 0)
-                        <flux:heading size="lg">{{ $this->formatDuration($this->deepWorkToday) }}</flux:heading>
+                        <flux:heading size="lg" class="truncate">{{ $this->formatDuration($this->deepWorkToday) }}</flux:heading>
                     @else
                         <flux:text class="text-sm text-zinc-500">Inicie uma sessão de foco</flux:text>
                     @endif
@@ -578,7 +578,7 @@ new class extends Component
         </div>
 
         @if (count($this->averageTimeByStatus) > 0)
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                 @foreach ($this->averageTimeByStatus as $statusValue => $data)
                     <div
                         class="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3"
@@ -591,7 +591,7 @@ new class extends Component
                             <div class="size-2.5 rounded-full" style="background-color: {{ $data['hex_color'] }};"></div>
                             <flux:text class="text-xs text-zinc-400">{{ $data['label'] }}</flux:text>
                         </div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-1 sm:gap-2">
                             <flux:heading size="sm">{{ $data['formatted'] }}</flux:heading>
                             @if ($data['trend_direction'] === 'down')
                                 <span class="flex items-center gap-0.5 text-xs font-medium text-emerald-400" title="Melhorou {{ abs($data['trend_pct']) }}% vs período anterior">

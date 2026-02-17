@@ -28,6 +28,8 @@ class Task extends Model
      */
     protected $fillable = [
         'project_id',
+        'recurring_task_id',
+        'task_template_id',
         'title',
         'description',
         'status',
@@ -62,6 +64,38 @@ class Task extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * Get the recurring task this task was created from.
+     */
+    public function recurringTask(): BelongsTo
+    {
+        return $this->belongsTo(RecurringTask::class);
+    }
+
+    /**
+     * Get the template this task was created from.
+     */
+    public function taskTemplate(): BelongsTo
+    {
+        return $this->belongsTo(TaskTemplate::class);
+    }
+
+    /**
+     * Check if this task was created from a recurring task.
+     */
+    public function isFromRecurring(): bool
+    {
+        return $this->recurring_task_id !== null;
+    }
+
+    /**
+     * Check if this task was created from a template.
+     */
+    public function isFromTemplate(): bool
+    {
+        return $this->task_template_id !== null;
     }
 
     /**

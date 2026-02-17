@@ -105,6 +105,13 @@ test('kanban filters overdue tasks', function () {
         ->assertDontSee('Normal task');
 });
 
+test('kanban overdue filter button shows active state when enabled', function () {
+    Livewire::test('pages::kanban')
+        ->assertSet('filterOverdue', false)
+        ->set('filterOverdue', true)
+        ->assertSet('filterOverdue', true);
+});
+
 test('kanban load more increases limit', function () {
     Livewire::test('pages::kanban')
         ->assertSet('limits.backlog', 20)

@@ -90,9 +90,9 @@ test('available statuses returns all statuses except inbox', function () {
         ->not->toContain(TaskStatus::Inbox);
 });
 
-test('inbox page shows move to dropdown for each task', function () {
+test('inbox page shows move dropdown for each task', function () {
     Task::factory()->create(['title' => 'Task com dropdown']);
 
     Livewire::test('pages::inbox')
-        ->assertSee('Mover para');
+        ->assertSee('Mover');
 });

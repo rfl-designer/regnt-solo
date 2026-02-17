@@ -11,10 +11,15 @@
             </flux:sidebar.header>
 
             <flux:sidebar.nav>
-                <flux:sidebar.group :heading="__('Menu')" class="grid">
+                {{-- Visão Geral --}}
+                <flux:sidebar.group class="grid">
                     <flux:sidebar.item icon="chart-bar-square" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         Dashboard
                     </flux:sidebar.item>
+                </flux:sidebar.group>
+
+                {{-- Planejamento --}}
+                <flux:sidebar.group heading="Planejamento" class="grid">
                     <flux:sidebar.item icon="inbox" :href="route('inbox')" :current="request()->routeIs('inbox')" wire:navigate>
                         Caixa de Entrada
                         <livewire:inbox-badge />
@@ -29,6 +34,10 @@
                         Semana
                         <livewire:weekly-badge />
                     </flux:sidebar.item>
+                </flux:sidebar.group>
+
+                {{-- Acompanhamento --}}
+                <flux:sidebar.group heading="Acompanhamento" class="grid">
                     <flux:sidebar.item icon="folder" :href="route('projects')" :current="request()->routeIs('projects') || request()->routeIs('project.*') || request()->routeIs('document.*')" wire:navigate>
                         Projetos
                     </flux:sidebar.item>
@@ -38,6 +47,10 @@
                     <flux:sidebar.item icon="clipboard-document-check" :href="route('review')" :current="request()->routeIs('review')" wire:navigate>
                         Revisão
                     </flux:sidebar.item>
+                </flux:sidebar.group>
+
+                {{-- Análise --}}
+                <flux:sidebar.group heading="Análise" class="grid">
                     <flux:sidebar.item icon="chart-bar" :href="route('analytics')" :current="request()->routeIs('analytics')" wire:navigate>
                         Métricas
                     </flux:sidebar.item>

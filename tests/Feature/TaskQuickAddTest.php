@@ -72,7 +72,7 @@ test('input resets after creating a task', function () {
         ->assertSet('prefixSearch', '');
 });
 
-test('task is always created with inbox status', function () {
+test('task defaults to inbox status when no initial status is set', function () {
     Livewire::test('task-quick-add')
         ->set('rawInput', 'Tarefa inbox')
         ->call('createTask');
@@ -195,4 +195,78 @@ test('quick add creates normal task without > prefix', function () {
 
     $task = Task::first();
     expect($task->session_prompt)->toBeNull();
+});
+
+test('can open quick add with pre-selected status via event', function () {
+    Livewire::test('task-quick-add')
+        ->dispatch('open-quick-add-with-status', status: 'todo')
+        ->assertSet('initialStatus', 'todo');
+});
+
+test('creates task with initial status when set', function () {
+    Livewire::test('task-quick-add')
+        ->set('initialStatus', 'todo')
+        ->set('rawInput', 'Tarefa para Todo')
+        ->call('createTask');
+
+    $task = Task::first();
+    expect($task->status)->toBe(TaskStatus::Todo);
+});
+
+test('creates task with backlog status when initial status is backlog', function () {
+    Livewire::test('task-quick-add')
+        ->set('initialStatus', 'backlog')
+        ->set('rawInput', 'Tarefa para Backlog')
+        ->call('createTask');
+
+    $task = Task::first();
+    expect($task->status)->toBe(TaskStatus::Backlog);
+});
+
+test('creates task with doing status when initial status is doing', function () {
+    Livewire::test('task-quick-add')
+        ->set('initialStatus', 'doing')
+        ->set('rawInput', 'Tarefa em progresso')
+        ->call('createTask');
+
+    $task = Task::first();
+    expect($task->status)->toBe(TaskStatus::Doing);
+});
+
+test('creates task with done status when initial status is done', function () {
+    Livewire::test('task-quick-add')
+        ->set('initialStatus', 'done')
+        ->set('rawInput', 'Tarefa concluída')
+        ->call('createTask');
+
+    $task = Task::first();
+    expect($task->status)->toBe(TaskStatus::Done);
+});
+
+test('falls back to inbox when initial status is invalid', function () {
+    Livewire::test('task-quick-add')
+        ->set('initialStatus', 'invalid-status')
+        ->set('rawInput', 'Tarefa com status inválido')
+        ->call('createTask');
+
+    $task = Task::first();
+    expect($task->status)->toBe(TaskStatus::Inbox);
+});
+
+test('resets initial status after creating task', function () {
+    Livewire::test('task-quick-add')
+        ->set('initialStatus', 'todo')
+        ->set('rawInput', 'Tarefa para Todo')
+        ->call('createTask')
+        ->assertSet('initialStatus', null);
+});
+
+test('creates task in inbox when initial status is null', function () {
+    Livewire::test('task-quick-add')
+        ->set('initialStatus', null)
+        ->set('rawInput', 'Tarefa normal')
+        ->call('createTask');
+
+    $task = Task::first();
+    expect($task->status)->toBe(TaskStatus::Inbox);
 });

@@ -309,8 +309,16 @@ new class extends Component
                                     <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
                                     <button
                                         type="button"
+                                        @click.stop="$wire.$dispatch('open-quick-add-with-status', { status: '{{ $status->value }}' })"
+                                        class="rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
+                                        title="Nova task em {{ $status->label() }}"
+                                    >
+                                        <flux:icon name="plus" class="size-4" />
+                                    </button>
+                                    <button
+                                        type="button"
                                         @click.stop="toggleDoneColumn()"
-                                        class="ml-1 rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
+                                        class="rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
                                         title="Colapsar coluna"
                                     >
                                         <flux:icon name="chevron-left" class="size-4" />
@@ -340,6 +348,14 @@ new class extends Component
                                 <flux:badge size="sm" color="zinc" icon="clock">{{ $estimateFormatted }}</flux:badge>
                             @endif
                             <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                            <flux:button
+                                wire:click="$dispatch('open-quick-add-with-status', { status: '{{ $status->value }}' })"
+                                variant="ghost"
+                                size="sm"
+                                icon="plus"
+                                class="ml-1 !p-1"
+                                title="Nova task em {{ $status->label() }}"
+                            />
                         </div>
                     </div>
                 @endif

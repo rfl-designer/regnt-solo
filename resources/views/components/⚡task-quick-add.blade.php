@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Flux\Flux;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 new class extends Component
@@ -30,6 +31,15 @@ new class extends Component
 
     /** @var array<int, array{value: string, label: string}> */
     public array $suggestions = [];
+
+    public ?string $initialStatus = null;
+
+    #[On('open-quick-add-with-status')]
+    public function openWithStatus(string $status): void
+    {
+        $this->initialStatus = $status;
+        Flux::modal('quick-add')->show();
+    }
 
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Project>
@@ -155,20 +165,25 @@ new class extends Component
 
         $dueDate = $this->parseDateAlias($dateAlias);
 
+        $taskStatus = $this->initialStatus !== null
+            ? TaskStatus::tryFrom($this->initialStatus) ?? TaskStatus::Inbox
+            : TaskStatus::Inbox;
+
         Task::create([
             'title' => $title,
             'project_id' => $projectId,
-            'status' => TaskStatus::Inbox,
+            'status' => $taskStatus,
             'priority' => $taskPriority ?? TaskPriority::Medium,
             'due_date' => $dueDate,
             'session_prompt' => $sessionPrompt,
         ]);
 
-        Flux::toast(variant: 'success', heading: 'Task criada', text: $title);
+        $statusLabel = $taskStatus->label();
+        Flux::toast(variant: 'success', heading: 'Task criada', text: "{$title} → {$statusLabel}");
 
         $this->dispatch('task-created');
 
-        $this->reset('rawInput', 'selectedProjectId', 'selectedPriority', 'selectedDueDate', 'activePrefix', 'prefixSearch', 'isSessionMode', 'sessionPromptInput');
+        $this->reset('rawInput', 'selectedProjectId', 'selectedPriority', 'selectedDueDate', 'activePrefix', 'prefixSearch', 'isSessionMode', 'sessionPromptInput', 'initialStatus');
 
         Flux::modal('quick-add')->close();
     }
@@ -255,7 +270,17 @@ new class extends Component
         "
         >
             <div>
-                <flux:heading size="lg">Nova Task</flux:heading>
+                <div class="flex items-center gap-2">
+                    <flux:heading size="lg">Nova Task</flux:heading>
+                    @if ($initialStatus)
+                        @php $statusEnum = \App\Enums\TaskStatus::tryFrom($initialStatus); @endphp
+                        @if ($statusEnum)
+                            <flux:badge size="sm" color="{{ $statusEnum->color() }}" icon="{{ $statusEnum->icon() }}">
+                                → {{ $statusEnum->label() }}
+                            </flux:badge>
+                        @endif
+                    @endif
+                </div>
                 <flux:text class="mt-1">
                     Use <code class="rounded bg-zinc-700 px-1 py-0.5 text-xs">#projeto</code>
                     <code class="rounded bg-zinc-700 px-1 py-0.5 text-xs">!prioridade</code>

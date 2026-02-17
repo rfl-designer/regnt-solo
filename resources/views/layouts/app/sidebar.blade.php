@@ -16,14 +16,14 @@
                         Dashboard
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="inbox" :href="route('inbox')" :current="request()->routeIs('inbox')" wire:navigate>
-                        Inbox
+                        Caixa de Entrada
                         <livewire:inbox-badge />
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="view-columns" :href="route('kanban')" :current="request()->routeIs('kanban')" wire:navigate>
                         Kanban
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="calendar-days" :href="route('daily')" :current="request()->routeIs('daily')" wire:navigate>
-                        Daily
+                        Hoje
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="calendar" :href="route('weekly')" :current="request()->routeIs('weekly')" wire:navigate>
                         Semana
@@ -36,10 +36,10 @@
                         Tempo
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="clipboard-document-check" :href="route('review')" :current="request()->routeIs('review')" wire:navigate>
-                        Review
+                        Revisão
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="chart-bar" :href="route('analytics')" :current="request()->routeIs('analytics')" wire:navigate>
-                        Analytics
+                        Métricas
                     </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>

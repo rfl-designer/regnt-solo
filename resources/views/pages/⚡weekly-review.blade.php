@@ -370,29 +370,29 @@ new class extends Component
         </div>
     </div>
 
-    {{-- Deep Work Section --}}
+    {{-- Trabalho Focado --}}
     <div class="rounded-xl border border-amber-500/20 bg-zinc-800/50 p-5">
         <div class="mb-4 flex items-center gap-2">
             <span class="text-lg">🎯</span>
-            <flux:heading size="sm">Deep Work</flux:heading>
+            <flux:heading size="sm">Trabalho Focado</flux:heading>
         </div>
 
         <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {{-- Focus Hours --}}
+            {{-- Horas de Foco --}}
             <div class="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
                 <flux:text class="mb-1 text-xs text-zinc-400">Horas de foco</flux:text>
                 <flux:heading size="lg">{{ $this->formatDuration($this->focusHours * 60) }}</flux:heading>
             </div>
 
-            {{-- Focus Ratio --}}
+            {{-- Taxa de Foco --}}
             <div class="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
-                <flux:text class="mb-1 text-xs text-zinc-400">Focus ratio</flux:text>
+                <flux:text class="mb-1 text-xs text-zinc-400">Taxa de foco</flux:text>
                 <flux:heading size="lg">{{ $this->focusRatio }}%</flux:heading>
             </div>
 
-            {{-- Average Rating --}}
+            {{-- Avaliação Média --}}
             <div class="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
-                <flux:text class="mb-1 text-xs text-zinc-400">Rating médio</flux:text>
+                <flux:text class="mb-1 text-xs text-zinc-400">Avaliação média</flux:text>
                 <flux:heading size="lg">
                     @if ($this->averageFocusRating !== null)
                         {{ $this->averageFocusRating }} ⭐
@@ -402,9 +402,9 @@ new class extends Component
                 </flux:heading>
             </div>
 
-            {{-- Streak --}}
+            {{-- Sequência --}}
             <div class="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
-                <flux:text class="mb-1 text-xs text-zinc-400">Streak (+2h/dia)</flux:text>
+                <flux:text class="mb-1 text-xs text-zinc-400">Sequência (+2h/dia)</flux:text>
                 <flux:heading size="lg">
                     @if ($this->focusStreak > 0)
                         🔥 {{ $this->focusStreak }} {{ $this->focusStreak === 1 ? 'dia' : 'dias' }}

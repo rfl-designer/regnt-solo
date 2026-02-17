@@ -298,17 +298,17 @@ new class extends Component
         @endif
     </div>
 
-    {{-- Section 2: Streaks --}}
+    {{-- Section 2: Sequências --}}
     <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         @php
             $streaks = $this->streakData;
         @endphp
 
-        {{-- Current Streak --}}
+        {{-- Sequência Atual --}}
         <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-4">
             <div class="mb-1 flex items-center gap-2">
                 <span class="text-lg">🔥</span>
-                <flux:text class="text-xs text-zinc-400">Streak atual</flux:text>
+                <flux:text class="text-xs text-zinc-400">Sequência atual</flux:text>
             </div>
             <flux:heading size="xl">{{ $streaks['current'] }}</flux:heading>
             <flux:text class="text-xs text-zinc-500">
@@ -316,42 +316,42 @@ new class extends Component
             </flux:text>
         </div>
 
-        {{-- Best Streak --}}
+        {{-- Melhor Sequência --}}
         <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-4">
             <div class="mb-1 flex items-center gap-2">
                 <flux:icon name="trophy" class="size-5 text-amber-400" />
-                <flux:text class="text-xs text-zinc-400">Melhor streak</flux:text>
+                <flux:text class="text-xs text-zinc-400">Melhor sequência</flux:text>
             </div>
             <flux:heading size="xl">{{ $streaks['best'] }}</flux:heading>
             <flux:text class="text-xs text-zinc-500">dias (recorde)</flux:text>
         </div>
 
-        {{-- Focus Streak Current --}}
+        {{-- Sequência de Foco Atual --}}
         <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-4">
             <div class="mb-1 flex items-center gap-2">
                 <span class="text-lg">🎯</span>
-                <flux:text class="text-xs text-zinc-400">Focus streak</flux:text>
+                <flux:text class="text-xs text-zinc-400">Sequência de foco</flux:text>
             </div>
             <flux:heading size="xl">{{ $streaks['focus_current'] }}</flux:heading>
-            <flux:text class="text-xs text-zinc-500">dias com +2h deep work</flux:text>
+            <flux:text class="text-xs text-zinc-500">dias com +2h de foco</flux:text>
         </div>
 
-        {{-- Focus Streak Best --}}
+        {{-- Melhor Sequência de Foco --}}
         <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-4">
             <div class="mb-1 flex items-center gap-2">
                 <flux:icon name="star" class="size-5 text-purple-400" />
-                <flux:text class="text-xs text-zinc-400">Melhor focus</flux:text>
+                <flux:text class="text-xs text-zinc-400">Melhor foco</flux:text>
             </div>
             <flux:heading size="xl">{{ $streaks['focus_best'] }}</flux:heading>
-            <flux:text class="text-xs text-zinc-500">dias (recorde focus)</flux:text>
+            <flux:text class="text-xs text-zinc-500">dias (recorde foco)</flux:text>
         </div>
     </div>
 
-    {{-- Section 3: Velocity Trend --}}
+    {{-- Section 3: Tendência de Velocidade --}}
     <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-5">
         <div class="mb-4 flex items-center gap-2">
             <flux:icon name="arrow-trending-up" class="size-5 text-blue-400" />
-            <flux:heading size="sm">Velocity</flux:heading>
+            <flux:heading size="sm">Velocidade</flux:heading>
             <flux:text class="text-xs text-zinc-500">(tasks criadas vs completadas por semana)</flux:text>
         </div>
 
@@ -694,18 +694,18 @@ new class extends Component
         @endif
     </div>
 
-    {{-- Focus Ratio --}}
+    {{-- Taxa de Foco --}}
     <div class="rounded-xl border border-amber-500/20 bg-zinc-800/50 p-5">
         <div class="flex items-center gap-3">
             <div class="flex size-10 items-center justify-center rounded-lg bg-amber-500/10">
                 <span class="text-lg">🎯</span>
             </div>
             <div>
-                <flux:text class="text-xs text-zinc-400">Focus Ratio (periodo selecionado)</flux:text>
+                <flux:text class="text-xs text-zinc-400">Taxa de foco (período selecionado)</flux:text>
                 <flux:heading size="lg">{{ number_format($this->focusRatioValue * 100, 1) }}%</flux:heading>
             </div>
             <div class="ml-auto">
-                <flux:text class="text-xs text-zinc-500">do tempo total em deep work</flux:text>
+                <flux:text class="text-xs text-zinc-500">do tempo total em trabalho focado</flux:text>
             </div>
         </div>
 

@@ -47,6 +47,11 @@ class SoloBoardServer extends Server
         \App\Mcp\Tools\UpdateDocumentTool::class,
         \App\Mcp\Tools\DeleteDocumentTool::class,
         \App\Mcp\Tools\GetProjectContextTool::class,
+        \App\Mcp\Tools\ListTemplatesTool::class,
+        \App\Mcp\Tools\ApplyTemplateTool::class,
+        \App\Mcp\Tools\ListRecurringTasksTool::class,
+        \App\Mcp\Tools\CreateRecurringTaskTool::class,
+        \App\Mcp\Tools\ToggleRecurringTaskTool::class,
     ];
 
     /**

@@ -67,6 +67,19 @@ new class extends Component
         Flux::toast(variant: 'success', heading: 'Projeto atualizado', text: $task->title);
     }
 
+    public function updatePriority(int $taskId, string $priority): void
+    {
+        $task = Task::inbox()->findOrFail($taskId);
+
+        $newPriority = TaskPriority::from($priority);
+
+        $task->update(['priority' => $newPriority]);
+
+        unset($this->tasks);
+
+        Flux::toast(variant: 'success', heading: 'Prioridade atualizada', text: $task->title);
+    }
+
     /**
      * Get statuses available to move tasks to (all except Inbox).
      *
@@ -395,6 +408,7 @@ new class extends Component
                     />
                 </flux:table.column>
                 <flux:table.column>Task</flux:table.column>
+                <flux:table.column>Prioridade</flux:table.column>
                 <flux:table.column>Projeto</flux:table.column>
                 <flux:table.column>Criada</flux:table.column>
                 <flux:table.column align="end">Ações</flux:table.column>
@@ -408,6 +422,23 @@ new class extends Component
                         </flux:table.cell>
                         <flux:table.cell variant="strong">
                             {{ $task->title }}
+                        </flux:table.cell>
+
+                        <flux:table.cell>
+                            <flux:select
+                                wire:change="updatePriority({{ $task->id }}, $event.target.value)"
+                                size="sm"
+                                class="min-w-32"
+                            >
+                                @foreach (TaskPriority::cases() as $priority)
+                                    <option
+                                        value="{{ $priority->value }}"
+                                        @selected($task->priority === $priority)
+                                    >
+                                        {{ $priority->label() }}
+                                    </option>
+                                @endforeach
+                            </flux:select>
                         </flux:table.cell>
 
                         <flux:table.cell>

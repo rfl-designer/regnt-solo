@@ -62,23 +62,23 @@ test('inbox shows project info when task has a project', function () {
         ->assertSee('Meu Projeto');
 });
 
-test('move to backlog updates task status', function () {
+test('move to status updates task status', function () {
     $task = Task::factory()->create(['title' => 'Task para backlog']);
 
     Livewire::test('pages::inbox')
-        ->call('moveToBacklog', $task->id)
+        ->call('moveToStatus', $task->id, 'backlog')
         ->assertDispatched('task-moved');
 
     expect($task->fresh()->status)->toBe(TaskStatus::Backlog);
 });
 
-test('move to backlog only works for inbox tasks', function () {
+test('move to status only works for inbox tasks', function () {
     $task = Task::factory()->backlog()->create();
 
     $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
 
     Livewire::test('pages::inbox')
-        ->call('moveToBacklog', $task->id);
+        ->call('moveToStatus', $task->id, 'todo');
 });
 
 test('assign project updates task project', function () {

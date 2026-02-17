@@ -62,11 +62,34 @@ new class extends Component
         Flux::toast(variant: 'success', heading: 'Projeto atualizado', text: $task->title);
     }
 
-    public function moveToBacklog(int $taskId): void
+    /**
+     * Get statuses available to move tasks to (all except Inbox).
+     *
+     * @return array<TaskStatus>
+     */
+    public function availableStatuses(): array
+    {
+        return [
+            TaskStatus::Backlog,
+            TaskStatus::Todo,
+            TaskStatus::Doing,
+            TaskStatus::Done,
+        ];
+    }
+
+    public function moveToStatus(int $taskId, string $status): void
     {
         $task = Task::inbox()->findOrFail($taskId);
 
-        $task->update(['status' => TaskStatus::Backlog]);
+        $newStatus = TaskStatus::from($status);
+
+        $updateData = ['status' => $newStatus];
+
+        if ($newStatus === TaskStatus::Done) {
+            $updateData['completed_at'] = now();
+        }
+
+        $task->update($updateData);
 
         unset($this->tasks);
 

@@ -77,6 +77,6 @@ test('kanban done column width changes based on collapsed state', function () {
     $response = $this->get('/kanban');
 
     $response->assertStatus(200);
-    // Check for dynamic width binding
-    $response->assertSee("doneCollapsed ? 'w-14' : 'w-80'", false);
+    // Check for dynamic width binding (responsive: w-72 sm:w-80)
+    $response->assertSee("doneCollapsed ? 'w-14' : 'w-72 sm:w-80'", false);
 });

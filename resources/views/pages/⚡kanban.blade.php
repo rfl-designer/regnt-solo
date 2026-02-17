@@ -256,7 +256,16 @@ new class extends Component
     <flux:separator class="my-4" />
 
     {{-- Kanban Board --}}
-    <div class="flex flex-1 gap-4 overflow-x-auto pb-4">
+    <div
+        x-data="{
+            doneCollapsed: localStorage.getItem('kanban-done-collapsed') === 'true',
+            toggleDoneColumn() {
+                this.doneCollapsed = !this.doneCollapsed;
+                localStorage.setItem('kanban-done-collapsed', this.doneCollapsed);
+            }
+        }"
+        class="flex flex-1 gap-4 overflow-x-auto pb-4"
+    >
         @foreach ($kanbanStatuses as $status)
             @php
                 $tasks = $this->getColumnTasks($status, withProject: true);
@@ -268,23 +277,78 @@ new class extends Component
                 $hasMore = $total > $limit;
             @endphp
 
-            <div class="flex w-80 shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50">
+            @php
+                $isDone = $status === \App\Enums\TaskStatus::Done;
+            @endphp
+
+            <div
+                @if ($isDone)
+                    x-bind:class="doneCollapsed ? 'w-14' : 'w-80'"
+                @endif
+                class="{{ $isDone ? '' : 'w-80' }} flex shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50 transition-all duration-300 ease-in-out"
+            >
                 {{-- Column Header --}}
-                <div class="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
-                    <div class="flex items-center gap-2">
-                        <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
-                        <flux:heading size="sm">{{ $status->label() }}</flux:heading>
+                @if ($isDone)
+                    {{-- Done column header with collapse support --}}
+                    <div
+                        @click="toggleDoneColumn()"
+                        x-bind:class="doneCollapsed ? 'flex-col items-center py-4 cursor-pointer hover:bg-zinc-800/50' : 'flex-row items-center justify-between'"
+                        class="flex border-b border-zinc-700 px-4 py-3 transition-all duration-200"
+                    >
+                        {{-- Expanded state --}}
+                        <template x-if="!doneCollapsed">
+                            <div class="flex w-full items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
+                                    <flux:heading size="sm">{{ $status->label() }}</flux:heading>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    @if ($estimateFormatted)
+                                        <flux:badge size="sm" color="zinc" icon="clock">{{ $estimateFormatted }}</flux:badge>
+                                    @endif
+                                    <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                                    <button
+                                        type="button"
+                                        @click.stop="toggleDoneColumn()"
+                                        class="ml-1 rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
+                                        title="Colapsar coluna"
+                                    >
+                                        <flux:icon name="chevron-right" class="size-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+
+                        {{-- Collapsed state --}}
+                        <template x-if="doneCollapsed">
+                            <div class="flex flex-col items-center gap-2">
+                                <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
+                                <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                                <flux:icon name="chevron-left" class="size-4 text-zinc-500" />
+                            </div>
+                        </template>
                     </div>
-                    <div class="flex items-center gap-2">
-                        @if ($estimateFormatted)
-                            <flux:badge size="sm" color="zinc" icon="clock">{{ $estimateFormatted }}</flux:badge>
-                        @endif
-                        <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                @else
+                    {{-- Regular column header --}}
+                    <div class="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
+                            <flux:heading size="sm">{{ $status->label() }}</flux:heading>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            @if ($estimateFormatted)
+                                <flux:badge size="sm" color="zinc" icon="clock">{{ $estimateFormatted }}</flux:badge>
+                            @endif
+                            <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                        </div>
                     </div>
-                </div>
+                @endif
 
                 {{-- Tasks List --}}
-                <div class="flex-1 overflow-y-auto p-2">
+                <div
+                    @if ($isDone) x-show="!doneCollapsed" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif
+                    class="flex-1 overflow-y-auto p-2"
+                >
                     <ul
                         wire:sort="handleSort"
                         wire:sort:group="tasks"

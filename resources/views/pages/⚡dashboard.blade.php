@@ -71,6 +71,31 @@ new class extends Component
     }
 
     /**
+     * Determine if the welcome section should be shown.
+     * Shows only for users without any tasks and who haven't dismissed it.
+     */
+    #[Computed]
+    public function shouldShowWelcome(): bool
+    {
+        $hasAnyTasks = Task::query()->exists();
+        $userDismissed = auth()->user()?->hide_welcome_dashboard ?? false;
+
+        return ! $hasAnyTasks && ! $userDismissed;
+    }
+
+    /**
+     * Dismiss the welcome section permanently.
+     */
+    public function dismissWelcome(): void
+    {
+        $user = auth()->user();
+
+        if ($user) {
+            $user->update(['hide_welcome_dashboard' => true]);
+        }
+    }
+
+    /**
      * Calculate average time in each status for tasks completed in the last 30 days,
      * with trend indicators comparing to the previous 30-day period.
      *
@@ -626,13 +651,25 @@ new class extends Component
         @endif
     </div>
 
-    <div class="relative h-full flex-1 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800/50">
-        <div class="flex h-full min-h-48 items-center justify-center text-zinc-500">
-            <div class="text-center">
-                <flux:icon name="squares-2x2" class="mx-auto mb-3 size-12" />
-                <flux:heading size="lg">Bem-vindo ao SoloBoard</flux:heading>
-                <flux:text class="mt-1">Seu painel de gestão pessoal de projetos.</flux:text>
+    @if ($this->shouldShowWelcome)
+        <div class="relative h-full flex-1 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800/50">
+            <button
+                wire:click="dismissWelcome"
+                class="absolute right-3 top-3 rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
+                title="Dispensar"
+            >
+                <flux:icon name="x-mark" class="size-4" />
+            </button>
+            <div class="flex h-full min-h-48 items-center justify-center text-zinc-500">
+                <div class="text-center">
+                    <flux:icon name="squares-2x2" class="mx-auto mb-3 size-12" />
+                    <flux:heading size="lg">Bem-vindo ao SoloBoard</flux:heading>
+                    <flux:text class="mt-1">Seu painel de gestão pessoal de projetos.</flux:text>
+                    <flux:text size="sm" class="mt-3 text-zinc-600">
+                        Comece criando sua primeira task com <kbd class="rounded bg-zinc-700 px-1.5 py-0.5 text-xs">Ctrl+N</kbd>
+                    </flux:text>
+                </div>
             </div>
         </div>
-    </div>
+    @endif
 </div>

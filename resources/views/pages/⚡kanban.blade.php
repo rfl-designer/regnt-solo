@@ -220,12 +220,12 @@ new class extends Component
 
 <div class="flex h-full w-full flex-1 flex-col p-4 sm:p-6">
     {{-- Header --}}
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <flux:heading size="xl">Kanban</flux:heading>
 
-        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div class="flex items-center gap-3">
             {{-- Project filter --}}
-            <flux:select wire:model.live="filterProject" size="sm" class="min-w-0 flex-1 sm:min-w-40 sm:flex-none">
+            <flux:select wire:model.live="filterProject" size="sm" class="w-44">
                 <option value="">Todos projetos</option>
                 @foreach ($this->projects as $project)
                     <option value="{{ $project->id }}">{{ $project->emoji }} {{ $project->name }}</option>
@@ -233,7 +233,7 @@ new class extends Component
             </flux:select>
 
             {{-- Priority filter --}}
-            <flux:select wire:model.live="filterPriority" size="sm" class="min-w-0 flex-1 sm:min-w-32 sm:flex-none">
+            <flux:select wire:model.live="filterPriority" size="sm" class="w-32">
                 <option value="">Prioridades</option>
                 @foreach (App\Enums\TaskPriority::cases() as $priority)
                     <option value="{{ $priority->value }}">{{ $priority->label() }}</option>
@@ -246,9 +246,8 @@ new class extends Component
                 size="sm"
                 :variant="$filterOverdue ? 'primary' : 'ghost'"
                 icon="exclamation-triangle"
-                class="shrink-0"
             >
-                <span class="hidden sm:inline">Atrasadas</span>
+                Atrasadas
             </flux:button>
 
             {{-- Color legend --}}

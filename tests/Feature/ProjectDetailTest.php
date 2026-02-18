@@ -98,6 +98,33 @@ test('project detail metrics shows zero percent when no tasks', function () {
     expect($metrics['completion_percent'])->toBe(0);
 });
 
+test('project detail shows archive button with danger styling for active projects', function () {
+    $project = Project::factory()->create(['status' => ProjectStatus::Active]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->assertSeeHtml('Arquivar')
+        ->assertSeeHtml('text-red-400');
+});
+
+test('project detail shows archive confirmation modal when button clicked', function () {
+    $project = Project::factory()->create(['status' => ProjectStatus::Active]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->set('showArchiveModal', true)
+        ->assertSet('showArchiveModal', true)
+        ->assertSee('Arquivar projeto')
+        ->assertSee('Tem certeza que deseja arquivar');
+});
+
+test('project detail archive modal closes after archiving', function () {
+    $project = Project::factory()->create(['status' => ProjectStatus::Active]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->set('showArchiveModal', true)
+        ->call('archiveProject')
+        ->assertSet('showArchiveModal', false);
+});
+
 test('project detail archive project changes status', function () {
     $project = Project::factory()->create(['status' => ProjectStatus::Active]);
 
@@ -106,6 +133,14 @@ test('project detail archive project changes status', function () {
         ->assertDispatched('project-updated');
 
     expect($project->fresh()->status)->toBe(ProjectStatus::Archived);
+});
+
+test('project detail shows reactivate button instead of archive for archived projects', function () {
+    $project = Project::factory()->archived()->create();
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->assertSee('Reativar')
+        ->assertDontSeeHtml('wire:click="$set(\'showArchiveModal\', true)"');
 });
 
 test('project detail activate project changes status', function () {

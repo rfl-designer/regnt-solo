@@ -15,6 +15,8 @@ new class extends Component
 
     public string $tab = 'tasks';
 
+    public bool $showArchiveModal = false;
+
     /** @var list<TaskStatus> */
     public array $kanbanStatuses = [];
 
@@ -199,6 +201,8 @@ new class extends Component
         $project = $this->project;
         $project->update(['status' => ProjectStatus::Archived]);
 
+        $this->showArchiveModal = false;
+
         unset($this->project, $this->tasksByStatus, $this->metrics);
 
         $this->dispatch('project-updated');
@@ -287,14 +291,15 @@ new class extends Component
                 Stakeholders
             </flux:button>
 
+            {{-- Separador visual --}}
+            <flux:separator vertical class="mx-1 h-6" />
+
             @if ($this->project->status !== ProjectStatus::Archived)
                 <flux:button
                     variant="ghost"
                     icon="archive-box"
-                    wire:click="archiveProject"
-                    wire:loading.attr="disabled"
-                    wire:target="archiveProject"
-                    wire:confirm="Tem certeza que deseja arquivar este projeto?"
+                    class="text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                    wire:click="$set('showArchiveModal', true)"
                 >
                     Arquivar
                 </flux:button>
@@ -755,4 +760,47 @@ new class extends Component
 
     {{-- Stakeholders Modal --}}
     <livewire:project-stakeholders-modal />
+
+    {{-- Archive Project Modal --}}
+    <flux:modal wire:model.self="showArchiveModal" class="md:w-96">
+        <div class="space-y-4">
+            <div>
+                <div class="mb-3 flex items-center gap-2 text-red-400">
+                    <flux:icon name="archive-box" class="size-5" />
+                    <flux:heading size="lg">Arquivar projeto</flux:heading>
+                </div>
+
+                <flux:text class="text-zinc-400">
+                    Tem certeza que deseja arquivar <strong class="text-zinc-200">{{ $this->project->name }}</strong>?
+                </flux:text>
+
+                <div class="mt-3 rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
+                    <flux:text class="text-sm text-zinc-400">
+                        <ul class="list-inside list-disc space-y-1">
+                            <li>O projeto não aparecerá na lista de projetos ativos</li>
+                            <li>As tasks associadas continuarão vinculadas</li>
+                            <li>Você pode reativar o projeto a qualquer momento</li>
+                        </ul>
+                    </flux:text>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="ghost">Cancelar</flux:button>
+                </flux:modal.close>
+
+                <flux:button
+                    variant="danger"
+                    icon="archive-box"
+                    wire:click="archiveProject"
+                    wire:loading.attr="disabled"
+                    wire:target="archiveProject"
+                >
+                    <span wire:loading.remove wire:target="archiveProject">Arquivar projeto</span>
+                    <span wire:loading wire:target="archiveProject">Arquivando...</span>
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
 </div>

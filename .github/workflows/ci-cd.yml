@@ -67,6 +67,9 @@ jobs:
           sed -i "s|MAIL_USERNAME=null|MAIL_USERNAME=${{ secrets.MAIL_USERNAME }}|g" .env
           sed -i "s|MAIL_PASSWORD=null|MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}|g" .env
           sed -i 's|^MAIL_FROM_ADDRESS=.*|MAIL_FROM_ADDRESS="${{ secrets.MAIL_USERNAME }}"|' .env
+          sed -i "s|SOLO_USER_EMAIL=admin@soloboard.local|SOLO_USER_EMAIL=${{ secrets.MAIL_USERNAME }}|g" .env
+          sed -i "s|SOLO_USER_PASSWORD=password|SOLO_USER_PASSWORD=${{ secrets.MAIL_PASSWORD }}|g" .env
+          sed -i "s|SOLOBOARD_MCP_KEY=soloboard-mcp-secret|SOLOBOARD_MCP_KEY=${{ secrets.FLUX_LICENSE_KEY }}|g" .env
 
       - name: Preparar arquivos para deploy
         run: |

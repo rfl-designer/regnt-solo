@@ -130,8 +130,9 @@ new class extends Component
     {
         $task = Task::findOrFail((int) $id);
         $newStatus = TaskStatus::from($groupId);
+        $shouldRedirectToSession = false;
 
-        DB::transaction(function () use ($task, $newStatus, $position): void {
+        DB::transaction(function () use ($task, $newStatus, $position, &$shouldRedirectToSession): void {
             if ($newStatus === TaskStatus::Done && $task->status !== TaskStatus::Done) {
                 // Add to daily plan if not already there (Observer syncs completed_at)
                 $dailyPlan = DailyPlan::getOrCreateForDate(Carbon::today());
@@ -149,10 +150,20 @@ new class extends Component
                     'status' => $newStatus,
                     'sort_order' => $position,
                 ]);
+
+                // Check if moving session task to Doing - redirect to session page
+                if ($newStatus === TaskStatus::Doing && $task->isSessionTask()) {
+                    $shouldRedirectToSession = true;
+                }
             }
 
             $this->recalculateSortOrder($newStatus);
         });
+
+        // Redirect after transaction completes
+        if ($shouldRedirectToSession) {
+            $this->redirect(route('session', $task), navigate: true);
+        }
     }
 
     #[On('task-updated')]

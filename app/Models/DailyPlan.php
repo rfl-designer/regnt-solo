@@ -86,11 +86,15 @@ class DailyPlan extends Model
 
     /**
      * Get the incomplete tasks for this daily plan.
+     * Excludes tasks that have status Done (even if not marked complete in the plan).
      *
      * @return Collection<int, Task>
      */
     public function incompleteTasks(): Collection
     {
-        return $this->tasks()->wherePivotNull('completed_at')->get();
+        return $this->tasks()
+            ->wherePivotNull('completed_at')
+            ->where('status', '!=', \App\Enums\TaskStatus::Done)
+            ->get();
     }
 }

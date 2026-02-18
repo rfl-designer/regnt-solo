@@ -9,6 +9,18 @@ use App\Models\TaskStatusChange;
 class TaskObserver
 {
     /**
+     * Handle the Task "creating" event.
+     *
+     * Sets completed_at when a task is created directly with status done.
+     */
+    public function creating(Task $task): void
+    {
+        if ($task->status === \App\Enums\TaskStatus::Done && $task->completed_at === null) {
+            $task->completed_at = now();
+        }
+    }
+
+    /**
      * Handle the Task "created" event.
      *
      * Records the initial status when a task is created.

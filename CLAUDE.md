@@ -345,7 +345,7 @@ Todos os atalhos requerem `Ctrl` (ou `Cmd` no Mac). Ignorar quando foco em `inpu
 
 O SoloBoard expõe um MCP Server para integração com AI clients (Claude Code, Cursor, etc.).
 
-- **Configurar**: `claude mcp add --transport http soloboard http://regnt.test/mcp`
+- **Configurar**: `claude mcp add --transport http soloboard https://regnt.sophostech.com.br/mcp`
 - **Header**: `Authorization: Bearer {SOLOBOARD_MCP_KEY}` (definido no `.env`)
 - **Tools disponíveis**:
   - `list-tasks` — Lista tasks com filtros (project_slug, status, limit)

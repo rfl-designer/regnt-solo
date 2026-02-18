@@ -1,0 +1,118 @@
+name: CI/CD Laravel
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checar o código
+        uses: actions/checkout@v3
+
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4" # Updated to match your local PHP version
+          extensions: |
+            bcmath
+            ctype
+            fileinfo
+            json
+            mbstring
+            openssl
+            pdo
+            tokenizer
+            xml
+            curl
+          ini-values: |
+            post_max_size=256M
+            upload_max_filesize=256M
+          coverage: none
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18" # Substitua pela versão do Node.js que você utiliza
+
+      - name: Add Flux license
+        run: composer config http-basic.composer.fluxui.dev "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
+
+      - name: Instalar dependências PHP
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+
+      - name: Instalar dependências NPM
+        run: npm install
+
+      - name: Executar build de produção
+        run: npm run build # Ou o comando que você usa para build
+
+      - name: Criar arquivo .env
+        run: |
+          cp .env.example .env
+          sed -i "s|APP_NAME=Laravel|APP_NAME='Regnt SoloBoard'|g" .env
+          sed -i "s|APP_ENV=local|APP_ENV=production|g" .env
+          sed -i "s|APP_TIMEZONE=UTC|APP_TIMEZONE=America/Sao_Paulo|g" .env
+          sed -i "s|APP_URL=http://localhost|APP_URL=https://regnt.sophostech.com.br|g" .env
+          sed -i "s|APP_LOCALE=en|APP_LOCALE=pt_BR|g" .env
+          sed -i "s|APP_DEBUG=true|APP_DEBUG=false|g" .env
+          sed -i "s|DB_DATABASE=laravel|DB_DATABASE=${{ secrets.DB_DATABASE }}|g" .env
+          sed -i "s|DB_USERNAME=root|DB_USERNAME=${{ secrets.DB_USERNAME }}|g" .env
+          sed -i "s|DB_PASSWORD=|DB_PASSWORD=${{ secrets.DB_PASSWORD }}|g" .env
+          sed -i "s|MAIL_USERNAME=null|MAIL_USERNAME=${{ secrets.MAIL_USERNAME }}|g" .env
+          sed -i "s|MAIL_PASSWORD=null|MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}|g" .env
+          sed -i 's|^MAIL_FROM_ADDRESS=.*|MAIL_FROM_ADDRESS="${{ secrets.MAIL_USERNAME }}"|' .env
+
+      - name: Preparar arquivos para deploy
+        run: |
+          rm -rf node_modules
+          rm -rf .git
+          rm -rf storage/logs/*
+          rm -rf tests
+          rm -rf .github
+          find . -type f -name ".DS_Store" -delete
+
+      - name: Sincronizar arquivos com o servidor via rsync
+        env:
+          SSH_PASS: ${{ secrets.SSH_PASSWORD }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          DEPLOY_PATH: /home/u431372276/domains/regnt.sophostech.com.br
+        run: |
+          sshpass -p "$SSH_PASS" rsync -avz --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude 'node_modules/' \
+            --exclude 'storage/' \
+            --exclude 'tests/' \
+            --exclude '.DS_Store' \
+            -e "ssh -o StrictHostKeyChecking=no -p $SSH_PORT" ./ $SSH_USER@$SSH_HOST:$DEPLOY_PATH
+
+      - name: 📂 Deploy to server via ssh
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            cd /home/u431372276/domains/regnt.sophostech.com.br
+            chmod -R 755 storage
+            php artisan storage:link
+            php artisan key:generate
+            ln -s public/ public_html
+            php artisan migrate --force
+            php artisan cache:clear
+            php artisan config:clear
+            php artisan view:clear
+            php artisan route:clear
+            php artisan config:cache
+            php artisan view:cache
+
+# Deus é bom!

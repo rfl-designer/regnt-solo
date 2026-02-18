@@ -27,21 +27,24 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $user = User::factory()->create([
-            'name' => 'Solo Admin',
+            'name' => 'Rafael Oliveira',
             'email' => config('solo.user_email', 'admin@soloboard.local'),
             'password' => Hash::make(config('solo.user_password', 'password')),
         ]);
 
-        $projects = $this->createProjects();
-        $tasks = $this->createTasks($projects);
-        $this->createStatusChangeHistory($tasks);
-        $this->createTimeEntries($tasks);
-        $this->createDailyPlan($tasks);
-        $this->createRunningTimer($tasks);
-        $this->createTaskCommits($tasks);
-        $this->createDocuments($projects);
-        $this->createWeeklyReviews();
-        $this->createStakeholders($projects);
+        // se APP_ENV=production não cria entidades
+        if (config('app.env') !== 'production') {
+            $projects = $this->createProjects();
+            $tasks = $this->createTasks($projects);
+            $this->createStatusChangeHistory($tasks);
+            $this->createTimeEntries($tasks);
+            $this->createDailyPlan($tasks);
+            $this->createRunningTimer($tasks);
+            $this->createTaskCommits($tasks);
+            $this->createDocuments($projects);
+            $this->createWeeklyReviews();
+            $this->createStakeholders($projects);
+        }
     }
 
     /**
@@ -270,7 +273,7 @@ class DatabaseSeeder extends Seeder
      */
     private function createTimeEntries(\Illuminate\Support\Collection $tasks): void
     {
-        $workTasks = $tasks->filter(fn (Task $t) => $t->status !== TaskStatus::Inbox);
+        $workTasks = $tasks->filter(fn(Task $t) => $t->status !== TaskStatus::Inbox);
 
         for ($day = 29; $day >= 0; $day--) {
             $date = Carbon::today()->subDays($day);
@@ -329,7 +332,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $planTasks = $tasks
-            ->filter(fn (Task $t) => in_array($t->status, [TaskStatus::Doing, TaskStatus::Todo], true))
+            ->filter(fn(Task $t) => in_array($t->status, [TaskStatus::Doing, TaskStatus::Todo], true))
             ->take(5);
 
         foreach ($planTasks->values() as $index => $task) {
@@ -347,7 +350,7 @@ class DatabaseSeeder extends Seeder
      */
     private function createRunningTimer(\Illuminate\Support\Collection $tasks): void
     {
-        $doingTask = $tasks->first(fn (Task $t) => $t->status === TaskStatus::Doing);
+        $doingTask = $tasks->first(fn(Task $t) => $t->status === TaskStatus::Doing);
 
         if ($doingTask) {
             TimeEntry::create([
@@ -365,7 +368,7 @@ class DatabaseSeeder extends Seeder
      */
     private function createTaskCommits(\Illuminate\Support\Collection $tasks): void
     {
-        $doneTasks = $tasks->filter(fn (Task $t) => $t->status === TaskStatus::Done);
+        $doneTasks = $tasks->filter(fn(Task $t) => $t->status === TaskStatus::Done);
 
         foreach ($doneTasks as $task) {
             $commitCount = rand(1, 4);
@@ -379,11 +382,11 @@ class DatabaseSeeder extends Seeder
                     'task_id' => $task->id,
                     'hash' => fake()->sha1(),
                     'message' => fake()->randomElement([
-                        'feat: implement '.fake()->words(3, true),
-                        'fix: resolve '.fake()->words(2, true).' issue',
-                        'refactor: improve '.fake()->words(2, true),
-                        'test: add tests for '.fake()->words(2, true),
-                        'chore: update '.fake()->words(2, true),
+                        'feat: implement ' . fake()->words(3, true),
+                        'fix: resolve ' . fake()->words(2, true) . ' issue',
+                        'refactor: improve ' . fake()->words(2, true),
+                        'test: add tests for ' . fake()->words(2, true),
+                        'chore: update ' . fake()->words(2, true),
                     ]),
                     'files_changed' => rand(1, 15),
                     'insertions' => rand(5, 300),

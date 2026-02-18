@@ -23,6 +23,8 @@ test('mcp request with invalid api key returns 401', function () {
 });
 
 test('mcp request with valid api key returns 200', function () {
+    config(['soloboard.mcp_key' => 'soloboard-mcp-secret']);
+
     $response = $this->postJson('/mcp', [
         'jsonrpc' => '2.0',
         'method' => 'initialize',

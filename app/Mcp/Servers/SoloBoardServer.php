@@ -17,6 +17,11 @@ class SoloBoardServer extends Server
     protected string $version = '1.0.0';
 
     /**
+     * Default pagination length for tools/resources/prompts listing.
+     */
+    public int $defaultPaginationLength = 50;
+
+    /**
      * The MCP server's instructions for the LLM.
      */
     protected string $instructions = 'SoloBoard is a personal productivity app for solo developers. It manages tasks, projects, time tracking, and daily planning. Use the available tools to create, read, update, and delete tasks; start and stop timers; manage daily plans; and list projects. Tasks have statuses (inbox, backlog, todo, doing, done) and priorities (urgent, high, medium, low). Projects have slugs for identification. Timers are time entries linked to tasks — only one timer can run at a time. Documents are markdown pages (PRDs, specs, decisions, notes) that belong to projects. Use list-documents, get-document, create-document, update-document, delete-document to manage them. Use get-project-context to get full project overview including all documents and active tasks.';

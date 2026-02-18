@@ -322,3 +322,246 @@ test('project detail getColumnTasks respects sort_order and created_at ordering'
     expect($columnTasks[0]->id)->toBe($taskB->id);
     expect($columnTasks[1]->id)->toBe($taskA->id);
 });
+
+// ========================================
+// Kanban Feature Parity Tests
+// ========================================
+
+test('project detail kanban has handleSort method', function () {
+    $project = Project::factory()->create();
+
+    $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
+
+    expect(method_exists($component->instance(), 'handleSort'))->toBeTrue();
+});
+
+test('project detail kanban handleSort moves task between columns', function () {
+    $project = Project::factory()->create();
+    $task = Task::factory()->backlog()->create([
+        'project_id' => $project->id,
+        'title' => 'Task to Move',
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->call('handleSort', $task->id, 0, 'todo');
+
+    expect($task->fresh()->status)->toBe(\App\Enums\TaskStatus::Todo);
+});
+
+test('project detail kanban handleSort updates status when moving between columns', function () {
+    $project = Project::factory()->create();
+    $task = Task::factory()->backlog()->create([
+        'project_id' => $project->id,
+        'sort_order' => 5,
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->call('handleSort', $task->id, 0, 'doing');
+
+    expect($task->fresh()->status)->toBe(\App\Enums\TaskStatus::Doing);
+});
+
+test('project detail kanban handleSort marks task as done when moved to done column', function () {
+    $project = Project::factory()->create();
+    $task = Task::factory()->doing()->create([
+        'project_id' => $project->id,
+        'title' => 'Task to Complete',
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->call('handleSort', $task->id, 0, 'done');
+
+    $task->refresh();
+    expect($task->status)->toBe(\App\Enums\TaskStatus::Done);
+    expect($task->completed_at)->not->toBeNull();
+});
+
+test('project detail kanban handleSort adds task to daily plan when completing', function () {
+    $project = Project::factory()->create();
+    $task = Task::factory()->doing()->create([
+        'project_id' => $project->id,
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->call('handleSort', $task->id, 0, 'done');
+
+    $dailyPlan = \App\Models\DailyPlan::getOrCreateForDate(\Carbon\Carbon::today());
+    expect($dailyPlan->tasks->contains($task))->toBeTrue();
+});
+
+test('project detail kanban loadMore increases limit by 20', function () {
+    $project = Project::factory()->create();
+
+    $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
+
+    $initialLimit = $component->get('limits')['backlog'];
+    expect($initialLimit)->toBe(20);
+
+    $component->call('loadMore', 'backlog');
+
+    expect($component->get('limits')['backlog'])->toBe(40);
+});
+
+test('project detail kanban getColumnTasks uses withCount commits', function () {
+    $project = Project::factory()->create();
+    $task = Task::factory()->todo()->create([
+        'project_id' => $project->id,
+    ]);
+
+    // Create commits for the task
+    \App\Models\TaskCommit::factory()->count(3)->create([
+        'task_id' => $task->id,
+    ]);
+
+    $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
+    $columnTasks = $component->instance()->getColumnTasks(\App\Enums\TaskStatus::Todo);
+
+    $taskFromColumn = $columnTasks->firstWhere('id', $task->id);
+    expect($taskFromColumn->commits_count)->toBe(3);
+});
+
+test('project detail kanban shows commits badge', function () {
+    $project = Project::factory()->create();
+    $task = Task::factory()->todo()->create([
+        'project_id' => $project->id,
+        'title' => 'Task with Commits',
+    ]);
+
+    \App\Models\TaskCommit::factory()->count(2)->create([
+        'task_id' => $task->id,
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->assertSee('2 commits');
+});
+
+test('project detail kanban shows session badge for session tasks', function () {
+    $project = Project::factory()->create();
+    Task::factory()->session()->todo()->create([
+        'project_id' => $project->id,
+        'title' => 'Session Task',
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->assertSee('🤖 Sessão');
+});
+
+test('project detail kanban done column only shows tasks from current week', function () {
+    $project = Project::factory()->create();
+
+    // Task completed this week
+    $currentWeekTask = Task::factory()->done()->create([
+        'project_id' => $project->id,
+        'title' => 'Current Week Task',
+        'completed_at' => now(),
+    ]);
+
+    // Task completed last week
+    $lastWeekTask = Task::factory()->done()->create([
+        'project_id' => $project->id,
+        'title' => 'Last Week Task',
+        'completed_at' => now()->subWeek(),
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->assertSee('Current Week Task')
+        ->assertDontSee('Last Week Task');
+});
+
+test('project detail kanban getColumnTotal filters done by current week', function () {
+    $project = Project::factory()->create();
+
+    // Create 3 tasks completed this week
+    Task::factory()->count(3)->done()->create([
+        'project_id' => $project->id,
+        'completed_at' => now(),
+    ]);
+
+    // Create 2 tasks completed last week
+    Task::factory()->count(2)->done()->create([
+        'project_id' => $project->id,
+        'completed_at' => now()->subWeek(),
+    ]);
+
+    $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
+    $total = $component->instance()->getColumnTotal(\App\Enums\TaskStatus::Done);
+
+    expect($total)->toBe(3);
+});
+
+test('project detail kanban getColumnEstimate filters done by current week', function () {
+    $project = Project::factory()->create();
+
+    // Create task completed this week
+    Task::factory()->done()->create([
+        'project_id' => $project->id,
+        'estimated_minutes' => 60,
+        'completed_at' => now(),
+    ]);
+
+    // Create task completed last week
+    Task::factory()->done()->create([
+        'project_id' => $project->id,
+        'estimated_minutes' => 120,
+        'completed_at' => now()->subWeek(),
+    ]);
+
+    $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
+    $estimate = $component->instance()->getColumnEstimate(\App\Enums\TaskStatus::Done);
+
+    expect($estimate)->toBe(60);
+});
+
+test('project detail kanban renders wire:sort attributes', function () {
+    $project = Project::factory()->create();
+    Task::factory()->todo()->create(['project_id' => $project->id]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->assertSeeHtml('wire:sort="handleSort"')
+        ->assertSeeHtml('wire:sort:group="project-tasks"');
+});
+
+test('project detail kanban renders grip handle for drag', function () {
+    $project = Project::factory()->create();
+    Task::factory()->todo()->create(['project_id' => $project->id]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->assertSeeHtml('wire:sort:handle');
+});
+
+test('project detail kanban shows quick-add button per column', function () {
+    $project = Project::factory()->create();
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->assertSeeHtml("open-quick-add-with-status', { status: 'backlog' }")
+        ->assertSeeHtml("open-quick-add-with-status', { status: 'todo' }")
+        ->assertSeeHtml("open-quick-add-with-status', { status: 'doing' }");
+});
+
+test('project detail kanban shows color legend button', function () {
+    $project = Project::factory()->create();
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->assertSee('Legenda');
+});
+
+test('project detail kanban task position updates correctly after handleSort', function () {
+    $project = Project::factory()->create();
+
+    $task1 = Task::factory()->backlog()->create([
+        'project_id' => $project->id,
+        'sort_order' => 0,
+    ]);
+    $task2 = Task::factory()->backlog()->create([
+        'project_id' => $project->id,
+        'sort_order' => 1,
+    ]);
+
+    // Move task1 to todo status
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->call('handleSort', $task1->id, 0, 'todo');
+
+    $task1->refresh();
+    expect($task1->status)->toBe(\App\Enums\TaskStatus::Todo);
+    expect($task1->sort_order)->toBe(0);
+});

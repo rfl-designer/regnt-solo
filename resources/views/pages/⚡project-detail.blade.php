@@ -2,9 +2,13 @@
 
 use App\Enums\ProjectStatus;
 use App\Enums\TaskStatus;
+use App\Models\DailyPlan;
 use App\Models\Document;
 use App\Models\Project;
+use App\Models\Task;
+use Carbon\Carbon;
 use Flux\Flux;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -22,10 +26,10 @@ new class extends Component
 
     /** @var array<string, int> */
     public array $limits = [
-        'backlog' => 10,
-        'todo' => 10,
-        'doing' => 10,
-        'done' => 10,
+        'backlog' => 20,
+        'todo' => 20,
+        'doing' => 20,
+        'done' => 20,
     ];
 
     public ?int $selectedDocumentId = null;
@@ -103,17 +107,27 @@ new class extends Component
     /**
      * Get tasks for a specific column with pagination.
      *
-     * @return \Illuminate\Support\Collection<int, \App\Models\Task>
+     * @return \Illuminate\Database\Eloquent\Collection<int, Task>
      */
-    public function getColumnTasks(TaskStatus $status): \Illuminate\Support\Collection
+    public function getColumnTasks(TaskStatus $status): \Illuminate\Database\Eloquent\Collection
     {
-        return $this->project->tasks
-            ->where('status', $status)
-            ->sortBy([
-                ['sort_order', 'asc'],
-                ['created_at', 'desc'],
-            ])
-            ->take($this->limits[$status->value]);
+        $query = Task::query()
+            ->with('project', 'timeEntries')
+            ->withCount('commits')
+            ->where('project_id', $this->project->id)
+            ->where('status', $status);
+
+        if ($status === TaskStatus::Done) {
+            $query->whereBetween('completed_at', [
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ]);
+        }
+
+        return $query->orderBy('sort_order')
+            ->orderBy('created_at', 'desc')
+            ->limit($this->limits[$status->value])
+            ->get();
     }
 
     /**
@@ -121,7 +135,18 @@ new class extends Component
      */
     public function getColumnTotal(TaskStatus $status): int
     {
-        return $this->project->tasks->where('status', $status)->count();
+        $query = Task::query()
+            ->where('project_id', $this->project->id)
+            ->where('status', $status);
+
+        if ($status === TaskStatus::Done) {
+            $query->whereBetween('completed_at', [
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ]);
+        }
+
+        return $query->count();
     }
 
     /**
@@ -129,9 +154,18 @@ new class extends Component
      */
     public function getColumnEstimate(TaskStatus $status): int
     {
-        return (int) $this->project->tasks
-            ->where('status', $status)
-            ->sum('estimated_minutes');
+        $query = Task::query()
+            ->where('project_id', $this->project->id)
+            ->where('status', $status);
+
+        if ($status === TaskStatus::Done) {
+            $query->whereBetween('completed_at', [
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ]);
+        }
+
+        return (int) $query->sum('estimated_minutes');
     }
 
     /**
@@ -159,7 +193,57 @@ new class extends Component
 
     public function loadMore(string $status): void
     {
-        $this->limits[$status] += 10;
+        $this->limits[$status] += 20;
+    }
+
+    public function handleSort(int|string $id, int $position, string $groupId): void
+    {
+        $task = Task::findOrFail((int) $id);
+        $newStatus = TaskStatus::from($groupId);
+
+        DB::transaction(function () use ($task, $newStatus, $position): void {
+            if ($newStatus === TaskStatus::Done && $task->status !== TaskStatus::Done) {
+                $dailyPlan = DailyPlan::getOrCreateForDate(Carbon::today());
+
+                if (! $dailyPlan->tasks()->where('task_id', $task->id)->exists()) {
+                    $maxOrder = $dailyPlan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+                    $dailyPlan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
+                }
+
+                $task->markAsDone();
+
+                Flux::toast(variant: 'success', heading: 'Task concluída', text: $task->title);
+            } else {
+                $task->update([
+                    'status' => $newStatus,
+                    'sort_order' => $position,
+                ]);
+            }
+
+            $this->recalculateSortOrder($newStatus);
+        });
+    }
+
+    private function recalculateSortOrder(TaskStatus $status): void
+    {
+        $query = Task::query()
+            ->where('project_id', $this->project->id)
+            ->where('status', $status);
+
+        if ($status === TaskStatus::Done) {
+            $query->whereBetween('completed_at', [
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ]);
+        }
+
+        $tasks = $query->orderBy('sort_order')->orderBy('created_at', 'desc')->get();
+
+        foreach ($tasks as $index => $task) {
+            if ($task->sort_order !== $index) {
+                $task->update(['sort_order' => $index]);
+            }
+        }
     }
 
     /**
@@ -330,11 +414,12 @@ new class extends Component
             <flux:tab name="metrics" icon="chart-bar-square">Métricas</flux:tab>
         </flux:tabs>
 
-        {{-- Tab Panel: Tasks (Mini-Kanban) --}}
+        {{-- Tab Panel: Tasks (Kanban) --}}
         <flux:tab.panel name="tasks">
             <div class="flex flex-col gap-4">
-                {{-- New Task button --}}
-                <div class="flex justify-end">
+                {{-- Header with New Task button and Color Legend --}}
+                <div class="flex items-center justify-between">
+                    <x-color-legend />
                     <flux:button
                         size="sm"
                         variant="primary"
@@ -345,86 +430,196 @@ new class extends Component
                     </flux:button>
                 </div>
 
-                {{-- Mini-Kanban --}}
-                <div class="flex gap-4 pb-4">
+                {{-- Kanban Board --}}
+                <div
+                    x-data="{
+                        doneCollapsed: localStorage.getItem('project-kanban-done-collapsed') === 'true',
+                        toggleDoneColumn() {
+                            this.doneCollapsed = !this.doneCollapsed;
+                            localStorage.setItem('project-kanban-done-collapsed', this.doneCollapsed);
+                        }
+                    }"
+                    class="-mx-4 flex flex-1 gap-3 overflow-x-auto px-4 pb-4 sm:mx-0 sm:gap-4 sm:px-0"
+                >
                     @foreach ($kanbanStatuses as $status)
                         @php
                             $tasks = $this->getColumnTasks($status);
                             $total = $this->getColumnTotal($status);
                             $estimate = $this->getColumnEstimate($status);
                             $estimateFormatted = $this->formatDuration($estimate);
-                            $limit = $this->limits[$status->value];
+                            $limit = $limits[$status->value];
                             $hasMore = $total > $limit;
+                            $isDone = $status === \App\Enums\TaskStatus::Done;
                         @endphp
 
-                        <div class="flex min-w-48 flex-1 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50">
+                        <div
+                            @if ($isDone)
+                                x-bind:class="doneCollapsed ? 'w-14' : 'w-72 sm:w-80'"
+                            @endif
+                            class="{{ $isDone ? '' : 'w-72 sm:w-80' }} flex shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50 transition-all duration-300 ease-in-out"
+                        >
                             {{-- Column Header --}}
-                            <div class="flex items-center justify-between border-b border-zinc-700 px-3 py-2.5">
-                                <div class="flex items-center gap-2">
-                                    <flux:icon :name="$status->icon()" class="size-4 text-{{ $status->color() }}-400" />
-                                    <span class="text-sm font-medium text-zinc-300">{{ $status->label() }}</span>
+                            @if ($isDone)
+                                {{-- Done column header with collapse support --}}
+                                <div
+                                    @click="toggleDoneColumn()"
+                                    x-bind:class="doneCollapsed ? 'flex-col items-center py-4 cursor-pointer hover:bg-zinc-800/50' : 'flex-row items-center justify-between'"
+                                    class="flex border-b border-zinc-700 px-4 py-3 transition-all duration-200"
+                                >
+                                    {{-- Expanded state --}}
+                                    <template x-if="!doneCollapsed">
+                                        <div class="flex w-full items-center justify-between">
+                                            <div class="flex items-center gap-2">
+                                                <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
+                                                <flux:heading size="sm">{{ $status->label() }}</flux:heading>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                @if ($estimateFormatted)
+                                                    <flux:badge size="sm" color="zinc" icon="clock">{{ $estimateFormatted }}</flux:badge>
+                                                @endif
+                                                <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                                                <button
+                                                    type="button"
+                                                    @click.stop="$wire.$dispatch('open-quick-add-with-status', { status: '{{ $status->value }}' })"
+                                                    class="rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
+                                                    title="Nova task em {{ $status->label() }}"
+                                                >
+                                                    <flux:icon name="plus" class="size-4" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    @click.stop="toggleDoneColumn()"
+                                                    class="rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
+                                                    title="Colapsar coluna"
+                                                >
+                                                    <flux:icon name="chevron-left" class="size-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    {{-- Collapsed state --}}
+                                    <template x-if="doneCollapsed">
+                                        <div class="flex flex-col items-center gap-2">
+                                            <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
+                                            <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                                            <flux:icon name="chevron-right" class="size-4 text-zinc-500" />
+                                        </div>
+                                    </template>
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    @if ($estimateFormatted)
-                                        <flux:badge size="sm" color="zinc" icon="clock">{{ $estimateFormatted }}</flux:badge>
-                                    @endif
-                                    <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                            @else
+                                {{-- Regular column header --}}
+                                <div class="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
+                                    <div class="flex items-center gap-2">
+                                        <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
+                                        <flux:heading size="sm">{{ $status->label() }}</flux:heading>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        @if ($estimateFormatted)
+                                            <flux:badge size="sm" color="zinc" icon="clock">{{ $estimateFormatted }}</flux:badge>
+                                        @endif
+                                        <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                                        <flux:button
+                                            wire:click="$dispatch('open-quick-add-with-status', { status: '{{ $status->value }}' })"
+                                            variant="ghost"
+                                            size="sm"
+                                            icon="plus"
+                                            class="ml-1 !p-1"
+                                            title="Nova task em {{ $status->label() }}"
+                                        />
+                                    </div>
                                 </div>
-                            </div>
+                            @endif
 
                             {{-- Tasks List --}}
-                            <div class="flex-1 overflow-y-auto p-2">
-                                @forelse ($tasks as $task)
-                                    <div
-                                        wire:key="task-{{ $task->id }}"
-                                        class="mb-2 cursor-pointer rounded-lg border border-zinc-700 bg-zinc-800 p-2.5 transition hover:border-zinc-500"
-                                        wire:click="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
-                                    >
-                                        <span class="line-clamp-2 text-sm font-medium text-zinc-200">{{ $task->title }}</span>
+                            <div
+                                @if ($isDone) x-show="!doneCollapsed" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif
+                                class="flex-1 overflow-y-auto p-2"
+                            >
+                                <ul
+                                    wire:sort="handleSort"
+                                    wire:sort:group="project-tasks"
+                                    wire:sort:group-id="{{ $status->value }}"
+                                    class="kanban-dropzone flex min-h-[2rem] flex-col gap-2 rounded-lg transition-colors duration-200"
+                                >
+                                    @forelse ($tasks as $task)
+                                        <li wire:key="task-{{ $task->id }}" wire:sort:item="{{ $task->id }}" class="kanban-card">
+                                            <div
+                                                class="group cursor-pointer rounded-lg border border-zinc-700 bg-zinc-800 p-3 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
+                                                wire:click="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
+                                            >
+                                                {{-- Card Top: Handle + Title --}}
+                                                <div class="flex items-start gap-2">
+                                                    <div wire:sort:handle class="mt-0.5 shrink-0 cursor-grab text-zinc-600 transition-colors hover:text-zinc-300 active:cursor-grabbing">
+                                                        <flux:icon name="grip-vertical" class="size-4" />
+                                                    </div>
+                                                    <span class="line-clamp-2 flex-1 text-sm font-medium text-zinc-200">{{ $task->title }}</span>
+                                                </div>
 
-                                        <div class="mt-1.5 flex flex-wrap items-center gap-1">
-                                            @if ($task->priority)
-                                                <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
-                                                    {{ $task->priority->label() }}
-                                                </flux:badge>
-                                            @endif
+                                                {{-- Badges Row --}}
+                                                <div class="mt-2 flex flex-wrap items-center gap-1.5" wire:sort:ignore>
+                                                    {{-- Priority Badge --}}
+                                                    @if ($task->priority)
+                                                        <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
+                                                            {{ $task->priority->label() }}
+                                                        </flux:badge>
+                                                    @endif
 
-                                            @if ($task->estimated_minutes)
-                                                <flux:badge size="sm" color="zinc" icon="clock">
-                                                    {{ $task->estimated_minutes }}m
-                                                </flux:badge>
-                                            @endif
+                                                    {{-- Estimate Badge --}}
+                                                    @if ($task->estimated_minutes)
+                                                        <flux:badge size="sm" color="zinc" icon="clock">
+                                                            {{ $task->estimated_minutes }}m
+                                                        </flux:badge>
+                                                    @endif
 
-                                            @if ($task->isOverdue())
-                                                <flux:badge size="sm" color="red" icon="exclamation-triangle">
-                                                    {{ $task->due_date->diffForHumans() }}
-                                                </flux:badge>
-                                            @endif
+                                                    {{-- Overdue Badge --}}
+                                                    @if ($task->isOverdue())
+                                                        <flux:badge size="sm" color="red" icon="exclamation-triangle">
+                                                            {{ $task->due_date->diffForHumans() }}
+                                                        </flux:badge>
+                                                    @endif
 
-                                            @if ($task->isRunning())
-                                                <flux:badge size="sm" color="emerald" class="animate-pulse">
-                                                    <div class="mr-1 size-2 rounded-full bg-emerald-400"></div>
-                                                    Timer
-                                                </flux:badge>
-                                            @endif
-                                        </div>
-                                    </div>
-                                @empty
-                                    <div class="py-6 text-center text-xs text-zinc-600">
-                                        Nenhuma task
-                                    </div>
-                                @endforelse
+                                                    {{-- Running Timer --}}
+                                                    @if ($task->isRunning())
+                                                        <flux:badge size="sm" color="emerald" class="animate-pulse">
+                                                            <div class="mr-1 size-2 rounded-full bg-emerald-400"></div>
+                                                            Timer
+                                                        </flux:badge>
+                                                    @endif
+
+                                                    {{-- Commits Badge --}}
+                                                    @if ($task->commits_count > 0)
+                                                        <flux:badge size="sm" color="zinc" icon="code-bracket">
+                                                            {{ $task->commits_count }} {{ $task->commits_count === 1 ? 'commit' : 'commits' }}
+                                                        </flux:badge>
+                                                    @endif
+
+                                                    {{-- Session Badge --}}
+                                                    @if ($task->isSessionTask())
+                                                        <flux:badge size="sm" color="violet" class="gap-1">
+                                                            🤖 Sessão
+                                                        </flux:badge>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </li>
+                                    @empty
+                                        <li class="py-8 text-center text-sm text-zinc-600">
+                                            Nenhuma task
+                                        </li>
+                                    @endforelse
+                                </ul>
 
                                 {{-- Load More Button --}}
                                 @if ($hasMore)
-                                    <div class="mt-2">
+                                    <div class="mt-2 px-1">
                                         <flux:button
-                                            variant="ghost"
-                                            size="sm"
-                                            class="w-full"
                                             wire:click="loadMore('{{ $status->value }}')"
                                             wire:loading.attr="disabled"
                                             wire:target="loadMore('{{ $status->value }}')"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full"
                                         >
                                             <span wire:loading.remove wire:target="loadMore('{{ $status->value }}')">
                                                 Carregar mais ({{ $total - $limit }} restantes)

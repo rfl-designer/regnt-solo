@@ -280,3 +280,49 @@ test('weekly calendar shows completed tasks with different styling', function ()
     Livewire::test('pages::weekly-calendar')
         ->assertSee('Task concluída');
 });
+
+test('weekly calendar shows legend section', function () {
+    Livewire::test('pages::weekly-calendar')
+        ->assertSee('Legenda');
+});
+
+test('weekly calendar legend shows load color explanations', function () {
+    Livewire::test('pages::weekly-calendar')
+        ->assertSee('Carga:')
+        ->assertSee('≤4h')
+        ->assertSee('≤6h');
+});
+
+test('weekly calendar legend shows icon explanations', function () {
+    Livewire::test('pages::weekly-calendar')
+        ->assertSee('Ícones:')
+        ->assertSee('Dia passado')
+        ->assertSee('Concluída')
+        ->assertSee('Arrastar');
+});
+
+test('weekly calendar legend shows toggle explanations', function () {
+    Livewire::test('pages::weekly-calendar')
+        ->assertSee('Toggle:');
+});
+
+test('weekly calendar toggle changes state correctly', function () {
+    Livewire::test('pages::weekly-calendar')
+        ->assertSet('showWeekends', false)
+        ->call('toggleWeekends')
+        ->assertSet('showWeekends', true)
+        ->call('toggleWeekends')
+        ->assertSet('showWeekends', false);
+});
+
+test('weekly calendar toggle shows weekdays label when weekends disabled', function () {
+    Livewire::test('pages::weekly-calendar')
+        ->assertSet('showWeekends', false)
+        ->assertSee('Seg-Sex');
+});
+
+test('weekly calendar toggle shows full week label when weekends enabled', function () {
+    Livewire::test('pages::weekly-calendar')
+        ->set('showWeekends', true)
+        ->assertSee('Dom-Sáb');
+});

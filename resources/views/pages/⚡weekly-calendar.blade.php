@@ -339,8 +339,9 @@ new class extends Component
             <flux:button
                 wire:click="toggleWeekends"
                 size="sm"
-                :variant="$showWeekends ? 'primary' : 'ghost'"
-                icon="calendar"
+                :variant="$showWeekends ? 'primary' : 'subtle'"
+                :icon="$showWeekends ? 'calendar' : 'briefcase'"
+                :tooltip="$showWeekends ? 'Clique para mostrar apenas dias úteis (Seg-Sex)' : 'Clique para incluir fins de semana (Dom-Sáb)'"
             >
                 <span class="hidden sm:inline">{{ $showWeekends ? 'Dom-Sáb' : 'Seg-Sex' }}</span>
                 <span class="sm:hidden">{{ $showWeekends ? '7d' : '5d' }}</span>
@@ -353,6 +354,83 @@ new class extends Component
                     <flux:badge size="sm" color="zinc" class="ml-1">{{ $this->availableTasks->count() }}</flux:badge>
                 </flux:button>
             </flux:modal.trigger>
+        </div>
+    </div>
+
+    {{-- Legend --}}
+    <div
+        x-data="{ showLegend: false }"
+        class="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-zinc-800 bg-zinc-900/30 px-4 py-2 text-xs text-zinc-400"
+    >
+        <button
+            @click="showLegend = !showLegend"
+            class="flex items-center gap-1.5 font-medium text-zinc-300 hover:text-white"
+        >
+            <flux:icon name="question-mark-circle" class="size-4" />
+            <span>Legenda</span>
+            <flux:icon
+                name="chevron-down"
+                class="size-3 transition-transform"
+                ::class="showLegend && 'rotate-180'"
+            />
+        </button>
+
+        <div
+            x-show="showLegend"
+            x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="transition ease-in duration-150"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            class="flex flex-wrap items-center gap-x-6 gap-y-2"
+        >
+            {{-- Load colors --}}
+            <div class="flex items-center gap-3">
+                <span class="text-zinc-500">Carga:</span>
+                <div class="flex items-center gap-1">
+                    <div class="size-2.5 rounded-full bg-emerald-500"></div>
+                    <span>≤4h</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="size-2.5 rounded-full bg-amber-500"></div>
+                    <span>≤6h</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="size-2.5 rounded-full bg-red-500"></div>
+                    <span>>6h</span>
+                </div>
+            </div>
+
+            {{-- Icons --}}
+            <div class="flex items-center gap-3">
+                <span class="text-zinc-500">Ícones:</span>
+                <div class="flex items-center gap-1">
+                    <flux:icon name="lock-closed" class="size-3.5 text-zinc-500" />
+                    <span>Dia passado</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <flux:icon name="check-circle" class="size-3.5 text-emerald-500" />
+                    <span>Concluída</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <flux:icon name="grip-vertical" class="size-3.5 text-zinc-500" />
+                    <span>Arrastar</span>
+                </div>
+            </div>
+
+            {{-- Toggle explanation --}}
+            <div class="flex items-center gap-3">
+                <span class="text-zinc-500">Toggle:</span>
+                <div class="flex items-center gap-1">
+                    <flux:icon name="briefcase" class="size-3.5 text-zinc-400" />
+                    <span>Seg-Sex</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <flux:icon name="calendar" class="size-3.5 text-zinc-400" />
+                    <span>Dom-Sáb</span>
+                </div>
+            </div>
         </div>
     </div>
 

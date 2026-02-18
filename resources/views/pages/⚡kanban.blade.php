@@ -223,7 +223,7 @@ new class extends Component
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <flux:heading size="xl">Kanban</flux:heading>
 
-        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div class="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
             {{-- Project filter --}}
             <flux:select wire:model.live="filterProject" size="sm" class="min-w-0 flex-1 sm:min-w-44 sm:flex-none">
                 <option value="">Todos projetos</option>

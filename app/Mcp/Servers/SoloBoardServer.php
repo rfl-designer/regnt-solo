@@ -76,5 +76,6 @@ class SoloBoardServer extends Server
     protected array $prompts = [
         \App\Mcp\Prompts\DailyPlanningPrompt::class,
         \App\Mcp\Prompts\SessionPlanningPrompt::class,
+        \App\Mcp\Prompts\DevelopmentWorkflowPrompt::class,
     ];
 }

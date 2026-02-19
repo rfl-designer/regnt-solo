@@ -25,11 +25,14 @@ test('development workflow prompt returns complete context for task', function (
     $response->assertSee('start-timer');
 });
 
-test('development workflow prompt fails for non-existent task', function () {
-    SoloBoardServer::prompt(DevelopmentWorkflowPrompt::class, [
+test('development workflow prompt returns error for non-existent task', function () {
+    $response = SoloBoardServer::prompt(DevelopmentWorkflowPrompt::class, [
         'task_id' => '99999',
     ]);
-})->throws(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
+    $response->assertOk();
+    $response->assertSee('Task com ID `99999` não encontrada');
+});
 
 test('development workflow prompt includes related documents', function () {
     $project = Project::factory()->create();

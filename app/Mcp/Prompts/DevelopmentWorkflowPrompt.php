@@ -40,10 +40,34 @@ class DevelopmentWorkflowPrompt extends Prompt
      */
     public function handle(Request $request): array
     {
-        $taskId = $request->integer('task_id');
+        // Get task_id from request, handling different formats
+        $taskId = $request->get('task_id');
+
+        // If task_id is not set or empty, return error with helpful message
+        if (empty($taskId)) {
+            return [
+                Response::text("❌ **Erro**: O argumento `task_id` é obrigatório.\n\n**Uso correto:**\n```\ndevelopment-workflow task_id=123\n```\n\nUse `list-tasks status=doing` para ver tasks disponíveis."),
+            ];
+        }
+
+        // Convert to integer
+        $taskId = (int) $taskId;
+
+        if ($taskId <= 0) {
+            return [
+                Response::text("❌ **Erro**: O `task_id` deve ser um número maior que zero.\n\nValor recebido: `{$request->get('task_id')}`"),
+            ];
+        }
+
         $task = Task::query()
             ->with(['project', 'commits', 'timeEntries', 'statusChanges', 'recurringTask', 'taskTemplate'])
-            ->findOrFail($taskId);
+            ->find($taskId);
+
+        if (! $task) {
+            return [
+                Response::text("❌ **Erro**: Task com ID `{$taskId}` não encontrada.\n\nUse `list-tasks` para ver tasks disponíveis."),
+            ];
+        }
 
         $context = $this->buildTaskContext($task);
         $context .= $this->buildProjectContext($task);

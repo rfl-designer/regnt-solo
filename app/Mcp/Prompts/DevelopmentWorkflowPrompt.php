@@ -50,6 +50,12 @@ class DevelopmentWorkflowPrompt extends Prompt
             ];
         }
 
+        // Handle case where Claude Code passes "task_id=123" as the value
+        if (is_string($taskId) && str_contains($taskId, '=')) {
+            $parts = explode('=', $taskId);
+            $taskId = end($parts);
+        }
+
         // Convert to integer
         $taskId = (int) $taskId;
 

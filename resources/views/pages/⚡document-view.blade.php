@@ -1,9 +1,13 @@
 <?php
 
 use App\Models\Document;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Flux\Flux;
+use Illuminate\Support\Str;
+use League\CommonMark\CommonMarkConverter;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 new class extends Component
 {
@@ -32,6 +36,42 @@ new class extends Component
 
         $action = $document->fresh()->is_pinned ? 'fixado' : 'desafixado';
         Flux::toast(variant: 'success', heading: 'Documento '.$action, text: $document->title);
+    }
+
+    public function exportPdf(): StreamedResponse
+    {
+        $document = $this->document;
+
+        // Convert markdown to HTML
+        $converter = new CommonMarkConverter([
+            'html_input' => 'strip',
+            'allow_unsafe_links' => false,
+        ]);
+        $htmlContent = $converter->convert($document->content)->getContent();
+
+        // Get type color for header badge
+        $typeColors = [
+            'prd' => '#3b82f6',      // blue
+            'spec' => '#8b5cf6',     // violet
+            'decision' => '#f59e0b', // amber
+            'note' => '#6b7280',     // gray
+            'reference' => '#10b981', // emerald
+        ];
+        $typeColor = $typeColors[$document->type->value] ?? '#6b7280';
+
+        $pdf = Pdf::loadView('pdf.document', [
+            'document' => $document,
+            'htmlContent' => $htmlContent,
+            'typeColor' => $typeColor,
+        ]);
+
+        $filename = Str::slug($document->title).'.pdf';
+
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            $filename,
+            ['Content-Type' => 'application/pdf']
+        );
     }
 
     public function deleteDocument(): void
@@ -103,6 +143,14 @@ new class extends Component
                 x-on:click="history.back()"
             >
                 Voltar
+            </flux:button>
+
+            <flux:button
+                variant="ghost"
+                icon="arrow-down-tray"
+                wire:click="exportPdf"
+            >
+                Exportar PDF
             </flux:button>
 
             <flux:button

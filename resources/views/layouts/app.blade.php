@@ -10,6 +10,7 @@
             if (key === 'k') { $event.preventDefault(); $flux.modal('command-palette').show(); return; }
             if (key === 'n') { $event.preventDefault(); $dispatch('open-quick-add'); $flux.modal('quick-add').show(); }
             if (key === 'b') { $event.preventDefault(); Livewire.navigate('/kanban'); }
+            if (key === 'f') { $event.preventDefault(); Livewire.navigate('/features'); }
             if (key === 'd') { $event.preventDefault(); Livewire.navigate('/daily'); }
             if (key === 'i') { $event.preventDefault(); Livewire.navigate('/inbox'); }
             if (key === 'w') { $event.preventDefault(); Livewire.navigate('/weekly'); }

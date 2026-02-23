@@ -20,6 +20,7 @@ class TimeEntry extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'feature_id',
         'task_id',
         'started_at',
         'stopped_at',
@@ -41,6 +42,14 @@ class TimeEntry extends Model
             'is_focus_session' => 'boolean',
             'focus_rating' => 'integer',
         ];
+    }
+
+    /**
+     * Get the feature this time entry belongs to.
+     */
+    public function feature(): BelongsTo
+    {
+        return $this->belongsTo(Feature::class);
     }
 
     /**

@@ -121,4 +121,15 @@ class TaskFactory extends Factory
             'session_result' => fake()->optional(0.7)->paragraph(),
         ]);
     }
+
+    /**
+     * Indicate that the task belongs to a feature.
+     */
+    public function forFeature(\App\Models\Feature $feature): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'feature_id' => $feature->id,
+            'project_id' => $feature->project_id,
+        ]);
+    }
 }

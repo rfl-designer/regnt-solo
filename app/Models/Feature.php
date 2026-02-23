@@ -201,6 +201,37 @@ class Feature extends Model
     }
 
     /**
+     * Stop the running timer for this feature.
+     */
+    public function stopTimer(?string $notes = null): ?TimeEntry
+    {
+        $entry = $this->timeEntries()->running()->latest('started_at')->first();
+
+        if ($entry === null) {
+            return null;
+        }
+
+        $entry->update([
+            'stopped_at' => now(),
+            'notes' => $notes,
+        ]);
+
+        return $entry->fresh();
+    }
+
+    /**
+     * Get the currently running time entry for this feature.
+     */
+    public function runningEntry(): ?TimeEntry
+    {
+        if ($this->relationLoaded('timeEntries')) {
+            return $this->timeEntries->first(fn (TimeEntry $entry): bool => $entry->stopped_at === null);
+        }
+
+        return $this->timeEntries()->running()->latest('started_at')->first();
+    }
+
+    /**
      * Scope to features for a specific project.
      */
     public function scopeForProject(Builder $query, int $projectId): void

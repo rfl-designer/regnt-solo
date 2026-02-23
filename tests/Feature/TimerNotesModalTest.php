@@ -22,7 +22,8 @@ test('opens modal when open-timer-notes event is dispatched', function () {
         ->dispatch('open-timer-notes', entryId: $entry->id)
         ->assertSet('showModal', true)
         ->assertSet('entryId', $entry->id)
-        ->assertSet('taskName', 'My Task')
+        ->assertSet('itemName', 'My Task')
+        ->assertSet('itemType', 'task')
         ->assertSet('notes', '');
 });
 
@@ -239,4 +240,26 @@ test('resets focusRating when opening a new entry', function () {
         ->set('focusRating', 5)
         ->dispatch('open-timer-notes', entryId: $entry2->id)
         ->assertSet('focusRating', null);
+});
+
+test('opens modal with feature title when entry belongs to a feature', function () {
+    $feature = \App\Models\Feature::factory()->create(['title' => 'Epic Feature']);
+    $entry = TimeEntry::factory()->running()->create(['feature_id' => $feature->id, 'task_id' => null]);
+
+    Livewire::test('timer-notes-modal')
+        ->dispatch('open-timer-notes', entryId: $entry->id)
+        ->assertSet('showModal', true)
+        ->assertSet('entryId', $entry->id)
+        ->assertSet('itemName', 'Epic Feature')
+        ->assertSet('itemType', 'feature')
+        ->assertSet('notes', '');
+});
+
+test('displays feature name in modal for feature entries', function () {
+    $feature = \App\Models\Feature::factory()->create(['title' => 'Implement Dark Mode']);
+    $entry = TimeEntry::factory()->running()->create(['feature_id' => $feature->id, 'task_id' => null]);
+
+    Livewire::test('timer-notes-modal')
+        ->dispatch('open-timer-notes', entryId: $entry->id)
+        ->assertSee('Implement Dark Mode');
 });

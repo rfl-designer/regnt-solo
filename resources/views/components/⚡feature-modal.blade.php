@@ -124,7 +124,7 @@ new class extends Component
         $runningEntry = $this->feature->timeEntries()->running()->first();
 
         if ($runningEntry) {
-            $this->dispatch('open-timer-notes-modal', entryId: $runningEntry->id);
+            $this->dispatch('open-timer-notes', entryId: $runningEntry->id);
         }
     }
 

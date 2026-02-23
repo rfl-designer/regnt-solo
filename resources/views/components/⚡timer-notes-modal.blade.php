@@ -13,7 +13,9 @@ new class extends Component
 
     public string $notes = '';
 
-    public string $taskName = '';
+    public string $itemName = '';
+
+    public string $itemType = 'task';
 
     public bool $isFocusSession = false;
 
@@ -25,10 +27,18 @@ new class extends Component
     #[On('open-timer-notes')]
     public function openNotes(int $entryId): void
     {
-        $entry = TimeEntry::with('task')->findOrFail($entryId);
+        $entry = TimeEntry::with(['task', 'feature'])->findOrFail($entryId);
 
         $this->entryId = $entry->id;
-        $this->taskName = $entry->task->title ?? '';
+
+        if ($entry->feature_id !== null && $entry->feature !== null) {
+            $this->itemName = $entry->feature->title;
+            $this->itemType = 'feature';
+        } else {
+            $this->itemName = $entry->task->title ?? '';
+            $this->itemType = 'task';
+        }
+
         $this->notes = '';
         $this->isFocusSession = (bool) $entry->is_focus_session;
         $this->focusRating = null;
@@ -89,7 +99,7 @@ new class extends Component
                     @if ($isFocusSession)
                         <span class="mr-1">🎯</span>
                     @endif
-                    {{ $taskName }}
+                    {{ $itemName }}
                 </flux:text>
             </div>
 

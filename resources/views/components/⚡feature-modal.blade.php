@@ -18,6 +18,7 @@ new class extends Component
     #[Validate('required|string|max:255')]
     public string $title = '';
 
+    #[Validate('nullable|string|max:65535')]
     public string $spec = '';
 
     public ?int $projectId = null;

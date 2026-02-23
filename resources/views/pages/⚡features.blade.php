@@ -366,6 +366,8 @@ new class extends Component
                                     <button
                                         type="button"
                                         wire:click.stop="toggleExpanded({{ $feature->id }})"
+                                        aria-expanded="{{ $isExpanded ? 'true' : 'false' }}"
+                                        aria-controls="tasks-list-{{ $feature->id }}"
                                         class="flex w-full items-center justify-between px-3 py-2 text-xs text-zinc-400 transition hover:bg-zinc-700/50 hover:text-zinc-300"
                                     >
                                         <span>{{ $tasksCount }} {{ $tasksCount === 1 ? 'task' : 'tasks' }}</span>
@@ -377,7 +379,7 @@ new class extends Component
 
                                     {{-- Tasks List (Expandable) --}}
                                     @if ($isExpanded)
-                                        <div class="border-t border-zinc-700/50 bg-zinc-800/50 px-3 py-2">
+                                        <div id="tasks-list-{{ $feature->id }}" class="border-t border-zinc-700/50 bg-zinc-800/50 px-3 py-2">
                                             <ul class="space-y-1.5">
                                                 @foreach ($feature->tasks->sortBy('sort_order') as $task)
                                                     <li

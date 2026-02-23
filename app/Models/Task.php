@@ -28,6 +28,7 @@ class Task extends Model
      */
     protected $fillable = [
         'project_id',
+        'feature_id',
         'recurring_task_id',
         'task_template_id',
         'title',
@@ -67,6 +68,14 @@ class Task extends Model
     }
 
     /**
+     * Get the feature this task belongs to.
+     */
+    public function feature(): BelongsTo
+    {
+        return $this->belongsTo(Feature::class);
+    }
+
+    /**
      * Get the recurring task this task was created from.
      */
     public function recurringTask(): BelongsTo
@@ -96,6 +105,14 @@ class Task extends Model
     public function isFromTemplate(): bool
     {
         return $this->task_template_id !== null;
+    }
+
+    /**
+     * Check if this task belongs to a feature.
+     */
+    public function isFromFeature(): bool
+    {
+        return $this->feature_id !== null;
     }
 
     /**

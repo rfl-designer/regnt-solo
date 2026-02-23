@@ -43,6 +43,14 @@ class Project extends Model
     }
 
     /**
+     * Get the features for this project.
+     */
+    public function features(): HasMany
+    {
+        return $this->hasMany(Feature::class);
+    }
+
+    /**
      * Get the tasks for this project.
      */
     public function tasks(): HasMany

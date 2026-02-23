@@ -1,0 +1,102 @@
+<?php
+
+namespace App\Mcp\Tools;
+
+use App\Enums\FeaturePriority;
+use App\Models\Feature;
+use App\Models\Project;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Validation\Rule;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\Server\Tool;
+
+class UpdateFeatureTool extends Tool
+{
+    protected string $name = 'update-feature';
+
+    protected string $description = 'Updates an existing feature. Provide only the fields you want to change.';
+
+    /**
+     * Handle the tool request.
+     */
+    public function handle(Request $request): Response
+    {
+        $validated = $request->validate([
+            'feature_id' => 'required|integer|exists:features,id',
+            'title' => 'nullable|string|max:255',
+            'spec' => 'nullable|string',
+            'project_slug' => 'nullable|string|exists:projects,slug',
+            'priority' => ['nullable', 'string', Rule::enum(FeaturePriority::class)],
+            'due_date' => 'nullable|date',
+        ], [
+            'feature_id.required' => 'You must provide a feature_id. Use list-features to find available feature IDs.',
+            'feature_id.exists' => 'Feature not found. Use list-features to find available feature IDs.',
+            'project_slug.exists' => 'Project not found. Use list-projects to find available project slugs.',
+            'priority.Illuminate\Validation\Rules\Enum' => 'Invalid priority. Valid values: urgent, high, medium, low.',
+        ]);
+
+        $feature = Feature::findOrFail($validated['feature_id']);
+
+        $updates = [];
+
+        if (isset($validated['title'])) {
+            $updates['title'] = $validated['title'];
+        }
+
+        if (array_key_exists('spec', $validated)) {
+            $updates['spec'] = $validated['spec'];
+        }
+
+        if (isset($validated['project_slug'])) {
+            $updates['project_id'] = Project::query()->where('slug', $validated['project_slug'])->value('id');
+        }
+
+        if (isset($validated['priority'])) {
+            $updates['priority'] = $validated['priority'];
+        }
+
+        if (array_key_exists('due_date', $validated)) {
+            $updates['due_date'] = $validated['due_date'];
+        }
+
+        if (! empty($updates)) {
+            $feature->update($updates);
+        }
+
+        $feature->load(['project', 'tasks']);
+
+        $data = [
+            'id' => $feature->id,
+            'title' => $feature->title,
+            'slug' => $feature->slug,
+            'status' => $feature->status->value,
+            'priority' => $feature->priority->value,
+            'progress' => $feature->progress,
+            'project' => $feature->project?->name,
+            'due_date' => $feature->due_date?->toDateString(),
+            'tasks_count' => $feature->tasksCount(),
+            'is_running' => $feature->isRunning(),
+            'updated_at' => $feature->updated_at->toDateTimeString(),
+        ];
+
+        return Response::text(json_encode($data, JSON_PRETTY_PRINT));
+    }
+
+    /**
+     * Get the tool's input schema.
+     *
+     * @return array<string, \Illuminate\JsonSchema\Types\Type>
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'feature_id' => $schema->integer()->description('The ID of the feature to update.')->required(),
+            'title' => $schema->string()->description('New title for the feature.'),
+            'spec' => $schema->string()->description('New specification in markdown format.'),
+            'project_slug' => $schema->string()->description('Slug of the project to assign the feature to.'),
+            'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('New priority.'),
+            'due_date' => $schema->string()->description('New due date in YYYY-MM-DD format.'),
+        ];
+    }
+}

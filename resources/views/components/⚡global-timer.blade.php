@@ -8,12 +8,40 @@ use Livewire\Component;
 new class extends Component
 {
     /**
-     * Get the currently running time entry with its task.
+     * Get the currently running time entry with its task or feature.
      */
     #[Computed]
     public function activeEntry(): ?TimeEntry
     {
-        return TimeEntry::with('task')->running()->first();
+        return TimeEntry::with(['task', 'feature'])->running()->first();
+    }
+
+    /**
+     * Check if the active entry is for a feature.
+     */
+    public function isFeatureTimer(): bool
+    {
+        $entry = $this->activeEntry;
+
+        return $entry !== null && $entry->feature_id !== null;
+    }
+
+    /**
+     * Get the timer title (task or feature name).
+     */
+    public function getTimerTitle(): string
+    {
+        $entry = $this->activeEntry;
+
+        if ($entry === null) {
+            return '';
+        }
+
+        if ($entry->feature_id !== null && $entry->feature !== null) {
+            return $entry->feature->title;
+        }
+
+        return $entry->task->title ?? '';
     }
 
     /**
@@ -103,22 +131,32 @@ new class extends Component
     "
 >
     @if ($this->activeEntry)
+        @php
+            $isFeature = $this->isFeatureTimer();
+            $timerTitle = $this->getTimerTitle();
+        @endphp
         <div class="inline-flex items-center gap-2">
             @if ($this->activeEntry->is_focus_session)
                 <span class="text-sm">🎯</span>
+            @elseif ($isFeature)
+                <span class="text-sm">🧩</span>
             @else
                 <span class="text-sm">⏱</span>
             @endif
 
             <button
                 type="button"
-                class="text-sm font-medium truncate max-w-32 {{ $this->activeEntry->is_focus_session ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100' }}"
-                wire:click="$dispatch('open-task-modal', { taskId: {{ $this->activeEntry->task_id }} })"
+                class="text-sm font-medium truncate max-w-32 {{ $this->activeEntry->is_focus_session ? 'text-amber-400 hover:text-amber-300' : ($isFeature ? 'text-violet-400 hover:text-violet-300' : 'text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100') }}"
+                @if ($isFeature)
+                    wire:click="$dispatch('open-feature-modal', { featureId: {{ $this->activeEntry->feature_id }} })"
+                @else
+                    wire:click="$dispatch('open-task-modal', { taskId: {{ $this->activeEntry->task_id }} })"
+                @endif
             >
-                {{ $this->activeEntry->task->title }}
+                {{ $timerTitle }}
             </button>
 
-            <span class="text-sm font-mono {{ $this->activeEntry->is_focus_session ? 'text-amber-400/70' : 'text-zinc-500 dark:text-zinc-400' }}" x-text="elapsed">00:00:00</span>
+            <span class="text-sm font-mono {{ $this->activeEntry->is_focus_session ? 'text-amber-400/70' : ($isFeature ? 'text-violet-400/70' : 'text-zinc-500 dark:text-zinc-400') }}" x-text="elapsed">00:00:00</span>
 
             <flux:button
                 wire:click="stop"
@@ -127,7 +165,7 @@ new class extends Component
                 icon="stop"
                 square
                 tooltip="Parar timer"
-                :class="$this->activeEntry->is_focus_session ? 'bg-amber-600! hover:bg-amber-500! text-white!' : ''"
+                :class="$this->activeEntry->is_focus_session ? 'bg-amber-600! hover:bg-amber-500! text-white!' : ($isFeature ? 'bg-violet-600! hover:bg-violet-500! text-white!' : '')"
             />
         </div>
     @endif

@@ -141,10 +141,32 @@ new class extends Component
     #[On('feature-created')]
     #[On('task-updated')]
     #[On('task-created')]
+    #[On('timer-updated')]
     public function refreshBoard(): void
     {
         unset($this->features);
         unset($this->projects);
+    }
+
+    public function startTimer(int $featureId): void
+    {
+        $feature = Feature::findOrFail($featureId);
+        $feature->startTimer();
+
+        Flux::toast(variant: 'success', heading: 'Timer iniciado', text: $feature->title);
+        $this->dispatch('timer-updated');
+
+        unset($this->features);
+    }
+
+    public function stopTimer(int $featureId): void
+    {
+        $feature = Feature::findOrFail($featureId);
+        $runningEntry = $feature->runningEntry();
+
+        if ($runningEntry) {
+            $this->dispatch('open-timer-notes', entryId: $runningEntry->id);
+        }
     }
 }
 
@@ -340,14 +362,6 @@ new class extends Component
                                         </flux:badge>
                                     @endif
 
-                                    {{-- Running Timer --}}
-                                    @if ($feature->isRunning())
-                                        <flux:badge size="sm" color="emerald" class="animate-pulse">
-                                            <div class="mr-1 size-2 rounded-full bg-emerald-400"></div>
-                                            Timer
-                                        </flux:badge>
-                                    @endif
-
                                     {{-- Due Date --}}
                                     @if ($feature->due_date)
                                         @php
@@ -357,6 +371,31 @@ new class extends Component
                                             {{ $feature->due_date->format('d/m') }}
                                         </flux:badge>
                                     @endif
+
+                                    {{-- Timer Control --}}
+                                    <div class="ml-auto">
+                                        @if ($feature->isRunning())
+                                            <button
+                                                type="button"
+                                                wire:click.stop="stopTimer({{ $feature->id }})"
+                                                class="flex items-center gap-1 rounded-md bg-violet-600/20 px-2 py-1 text-xs font-medium text-violet-400 transition hover:bg-violet-600/30"
+                                                title="Parar timer"
+                                            >
+                                                <div class="size-2 animate-pulse rounded-full bg-violet-400"></div>
+                                                <span>Timer</span>
+                                                <flux:icon name="stop" class="size-3" />
+                                            </button>
+                                        @else
+                                            <button
+                                                type="button"
+                                                wire:click.stop="startTimer({{ $feature->id }})"
+                                                class="flex items-center gap-1 rounded-md bg-zinc-700/50 px-2 py-1 text-xs font-medium text-zinc-400 opacity-0 transition group-hover:opacity-100 hover:bg-zinc-600 hover:text-zinc-200"
+                                                title="Iniciar timer"
+                                            >
+                                                <flux:icon name="play" class="size-3" />
+                                            </button>
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
 

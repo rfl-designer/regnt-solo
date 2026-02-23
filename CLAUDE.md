@@ -353,17 +353,24 @@ O SoloBoard expõe um MCP Server para integração com AI clients (Claude Code, 
   - `create-task` — Cria nova task (default: inbox/medium)
   - `update-task` — Atualiza task (markAsDone ao mudar para done)
   - `delete-task` — Deleta task e time entries
-  - `start-timer` — Inicia timer (para outros automaticamente)
+  - `list-features` — Lista features com filtros (project_slug, status, limit)
+  - `get-feature` — Detalhes completos de uma feature (spec, tasks, time entries, progress)
+  - `create-feature` — Cria nova feature com spec e prioridade
+  - `update-feature` — Atualiza feature (spec, prioridade, due_date, projeto)
+  - `delete-feature` — Deleta feature (desvincula tasks, deleta time entries)
+  - `add-task-to-feature` — Vincula task existente a uma feature (herda projeto se não tiver)
+  - `start-timer` — Inicia timer para task ou feature (para outros automaticamente)
   - `stop-timer` — Para timer com notas opcionais
-  - `timer-status` — Mostra timer ativo
+  - `timer-status` — Mostra timer ativo (task ou feature)
   - `today-plan` — Plano do dia (auto-cria)
   - `suggest-tasks` — Sugere tasks prioritárias
   - `add-to-plan` — Adiciona task ao plano do dia
   - `list-projects` — Lista projetos por status
-- **Resource**: `soloboard://overview` — Resumo geral do estado
+- **Resource**: `soloboard://overview` — Resumo geral do estado (inclui active_features)
 - **Prompts**:
   - `daily-planning` — Ajuda a planejar o dia
   - `session-planning` — Lê prompt de uma task e gera contexto para planejar sessão de AI coding
+  - `feature-planning` — Lê spec de uma feature e gera contexto para planejar implementação
 
 <laravel-boost-guidelines>
 === foundation rules ===
@@ -399,7 +406,7 @@ This project has domain-specific skills available. You MUST activate the relevan
 - `mcp-development` — Develops MCP servers, tools, resources, and prompts. Activates when creating MCP tools, resources, or prompts; setting up AI integrations; debugging MCP connections; working with routes/ai.php; or when the user mentions MCP, Model Context Protocol, AI tools, AI server, or building tools for AI assistants.
 - `fluxui-development` — Develops UIs with Flux UI Pro components. Activates when creating buttons, forms, modals, inputs, tables, charts, date pickers, or UI components; replacing HTML elements with Flux; working with flux: components; or when the user mentions Flux, component library, UI components, form fields, or asks about available Flux components.
 - `livewire-development` — Develops reactive Livewire 4 components. Activates when creating, updating, or modifying Livewire components; working with wire:model, wire:click, wire:loading, or any wire: directives; adding real-time updates, loading states, or reactivity; debugging component behavior; writing Livewire tests; or when the user mentions Livewire, component, counter, or reactive UI.
-- `pest-testing` — Tests applications using the Pest 4 PHP framework. Activates when writing tests, creating unit or feature tests, adding assertions, testing Livewire components, browser testing, debugging test failures, working with datasets or mocking; or when the user mentions test, spec, TDD, expects, assertion, coverage, or needs to verify functionality works. ALSO activates when: running 'php artisan test', creating test files, fixing failing tests, adding test coverage, implementing red-green-refactor, writing it() or test() blocks, using Livewire::test(), or when any implementation needs verification through automated tests.
+- `pest-testing` — Tests applications using the Pest 4 PHP framework. Activates when writing tests, creating unit or feature tests, adding assertions, testing Livewire components, browser testing, debugging test failures, working with datasets or mocking; or when the user mentions test, spec, TDD, expects, assertion, coverage, or needs to verify functionality works.
 - `tailwindcss-development` — Styles applications using Tailwind CSS v4 utilities. Activates when adding styles, restyling components, working with gradients, spacing, layout, flex, grid, responsive design, dark mode, colors, typography, or borders; or when the user mentions CSS, styling, classes, Tailwind, restyle, hero section, cards, buttons, or any visual/UI changes.
 - `developing-with-fortify` — Laravel Fortify headless authentication backend development. Activate when implementing authentication features including login, registration, password reset, email verification, two-factor authentication (2FA/TOTP), profile updates, headless auth, authentication scaffolding, or auth guards in Laravel applications.
 

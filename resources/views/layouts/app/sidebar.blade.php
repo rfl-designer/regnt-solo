@@ -27,6 +27,9 @@
                     <flux:sidebar.item icon="view-columns" :href="route('kanban')" :current="request()->routeIs('kanban')" wire:navigate>
                         Kanban
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="squares-2x2" :href="route('features')" :current="request()->routeIs('features')" wire:navigate>
+                        Features
+                    </flux:sidebar.item>
                     <flux:sidebar.item icon="calendar-days" :href="route('daily')" :current="request()->routeIs('daily')" wire:navigate>
                         Hoje
                     </flux:sidebar.item>
@@ -150,6 +153,7 @@
 
         <livewire:task-quick-add />
         <livewire:task-modal />
+        <livewire:feature-modal />
         <livewire:project-form />
         <livewire:timer-notes-modal />
 

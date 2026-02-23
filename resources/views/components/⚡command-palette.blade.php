@@ -352,7 +352,8 @@ new class extends Component
                         <p>Digite para buscar ou use <code class="rounded bg-zinc-700 px-1.5 py-0.5 text-xs text-zinc-300">></code> para comandos</p>
                         <div class="mt-3 flex flex-wrap justify-center gap-2">
                             <flux:badge size="sm" color="zinc">N</flux:badge> <span class="text-xs">Nova task</span>
-                            <flux:badge size="sm" color="zinc">K</flux:badge> <span class="text-xs">Kanban</span>
+                            <flux:badge size="sm" color="zinc">B</flux:badge> <span class="text-xs">Kanban</span>
+                            <flux:badge size="sm" color="zinc">F</flux:badge> <span class="text-xs">Features</span>
                             <flux:badge size="sm" color="zinc">D</flux:badge> <span class="text-xs">Daily</span>
                             <flux:badge size="sm" color="zinc">I</flux:badge> <span class="text-xs">Inbox</span>
                             <flux:badge size="sm" color="zinc">T</flux:badge> <span class="text-xs">Timer</span>

@@ -24,7 +24,7 @@ class SoloBoardServer extends Server
     /**
      * The MCP server's instructions for the LLM.
      */
-    protected string $instructions = 'SoloBoard is a personal productivity app for solo developers. It manages tasks, projects, time tracking, and daily planning. Use the available tools to create, read, update, and delete tasks; start and stop timers; manage daily plans; and list projects. Tasks have statuses (inbox, backlog, todo, doing, done) and priorities (urgent, high, medium, low). Projects have slugs for identification. Timers are time entries linked to tasks — only one timer can run at a time. Documents are markdown pages (PRDs, specs, decisions, notes) that belong to projects. Use list-documents, get-document, create-document, update-document, delete-document to manage them. Use get-project-context to get full project overview including all documents and active tasks.';
+    protected string $instructions = 'SoloBoard is a personal productivity app for solo developers. It manages tasks, features, projects, time tracking, and daily planning. Use the available tools to create, read, update, and delete tasks and features; start and stop timers; manage daily plans; and list projects. Tasks have statuses (inbox, backlog, todo, doing, done) and priorities (urgent, high, medium, low). Features group related tasks and have computed status based on their tasks (draft, backlog, todo, doing, done). Projects have slugs for identification. Timers are time entries linked to tasks or features — only one timer can run at a time. Documents are markdown pages (PRDs, specs, decisions, notes) that belong to projects. Use list-features, get-feature, create-feature, update-feature, delete-feature, add-task-to-feature to manage features. Use get-project-context for full project overview.';
 
     /**
      * The tools registered with this MCP server.
@@ -57,6 +57,12 @@ class SoloBoardServer extends Server
         \App\Mcp\Tools\ListRecurringTasksTool::class,
         \App\Mcp\Tools\CreateRecurringTaskTool::class,
         \App\Mcp\Tools\ToggleRecurringTaskTool::class,
+        \App\Mcp\Tools\ListFeaturesTool::class,
+        \App\Mcp\Tools\GetFeatureTool::class,
+        \App\Mcp\Tools\CreateFeatureTool::class,
+        \App\Mcp\Tools\UpdateFeatureTool::class,
+        \App\Mcp\Tools\DeleteFeatureTool::class,
+        \App\Mcp\Tools\AddTaskToFeatureTool::class,
     ];
 
     /**
@@ -77,5 +83,6 @@ class SoloBoardServer extends Server
         \App\Mcp\Prompts\DailyPlanningPrompt::class,
         \App\Mcp\Prompts\SessionPlanningPrompt::class,
         \App\Mcp\Prompts\DevelopmentWorkflowPrompt::class,
+        \App\Mcp\Prompts\FeaturePlanningPrompt::class,
     ];
 }

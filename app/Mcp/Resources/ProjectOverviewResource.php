@@ -3,6 +3,7 @@
 namespace App\Mcp\Resources;
 
 use App\Enums\TaskStatus;
+use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
@@ -17,7 +18,7 @@ class ProjectOverviewResource extends Resource
 {
     protected string $uri = 'soloboard://overview';
 
-    protected string $description = 'Provides a comprehensive overview of the current SoloBoard state including active projects with task counts, running timer, overdue tasks, and hours worked today.';
+    protected string $description = 'Provides a comprehensive overview of the current SoloBoard state including active projects with task counts, active features, running timer, overdue tasks, and hours worked today.';
 
     /**
      * Handle the resource request.
@@ -88,8 +89,27 @@ class ProjectOverviewResource extends Resource
         $minutesToday = $todayEntries->sum(fn (TimeEntry $entry) => $entry->duration_minutes);
         $hoursToday = round($minutesToday / 60, 2);
 
+        // Get active features (not done)
+        $activeFeatures = Feature::query()
+            ->with(['project', 'tasks'])
+            ->get()
+            ->filter(fn (Feature $f) => $f->status->value !== 'done')
+            ->take(10)
+            ->map(fn (Feature $feature) => [
+                'id' => $feature->id,
+                'title' => $feature->title,
+                'slug' => $feature->slug,
+                'status' => $feature->status->value,
+                'priority' => $feature->priority->value,
+                'progress' => $feature->progress,
+                'project' => $feature->project?->name,
+                'tasks_count' => $feature->tasksCount(),
+                'is_running' => $feature->isRunning(),
+            ])->values()->all();
+
         $data = [
             'active_projects' => $projects,
+            'active_features' => $activeFeatures,
             'running_timer' => $timer,
             'overdue_tasks' => $overdueTasks,
             'overdue_count' => count($overdueTasks),

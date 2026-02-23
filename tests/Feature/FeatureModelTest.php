@@ -228,6 +228,54 @@ describe('Feature Timer', function () {
 
         expect($entry->is_focus_session)->toBeTrue();
     });
+
+    test('can stop a timer', function () {
+        $feature = Feature::factory()->create();
+        $entry = $feature->startTimer();
+
+        $stoppedEntry = $feature->stopTimer('Work completed');
+
+        expect($stoppedEntry)->not->toBeNull()
+            ->and($stoppedEntry->stopped_at)->not->toBeNull()
+            ->and($stoppedEntry->notes)->toBe('Work completed');
+    });
+
+    test('stopTimer returns null when no running entry', function () {
+        $feature = Feature::factory()->create();
+
+        $result = $feature->stopTimer();
+
+        expect($result)->toBeNull();
+    });
+
+    test('stopTimer can save notes as null', function () {
+        $feature = Feature::factory()->create();
+        $entry = $feature->startTimer();
+
+        $stoppedEntry = $feature->stopTimer();
+
+        expect($stoppedEntry)->not->toBeNull()
+            ->and($stoppedEntry->stopped_at)->not->toBeNull()
+            ->and($stoppedEntry->notes)->toBeNull();
+    });
+
+    test('runningEntry returns the running time entry', function () {
+        $feature = Feature::factory()->create();
+        $entry = $feature->startTimer();
+
+        $runningEntry = $feature->runningEntry();
+
+        expect($runningEntry)->not->toBeNull()
+            ->and($runningEntry->id)->toBe($entry->id);
+    });
+
+    test('runningEntry returns null when no running entry', function () {
+        $feature = Feature::factory()->create();
+
+        $runningEntry = $feature->runningEntry();
+
+        expect($runningEntry)->toBeNull();
+    });
 });
 
 describe('Feature Helper Methods', function () {

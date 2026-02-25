@@ -1,0 +1,32 @@
+{
+    "name": "Laravel + Flux UI Dev",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "app",
+    "workspaceFolder": "/workspace",
+
+    "mounts": [
+        "source=${localEnv:HOME}/.claude,target=/home/dev/.claude,type=bind,consistency=cached",
+        "source=composer-cache-${devcontainerId},target=/home/dev/.composer,type=volume",
+        "source=npm-cache-${devcontainerId},target=/home/dev/.npm,type=volume",
+        "source=bash-history-${devcontainerId},target=/commandhistory,type=volume",
+    ],
+
+    "containerEnv": {
+        "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+        "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
+        "NODE_OPTIONS": "--max-old-space-size=4096",
+        "COMPOSER_AUTH": "${localEnv:COMPOSER_AUTH}",
+        "FLUX_LICENSE_KEY": "${localEnv:FLUX_LICENSE_KEY}",
+        "FLUX_EMAIL": "${localEnv:FLUX_EMAIL}",
+    },
+
+    "appPort": [8000, 5173],
+
+    "postCreateCommand": ".devcontainer/scripts/post-create.sh",
+    "postStartCommand": ".devcontainer/scripts/post-start.sh",
+
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {},
+        "ghcr.io/devcontainers/features/github-cli:1": {},
+    },
+}

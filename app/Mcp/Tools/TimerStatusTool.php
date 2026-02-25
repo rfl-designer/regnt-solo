@@ -22,7 +22,7 @@ class TimerStatusTool extends Tool
     public function handle(Request $request): Response
     {
         $entry = TimeEntry::query()
-            ->with('task')
+            ->with(['task', 'feature'])
             ->running()
             ->latest('started_at')
             ->first();
@@ -36,12 +36,21 @@ class TimerStatusTool extends Tool
 
         $data = [
             'running' => true,
-            'task_id' => $entry->task_id,
-            'task_title' => $entry->task->title,
             'entry_id' => $entry->id,
             'started_at' => $entry->started_at->toDateTimeString(),
             'duration_minutes' => $entry->duration_minutes,
+            'is_focus_session' => $entry->is_focus_session,
         ];
+
+        if ($entry->feature_id !== null && $entry->feature !== null) {
+            $data['feature_id'] = $entry->feature_id;
+            $data['feature_title'] = $entry->feature->title;
+        }
+
+        if ($entry->task_id !== null && $entry->task !== null) {
+            $data['task_id'] = $entry->task_id;
+            $data['task_title'] = $entry->task->title;
+        }
 
         return Response::text(json_encode($data, JSON_PRETTY_PRINT));
     }

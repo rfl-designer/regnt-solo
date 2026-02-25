@@ -63,6 +63,7 @@ class SoloBoardServer extends Server
         \App\Mcp\Tools\UpdateFeatureTool::class,
         \App\Mcp\Tools\DeleteFeatureTool::class,
         \App\Mcp\Tools\AddTaskToFeatureTool::class,
+        \App\Mcp\Tools\RalphExportTool::class,
     ];
 
     /**

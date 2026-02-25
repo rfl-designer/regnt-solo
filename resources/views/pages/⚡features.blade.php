@@ -19,6 +19,9 @@ new class extends Component
     #[Url]
     public string $filterPriority = '';
 
+    #[Url(as: 'overdue')]
+    public bool $filterOverdue = false;
+
     /** @var array<string, int> */
     public array $limits = [
         'draft' => 20,
@@ -73,7 +76,13 @@ new class extends Component
             $query->where('priority', $this->filterPriority);
         }
 
-        return $query->get();
+        $features = $query->get();
+
+        if ($this->filterOverdue) {
+            $features = $features->filter(fn (Feature $f): bool => $f->due_date?->lt(today()) && $f->status !== FeatureStatus::Done);
+        }
+
+        return $features;
     }
 
     /**
@@ -196,6 +205,19 @@ new class extends Component
                     <option value="{{ $priority->value }}">{{ $priority->label() }}</option>
                 @endforeach
             </flux:select>
+
+            {{-- Overdue toggle --}}
+            <flux:button
+                wire:click="$toggle('filterOverdue')"
+                size="sm"
+                :variant="$filterOverdue ? 'primary' : 'ghost'"
+                icon="clock"
+            >
+                Vencidas
+                @if ($filterOverdue)
+                    ({{ $this->features->count() }})
+                @endif
+            </flux:button>
 
             {{-- New Feature button --}}
             <flux:button

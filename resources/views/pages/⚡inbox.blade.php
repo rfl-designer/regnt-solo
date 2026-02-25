@@ -9,10 +9,20 @@ use Flux\Flux;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 new class extends Component
 {
+    #[Url(as: 'q')]
+    public string $search = '';
+
+    #[Url(as: 'sort')]
+    public string $sortBy = 'created_at';
+
+    #[Url(as: 'dir')]
+    public string $sortDirection = 'desc';
+
     public bool $showDeleteModal = false;
 
     public ?int $deletingTaskId = null;
@@ -37,10 +47,25 @@ new class extends Component
     #[Computed]
     public function tasks(): \Illuminate\Database\Eloquent\Collection
     {
-        return Task::inbox()
-            ->with('project')
-            ->latest()
-            ->get();
+        $query = Task::inbox()->with('project');
+
+        if ($this->search !== '') {
+            $query->where('title', 'ilike', "%{$this->search}%");
+        }
+
+        return $query->orderBy($this->sortBy, $this->sortDirection)->get();
+    }
+
+    public function sort(string $column): void
+    {
+        if ($this->sortBy === $column) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $column;
+            $this->sortDirection = 'asc';
+        }
+
+        unset($this->tasks);
     }
 
     /**
@@ -342,6 +367,10 @@ new class extends Component
         @endif
     </div>
 
+    <div class="flex items-center gap-3">
+        <flux:input icon="magnifying-glass" wire:model.live.debounce.300ms="search" placeholder="Buscar tasks..." size="sm" class="max-w-xs" />
+    </div>
+
     @if ($this->tasks->isEmpty())
         <div class="flex flex-1 items-center justify-center">
             <div class="text-center">
@@ -407,10 +436,10 @@ new class extends Component
                         wire:click="{{ $allSelected ? 'deselectAll' : 'selectAll' }}"
                     />
                 </flux:table.column>
-                <flux:table.column>Task</flux:table.column>
-                <flux:table.column>Prioridade</flux:table.column>
+                <flux:table.column sortable :sorted="$sortBy === 'title'" :direction="$sortDirection" wire:click="sort('title')">Task</flux:table.column>
+                <flux:table.column sortable :sorted="$sortBy === 'priority'" :direction="$sortDirection" wire:click="sort('priority')">Prioridade</flux:table.column>
                 <flux:table.column>Projeto</flux:table.column>
-                <flux:table.column>Criada</flux:table.column>
+                <flux:table.column sortable :sorted="$sortBy === 'created_at'" :direction="$sortDirection" wire:click="sort('created_at')">Criada</flux:table.column>
                 <flux:table.column align="end">Ações</flux:table.column>
             </flux:table.columns>
 

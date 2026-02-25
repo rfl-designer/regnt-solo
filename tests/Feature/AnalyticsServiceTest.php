@@ -595,8 +595,8 @@ test('productivityPatterns identifies best days and hours', function () {
     $task = Task::withoutEvents(fn () => Task::factory()->create());
 
     // Find the most recent Monday and Wednesday
-    $monday = Carbon::today()->startOfWeek();
-    $wednesday = Carbon::today()->startOfWeek()->addDays(2);
+    $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
+    $wednesday = Carbon::today()->startOfWeek(Carbon::MONDAY)->addDays(2);
 
     // If these dates are in the future, go back a week
     if ($monday->isFuture()) {

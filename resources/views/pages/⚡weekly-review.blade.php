@@ -58,7 +58,7 @@ new class extends Component
     #[Computed]
     public function isCurrentWeek(): bool
     {
-        return $this->weekStart->isSameWeek(now());
+        return $this->week === now()->startOfWeek()->toDateString();
     }
 
     #[Computed]
@@ -202,7 +202,7 @@ new class extends Component
 
     public function previousWeek(): void
     {
-        $this->week = $this->weekStart->subWeek()->toDateString();
+        $this->week = $this->weekStart->copy()->subWeek()->toDateString();
 
         $this->invalidateComputed();
     }
@@ -213,7 +213,7 @@ new class extends Component
             return;
         }
 
-        $this->week = $this->weekStart->addWeek()->toDateString();
+        $this->week = $this->weekStart->copy()->addWeek()->toDateString();
 
         $this->invalidateComputed();
     }

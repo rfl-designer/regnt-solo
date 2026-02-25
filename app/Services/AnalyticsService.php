@@ -28,7 +28,7 @@ class AnalyticsService
         $hoursByDate = TimeEntry::query()
             ->whereNotNull('stopped_at')
             ->where('started_at', '>=', $startDate)
-            ->selectRaw('date(started_at) as date, sum(cast((julianday(stopped_at) - julianday(started_at)) * 24 as real)) as total_hours')
+            ->selectRaw('date(started_at) as date, sum(EXTRACT(EPOCH FROM (stopped_at - started_at)) / 3600) as total_hours')
             ->groupByRaw('date(started_at)')
             ->pluck('total_hours', 'date');
 
@@ -122,8 +122,8 @@ class AnalyticsService
             ->whereNotNull('stopped_at')
             ->where('started_at', '>=', $since)
             ->selectRaw('
-                sum(cast((julianday(stopped_at) - julianday(started_at)) * 24 * 60 as real)) as total_minutes,
-                sum(case when is_focus_session = 1 then cast((julianday(stopped_at) - julianday(started_at)) * 24 * 60 as real) else 0 end) as focus_minutes
+                sum(EXTRACT(EPOCH FROM (stopped_at - started_at)) / 60) as total_minutes,
+                sum(case when is_focus_session = true then EXTRACT(EPOCH FROM (stopped_at - started_at)) / 60 else 0 end) as focus_minutes
             ')
             ->first();
 
@@ -448,9 +448,9 @@ class AnalyticsService
         return TimeEntry::query()
             ->where('is_focus_session', true)
             ->whereNotNull('stopped_at')
-            ->selectRaw('date(started_at) as date, sum(cast((julianday(stopped_at) - julianday(started_at)) * 24 as real)) as total_hours')
+            ->selectRaw('date(started_at) as date, sum(EXTRACT(EPOCH FROM (stopped_at - started_at)) / 3600) as total_hours')
             ->groupByRaw('date(started_at)')
-            ->havingRaw('total_hours >= 2')
+            ->havingRaw('sum(EXTRACT(EPOCH FROM (stopped_at - started_at)) / 3600) >= 2')
             ->pluck('date')
             ->sort()
             ->values()

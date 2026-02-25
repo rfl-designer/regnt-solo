@@ -1,0 +1,73 @@
+{
+    "project": "Smart Task Filtering",
+    "branchName": "ralph/smart-task-filtering",
+    "description": "## User Story\nComo desenvolvedor solo, quero filtrar e buscar tasks de forma mais eficiente no Kanban, Inbox e Features para encontrar rapidamente o que preciso sem scroll infinito.\n\n## Contexto\nAtualmente o Kanban tem filtro por projeto, prioridade e overdue — mas não tem filtro por data de vencimento. O Inbox não tem busca por texto nem ordenação por coluna. A página de Features não tem filtro de overdue. Essas 3 lacunas criam fricção diária.\n\n## Critérios de Aceitação\n- [ ] Kanban: filtro \"Vence em\" com opções (Hoje, Esta semana, Próximos 7 dias, Próximos 30 dias)\n- [ ] Kanban: filtro de data funciona junto com filtros existentes (AND logic)\n- [ ] Kanban: filtro de data persistido na URL via #[Url]\n- [ ] Inbox: campo de busca por texto no título (debounced, wire:model.live)\n- [ ] Inbox: colunas ordenáveis (Task, Prioridade, Criada)\n- [ ] Inbox: busca e ordenação persistidos na URL via #[Url]\n- [ ] Features: toggle de overdue (mesmo padrão do Kanban)\n- [ ] Features: filtro persistido na URL via #[Url]\n- [ ] Todos os novos filtros têm testes Feature (Pest)\n\n## Notas Técnicas\n- Kanban: `resources/views/pages/⚡kanban.blade.php` — adicionar property `$filterDueDate` e lógica em `buildColumnQuery()`\n- Inbox: `resources/views/pages/⚡inbox.blade.php` — adicionar `$search`, `$sortBy`, `$sortDirection` e atualizar computed `tasks()`\n- Features: `resources/views/pages/⚡features.blade.php` — adicionar `$filterOverdue` e filtrar no computed\n- Usar `<flux:select>` para dropdown de data, `<flux:input>` para busca\n- Cada melhoria é independente — arquivos diferentes, sem conflito",
+    "maxIterations": 10,
+    "userStories": [
+        {
+            "id": "US-166",
+            "title": "feat: Kanban due date filter",
+            "description": "## User Story\nComo desenvolvedor solo, quero filtrar tasks no Kanban por data de vencimento para ver rapidamente o que vence hoje, esta semana ou nos próximos dias.\n\n## Contexto\nO Kanban (`resources/views/pages/⚡kanban.blade.php`) já tem 3 filtros: `$filterProject` (linha 18), `$filterPriority` (linha 21) e `$filterOverdue` (linha 24). Falta um filtro por período de vencimento. O método `buildColumnQuery()` (linhas 168-196) aplica os filtros existentes com AND logic. A seção de filtros no template está nas linhas 226-256 usando `<flux:select>` e `<flux:button>`.\n\n## Critérios de Aceitação\n- [ ] Adicionar property `$filterDueDate` (string, default '') com `#[Url(as: 'due')]`\n- [ ] Opções: '' (Todas), 'today' (Hoje), 'week' (Esta semana), '7days' (Próximos 7 dias), '30days' (Próximos 30 dias)\n- [ ] Aplicar filtro em `buildColumnQuery()` após os filtros existentes (~linha 193)\n- [ ] Renderizar `<flux:select>` no template entre o filtro de prioridade (linha 241) e o botão overdue (linha 244)\n- [ ] Filtro funciona combinado com projeto, prioridade e overdue (AND logic)\n- [ ] Escrever testes Pest em `tests/Feature/KanbanDueDateFilterTest.php`\n- [ ] Rodar `php artisan test --compact --filter=KanbanDueDateFilter`\n\n## Notas Técnicas\n- Arquivo: `resources/views/pages/⚡kanban.blade.php`\n- Padrão existente de filtro (copiar de filterOverdue):\n  ```php\n  if ($this->filterDueDate !== '') {\n      $query->whereNotNull('due_date');\n      match ($this->filterDueDate) {\n          'today' => $query->whereDate('due_date', today()),\n          'week' => $query->whereBetween('due_date', [today(), today()->endOfWeek()]),\n          '7days' => $query->whereBetween('due_date', [today(), today()->addDays(7)]),\n          '30days' => $query->whereBetween('due_date', [today(), today()->addDays(30)]),\n      };\n  }\n  ```\n- Usar `<flux:select wire:model.live=\"filterDueDate\" size=\"sm\" placeholder=\"Vence em\">`\n- Opções com `<flux:select.option>`: Hoje, Esta semana, 7 dias, 30 dias\n- Testes: criar tasks com due_date variados, montar componente com Livewire::test, assertSee/assertDontSee",
+            "acceptanceCriteria": [
+                "Adicionar property `$filterDueDate` (string, default '') com `#[Url(as: 'due')]`",
+                "Opções: '' (Todas), 'today' (Hoje), 'week' (Esta semana), '7days' (Próximos 7 dias), '30days' (Próximos 30 dias)",
+                "Aplicar filtro em `buildColumnQuery()` após os filtros existentes (~linha 193)",
+                "Renderizar `<flux:select>` no template entre o filtro de prioridade (linha 241) e o botão overdue (linha 244)",
+                "Filtro funciona combinado com projeto, prioridade e overdue (AND logic)",
+                "Escrever testes Pest em `tests/Feature/KanbanDueDateFilterTest.php`",
+                "Rodar `php artisan test --compact --filter=KanbanDueDateFilter`"
+            ],
+            "priority": 2,
+            "passes": true,
+            "metadata": {
+                "soloboard_task_id": 166,
+                "soloboard_status": "done"
+            }
+        },
+        {
+            "id": "US-167",
+            "title": "feat: Inbox text search and sortable columns",
+            "description": "## User Story\nComo desenvolvedor solo, quero buscar tasks por texto e ordenar colunas no Inbox para triar tasks rapidamente sem scroll.\n\n## Contexto\nO Inbox (`resources/views/pages/⚡inbox.blade.php`) não tem busca por texto nem ordenação. O computed `tasks()` (linhas 37-44) faz apenas `Task::inbox()->with('project')->latest()->get()`. A tabela (linhas 398-494) tem colunas Task, Prioridade, Projeto, Criada e Ações, mas nenhuma é clicável para ordenar. Outros componentes do projeto já usam `#[Url]` para persistência.\n\n## Critérios de Aceitação\n- [ ] Adicionar property `$search` (string, default '') com `#[Url(as: 'q')]`\n- [ ] Adicionar property `$sortBy` (string, default 'created_at') com `#[Url(as: 'sort')]`\n- [ ] Adicionar property `$sortDirection` (string, default 'desc') com `#[Url(as: 'dir')]`\n- [ ] Campo de busca `<flux:input>` acima da tabela com `wire:model.live.debounce.300ms=\"search\"` e ícone de busca\n- [ ] Busca filtra por título (LIKE %termo%)\n- [ ] Headers de coluna clicáveis para ordenar: Task (title), Prioridade (priority), Criada (created_at)\n- [ ] Indicador visual de direção (seta up/down) na coluna ativa\n- [ ] Método `sort($column)` que alterna direção se mesma coluna, ou seta novo sortBy\n- [ ] Atualizar computed `tasks()` para aplicar search e sort\n- [ ] Escrever testes Pest em `tests/Feature/InboxSearchSortTest.php`\n- [ ] Rodar `php artisan test --compact --filter=InboxSearchSort`\n\n## Notas Técnicas\n- Arquivo: `resources/views/pages/⚡inbox.blade.php`\n- Atualizar computed tasks() (linha 37-44):\n  ```php\n  $query = Task::inbox()->with('project');\n  if ($this->search !== '') {\n      $query->where('title', 'ilike', \"%{$this->search}%\");\n  }\n  return $query->orderBy($this->sortBy, $this->sortDirection)->get();\n  ```\n- Método sort:\n  ```php\n  public function sort(string $column): void {\n      if ($this->sortBy === $column) {\n          $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';\n      } else {\n          $this->sortBy = $column;\n          $this->sortDirection = 'asc';\n      }\n      unset($this->tasks);\n  }\n  ```\n- Usar `<flux:input icon=\"magnifying-glass\" wire:model.live.debounce.300ms=\"search\" placeholder=\"Buscar tasks...\" size=\"sm\" />`\n- Para headers ordenáveis, usar `<flux:table.column sortable :sorted=\"$sortBy === 'title'\" :direction=\"$sortDirection\" wire:click=\"sort('title')\">` ou botão no header com ícone condicional\n- PostgreSQL usa `ilike` para case-insensitive (não `like`)\n- Testes: criar tasks com títulos conhecidos, buscar, verificar filtro. Testar sort por created_at e priority",
+            "acceptanceCriteria": [
+                "Adicionar property `$search` (string, default '') com `#[Url(as: 'q')]`",
+                "Adicionar property `$sortBy` (string, default 'created_at') com `#[Url(as: 'sort')]`",
+                "Adicionar property `$sortDirection` (string, default 'desc') com `#[Url(as: 'dir')]`",
+                "Campo de busca `<flux:input>` acima da tabela com `wire:model.live.debounce.300ms=\"search\"` e ícone de busca",
+                "Busca filtra por título (LIKE %termo%)",
+                "Headers de coluna clicáveis para ordenar: Task (title), Prioridade (priority), Criada (created_at)",
+                "Indicador visual de direção (seta up/down) na coluna ativa",
+                "Método `sort($column)` que alterna direção se mesma coluna, ou seta novo sortBy",
+                "Atualizar computed `tasks()` para aplicar search e sort",
+                "Escrever testes Pest em `tests/Feature/InboxSearchSortTest.php`",
+                "Rodar `php artisan test --compact --filter=InboxSearchSort`"
+            ],
+            "priority": 2,
+            "passes": true,
+            "metadata": {
+                "soloboard_task_id": 167,
+                "soloboard_status": "done"
+            }
+        },
+        {
+            "id": "US-168",
+            "title": "feat: Features overdue filter",
+            "description": "## User Story\nComo desenvolvedor solo, quero filtrar features vencidas na página de Features para identificar rapidamente épicos atrasados.\n\n## Contexto\nA página Features (`resources/views/pages/⚡features.blade.php`) tem filtros `$filterProject` (linha 17) e `$filterPriority` (linha 20), mas não tem filtro de overdue. A página Kanban já tem `$filterOverdue` (linha 24) como referência de implementação. Features têm `due_date` (nullable). A seção de filtros está nas linhas 183-209, com project select (185-190) e priority select (193-198).\n\n## Critérios de Aceitação\n- [ ] Adicionar property `$filterOverdue` (bool, default false) com `#[Url(as: 'overdue')]`\n- [ ] Aplicar filtro no computed `features()` (linhas 62-77): features com due_date < today e status != done\n- [ ] Adicionar botão toggle no template entre o priority select (linha 198) e o botão \"Nova Feature\" (linha 201)\n- [ ] Botão usa mesmo padrão visual do Kanban: `<flux:button>` com ícone `clock` e variant condicional\n- [ ] Quando ativo, mostra contagem de features overdue no botão\n- [ ] Filtro funciona combinado com projeto e prioridade (AND logic)\n- [ ] Escrever testes Pest em `tests/Feature/FeaturesOverdueFilterTest.php`\n- [ ] Rodar `php artisan test --compact --filter=FeaturesOverdueFilter`\n\n## Notas Técnicas\n- Arquivo: `resources/views/pages/⚡features.blade.php`\n- Adicionar filtro no computed features() (~linha 75, antes do return):\n  ```php\n  if ($this->filterOverdue) {\n      $query->whereNotNull('due_date')\n          ->where('due_date', '<', today());\n  }\n  ```\n  Nota: como status é computed (não coluna), filtrar features \"not done\" precisa ser feito após o get():\n  ```php\n  $features = $query->get();\n  if ($this->filterOverdue) {\n      $features = $features->filter(fn ($f) => $f->due_date?->lt(today()) && $f->status !== FeatureStatus::Done);\n  }\n  return $features;\n  ```\n- Template do botão (copiar padrão do Kanban linhas 244-251):\n  ```blade\n  <flux:button size=\"sm\" :variant=\"$filterOverdue ? 'primary' : 'ghost'\" wire:click=\"$toggle('filterOverdue')\" icon=\"clock\">\n      Vencidas\n      @if($filterOverdue)\n          ({{ $this->features->count() }})\n      @endif\n  </flux:button>\n  ```\n- Testes: criar features com due_date passado e futuro, montar componente, toggle filterOverdue, verificar que só overdue aparecem",
+            "acceptanceCriteria": [
+                "Adicionar property `$filterOverdue` (bool, default false) com `#[Url(as: 'overdue')]`",
+                "Aplicar filtro no computed `features()` (linhas 62-77): features com due_date < today e status != done",
+                "Adicionar botão toggle no template entre o priority select (linha 198) e o botão \"Nova Feature\" (linha 201)",
+                "Botão usa mesmo padrão visual do Kanban: `<flux:button>` com ícone `clock` e variant condicional",
+                "Quando ativo, mostra contagem de features overdue no botão",
+                "Filtro funciona combinado com projeto e prioridade (AND logic)",
+                "Escrever testes Pest em `tests/Feature/FeaturesOverdueFilterTest.php`",
+                "Rodar `php artisan test --compact --filter=FeaturesOverdueFilter`"
+            ],
+            "priority": 3,
+            "passes": true,
+            "metadata": {
+                "soloboard_task_id": 168,
+                "soloboard_status": "done"
+            }
+        }
+    ]
+}

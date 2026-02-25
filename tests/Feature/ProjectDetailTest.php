@@ -389,17 +389,17 @@ test('project detail kanban handleSort adds task to daily plan when completing',
     expect($dailyPlan->tasks->contains($task))->toBeTrue();
 });
 
-test('project detail kanban loadMore increases limit by 20', function () {
+test('project detail kanban loadMore increases limit by 10', function () {
     $project = Project::factory()->create();
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
     $initialLimit = $component->get('limits')['backlog'];
-    expect($initialLimit)->toBe(20);
+    expect($initialLimit)->toBe(10);
 
     $component->call('loadMore', 'backlog');
 
-    expect($component->get('limits')['backlog'])->toBe(40);
+    expect($component->get('limits')['backlog'])->toBe(20);
 });
 
 test('project detail kanban getColumnTasks uses withCount commits', function () {

@@ -313,5 +313,5 @@ test('weekly review navigates to week via history', function () {
 
 test('sidebar contains review link', function () {
     $this->get(route('dashboard'))
-        ->assertSee('Review');
+        ->assertSee('Revisão');
 });

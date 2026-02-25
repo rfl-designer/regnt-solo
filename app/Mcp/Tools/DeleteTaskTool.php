@@ -32,6 +32,7 @@ class DeleteTaskTool extends Tool
         $title = $task->title;
         $id = $task->id;
 
+        $task->timeEntries()->delete();
         $task->delete();
 
         return Response::text(json_encode([

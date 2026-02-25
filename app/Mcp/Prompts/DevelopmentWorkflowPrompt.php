@@ -287,7 +287,7 @@ SYSTEM;
     private function buildTodayContext(): string
     {
         $todayPlan = DailyPlan::query()->whereDate('date', Carbon::today())->first();
-        $runningEntry = TimeEntry::query()->whereNull('ended_at')->with('task')->first();
+        $runningEntry = TimeEntry::query()->whereNull('stopped_at')->with('task')->first();
 
         $context = "\n## ⏰ Contexto de Hoje\n";
         $context .= '- **Data**: '.Carbon::today()->format('d/m/Y (l)')."\n";

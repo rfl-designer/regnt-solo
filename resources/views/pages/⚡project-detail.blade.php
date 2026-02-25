@@ -26,10 +26,10 @@ new class extends Component
 
     /** @var array<string, int> */
     public array $limits = [
-        'backlog' => 20,
-        'todo' => 20,
-        'doing' => 20,
-        'done' => 20,
+        'backlog' => 10,
+        'todo' => 10,
+        'doing' => 10,
+        'done' => 10,
     ];
 
     public ?int $selectedDocumentId = null;
@@ -193,7 +193,7 @@ new class extends Component
 
     public function loadMore(string $status): void
     {
-        $this->limits[$status] += 20;
+        $this->limits[$status] += 10;
     }
 
     public function handleSort(int|string $id, int $position, string $groupId): void

@@ -1,0 +1,7 @@
+[2026-02-25 15:30] US-1: fix: DevelopmentWorkflowPrompt ended_at typo — DONE
+[2026-02-25 15:30] US-3: fix: DeleteTaskTool cascade delete time entries — DONE
+[2026-02-25 15:30] US-4: fix: ProjectDetail lazy loading initial limit 20 → 10 — DONE
+[2026-02-25 15:30] US-6: fix: sidebar test expects Review instead of Revisão — DONE
+[2026-02-25 15:31] US-2: fix: AnalyticsService julianday PostgreSQL compatibility — DONE
+[2026-02-25 15:31] US-5: fix: WeeklyReview Carbon mutation in navigation — DONE
+[2026-02-25 15:31] US-7: fix: WeeklyCalendar creates DailyPlan for past days — DONE

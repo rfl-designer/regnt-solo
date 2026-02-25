@@ -1,0 +1,127 @@
+{
+    "project": "Fix Failing Tests — Stabilize Test Suite",
+    "branchName": "ralph/fix-failing-tests-stabilize-test-suite",
+    "description": "## User Story\nComo desenvolvedor solo, quero corrigir todos os testes falhando na suite para ter uma base estável e confiável antes de adicionar novas features.\n\n## Contexto\nA suite de testes tem 67 testes falhando por 7 bugs distintos: incompatibilidade SQLite/PostgreSQL no AnalyticsService, typo de coluna no DevelopmentWorkflowPrompt, cascade delete faltando no DeleteTaskTool, limites incorretos no ProjectDetail lazy loading, mutação de Carbon no WeeklyReview, texto de sidebar em inglês vs português, e criação indevida de DailyPlan para dias passados no WeeklyCalendar.\n\n## Critérios de Aceitação\n- [x] AnalyticsService usa funções PostgreSQL em vez de julianday()\n- [x] DevelopmentWorkflowPrompt usa stopped_at em vez de ended_at\n- [x] DeleteTaskTool deleta time entries antes de deletar task\n- [x] ProjectDetail lazy loading inicia com limite 10 por coluna\n- [x] WeeklyReview usa Carbon copy() para evitar mutação\n- [x] Teste do sidebar usa \"Revisão\" (PT-BR) em vez de \"Review\"\n- [x] WeeklyCalendar não cria DailyPlan para dias passados\n- [x] Todos os testes afetados passam após as correções\n\n## Notas Técnicas\n- Cada bug tem testes existentes que servem como critério de aceitação\n- Os bugs são independentes e podem ser corrigidos em qualquer ordem\n- Rodar `php artisan test --compact` para verificar regressões\n- Rodar `vendor/bin/pint --dirty` antes de commitar",
+    "maxIterations": 10,
+    "userStories": [
+        {
+            "id": "US-1",
+            "title": "fix: DevelopmentWorkflowPrompt ended_at typo",
+            "description": "## User Story\nComo desenvolvedor, quero corrigir o typo ended_at no DevelopmentWorkflowPrompt para que o prompt MCP funcione corretamente.\n\n## Contexto\nO método buildTodayContext() no DevelopmentWorkflowPrompt.php usa `whereNull('ended_at')` mas a coluna correta na tabela time_entries é `stopped_at`. Isso causa QueryException em todas as chamadas ao prompt.\n\n## Critérios de Aceitação\n- [x] Substituir `ended_at` por `stopped_at` em app/Mcp/Prompts/DevelopmentWorkflowPrompt.php linha 290\n- [x] Todos os testes em DevelopmentWorkflowPromptTest devem passar\n- [x] Rodar `php artisan test --compact --filter=DevelopmentWorkflowPromptTest`\n\n## Notas Técnicas\n- Arquivo: `app/Mcp/Prompts/DevelopmentWorkflowPrompt.php`\n- Linha: 290\n- Coluna correta: `stopped_at` (não `ended_at`)\n- Testes: `tests/Feature/Mcp/DevelopmentWorkflowPromptTest.php` (9 testes)",
+            "acceptanceCriteria": [
+                "Substituir `ended_at` por `stopped_at` em app/Mcp/Prompts/DevelopmentWorkflowPrompt.php linha 290",
+                "Todos os testes em DevelopmentWorkflowPromptTest devem passar",
+                "Rodar `php artisan test --compact --filter=DevelopmentWorkflowPromptTest`"
+            ],
+            "priority": 1,
+            "passes": true,
+            "metadata": {
+                "soloboard_task_id": 1,
+                "soloboard_status": "done"
+            }
+        },
+        {
+            "id": "US-3",
+            "title": "fix: DeleteTaskTool cascade delete time entries",
+            "description": "## User Story\nComo desenvolvedor, quero que ao deletar uma task via MCP, as time entries associadas sejam deletadas também.\n\n## Contexto\nO DeleteTaskTool deleta a task mas as time entries ficam órfãs (task_id vira NULL via SET NULL na FK). O teste espera que time_entries sejam deletadas junto com a task.\n\n## Critérios de Aceitação\n- [x] Deletar time entries da task antes de deletar a task no DeleteTaskTool\n- [x] O teste `delete-task deletes task and time entries` deve passar\n- [x] Rodar `php artisan test --compact --filter=\"delete-task deletes task\"`\n\n## Notas Técnicas\n- Arquivo: `app/Mcp/Tools/DeleteTaskTool.php`\n- Adicionar `$task->timeEntries()->delete();` antes de `$task->delete();`\n- A FK usa ON DELETE SET NULL, então precisamos deletar na camada de aplicação\n- Teste: `tests/Feature/Mcp/TaskToolsTest.php`",
+            "acceptanceCriteria": [
+                "Deletar time entries da task antes de deletar a task no DeleteTaskTool",
+                "O teste `delete-task deletes task and time entries` deve passar",
+                "Rodar `php artisan test --compact --filter=\"delete-task deletes task\"`"
+            ],
+            "priority": 2,
+            "passes": true,
+            "metadata": {
+                "soloboard_task_id": 3,
+                "soloboard_status": "done"
+            }
+        },
+        {
+            "id": "US-4",
+            "title": "fix: ProjectDetail lazy loading initial limit 20 → 10",
+            "description": "## User Story\nComo desenvolvedor, quero corrigir o limite inicial do lazy loading no ProjectDetail para 10 tasks por coluna conforme esperado pelos testes.\n\n## Contexto\nO componente ProjectDetail inicializa `$limits` com 20 para cada status, mas os testes esperam 10. O \"load more\" incrementa em 10, então o limite inicial deve ser 10.\n\n## Critérios de Aceitação\n- [x] Alterar $limits array de 20 para 10 em cada status (backlog, todo, doing, done)\n- [x] Todos os testes em ProjectDetailLazyLoadingTest devem passar\n- [x] Rodar `php artisan test --compact --filter=ProjectDetailLazyLoadingTest`\n\n## Notas Técnicas\n- Arquivo: `resources/views/pages/⚡project-detail.blade.php`\n- Linhas: ~28-33 (array $limits)\n- Mudar todos os 4 valores de 20 para 10\n- Testes: `tests/Feature/ProjectDetailLazyLoadingTest.php` (4 testes afetados)",
+            "acceptanceCriteria": [
+                "Alterar $limits array de 20 para 10 em cada status (backlog, todo, doing, done)",
+                "Todos os testes em ProjectDetailLazyLoadingTest devem passar",
+                "Rodar `php artisan test --compact --filter=ProjectDetailLazyLoadingTest`"
+            ],
+            "priority": 3,
+            "passes": true,
+            "metadata": {
+                "soloboard_task_id": 4,
+                "soloboard_status": "done"
+            }
+        },
+        {
+            "id": "US-6",
+            "title": "fix: sidebar test expects Review instead of Revisão",
+            "description": "## User Story\nComo desenvolvedor, quero corrigir o teste do sidebar que espera \"Review\" (inglês) quando a interface usa \"Revisão\" (PT-BR).\n\n## Contexto\nO teste `sidebar contains review link` faz `assertSee('Review')` mas o sidebar exibe \"Revisão\" conforme convenção PT-BR do projeto. O teste precisa ser atualizado para o texto correto.\n\n## Critérios de Aceitação\n- [x] Alterar assertSee('Review') para assertSee('Revisão') no teste\n- [x] O teste `sidebar contains review link` deve passar\n- [x] Rodar `php artisan test --compact --filter=\"sidebar contains review link\"`\n\n## Notas Técnicas\n- Arquivo: `tests/Feature/WeeklyReviewPageTest.php`\n- Linha: ~316\n- Mudança: `->assertSee('Review')` → `->assertSee('Revisão')`\n- Verificar o sidebar em `resources/views/layouts/app/sidebar.blade.php` para confirmar o texto",
+            "acceptanceCriteria": [
+                "Alterar assertSee('Review') para assertSee('Revisão') no teste",
+                "O teste `sidebar contains review link` deve passar",
+                "Rodar `php artisan test --compact --filter=\"sidebar contains review link\"`"
+            ],
+            "priority": 4,
+            "passes": true,
+            "metadata": {
+                "soloboard_task_id": 6,
+                "soloboard_status": "done"
+            }
+        },
+        {
+            "id": "US-2",
+            "title": "fix: AnalyticsService julianday PostgreSQL compatibility",
+            "description": "## User Story\nComo desenvolvedor, quero corrigir as queries do AnalyticsService para usar funções PostgreSQL em vez de julianday() do SQLite.\n\n## Contexto\nO AnalyticsService usa `julianday()` (função exclusiva do SQLite) em 3 locais para calcular duração de time entries. O banco de dados é PostgreSQL, que não tem essa função. O equivalente é `EXTRACT(EPOCH FROM (stopped_at - started_at))`.\n\n## Critérios de Aceitação\n- [x] Substituir julianday() em contributionHeatmap() (linha ~31) — usar EXTRACT(EPOCH FROM ...) / 3600 para horas\n- [x] Substituir julianday() em focusRatio() (linhas ~124-126) — usar EXTRACT(EPOCH FROM ...) / 60 para minutos\n- [x] Substituir julianday() em getFocusDates() (linha ~451) — usar EXTRACT(EPOCH FROM ...) / 3600 para horas\n- [x] Todos os testes em AnalyticsServiceTest devem passar\n- [x] Rodar `php artisan test --compact --filter=AnalyticsServiceTest`\n\n## Notas Técnicas\n- Arquivo: `app/Services/AnalyticsService.php`\n- Linhas afetadas: ~31, ~124-126, ~451\n- Pattern SQLite: `cast((julianday(stopped_at) - julianday(started_at)) * 24 as real)` (horas)\n- Pattern PostgreSQL: `EXTRACT(EPOCH FROM (stopped_at - started_at)) / 3600` (horas)\n- Pattern PostgreSQL: `EXTRACT(EPOCH FROM (stopped_at - started_at)) / 60` (minutos)\n- Testes: `tests/Feature/AnalyticsServiceTest.php` (~6 testes afetados)",
+            "acceptanceCriteria": [
+                "Substituir julianday() em contributionHeatmap() (linha ~31) — usar EXTRACT(EPOCH FROM ...) / 3600 para horas",
+                "Substituir julianday() em focusRatio() (linhas ~124-126) — usar EXTRACT(EPOCH FROM ...) / 60 para minutos",
+                "Substituir julianday() em getFocusDates() (linha ~451) — usar EXTRACT(EPOCH FROM ...) / 3600 para horas",
+                "Todos os testes em AnalyticsServiceTest devem passar",
+                "Rodar `php artisan test --compact --filter=AnalyticsServiceTest`"
+            ],
+            "priority": 2,
+            "passes": true,
+            "metadata": {
+                "soloboard_task_id": 2,
+                "soloboard_status": "done"
+            }
+        },
+        {
+            "id": "US-5",
+            "title": "fix: WeeklyReview Carbon mutation in navigation",
+            "description": "## User Story\nComo desenvolvedor, quero corrigir a mutação de Carbon no WeeklyReview para que a navegação entre semanas funcione corretamente.\n\n## Contexto\nOs métodos `previousWeek()` e `nextWeek()` chamam `subWeek()` e `addWeek()` diretamente no computed `$this->weekStart`, que é um Carbon mutável. Isso corrompe o estado — `isCurrentWeek` retorna false quando deveria retornar true, permitindo navegar além da semana atual.\n\n## Critérios de Aceitação\n- [x] Usar copy() antes de subWeek() em previousWeek()\n- [x] Usar copy() antes de addWeek() em nextWeek()\n- [x] O teste `weekly review does not navigate past current week` deve passar\n- [x] O teste `weekly review shows current week badge` deve passar (assertSee 'Semana atual')\n- [x] Rodar `php artisan test --compact --filter=WeeklyReviewPageTest`\n\n## Notas Técnicas\n- Arquivo: `resources/views/pages/⚡weekly-review.blade.php`\n- Linhas: ~205 (previousWeek) e ~216 (nextWeek)\n- Mudança: `$this->weekStart->subWeek()` → `$this->weekStart->copy()->subWeek()`\n- Mudança: `$this->weekStart->addWeek()` → `$this->weekStart->copy()->addWeek()`\n- Testes: `tests/Feature/WeeklyReviewPageTest.php`",
+            "acceptanceCriteria": [
+                "Usar copy() antes de subWeek() em previousWeek()",
+                "Usar copy() antes de addWeek() em nextWeek()",
+                "O teste `weekly review does not navigate past current week` deve passar",
+                "O teste `weekly review shows current week badge` deve passar (assertSee 'Semana atual')",
+                "Rodar `php artisan test --compact --filter=WeeklyReviewPageTest`"
+            ],
+            "priority": 3,
+            "passes": true,
+            "metadata": {
+                "soloboard_task_id": 5,
+                "soloboard_status": "done"
+            }
+        },
+        {
+            "id": "US-7",
+            "title": "fix: WeeklyCalendar creates DailyPlan for past days",
+            "description": "## User Story\nComo desenvolvedor, quero que o WeeklyCalendar não crie DailyPlan para dias passados, apenas consulte se já existe.\n\n## Contexto\nO método computed `days()` no componente WeeklyCalendar chama `DailyPlan::getOrCreateForDate($date)` para todos os dias da semana, inclusive passados. Isso cria registros DailyPlan desnecessários para dias que já passaram, impedindo que os testes de \"prevent adding tasks to past days\" funcionem (o plano já existe antes do teste verificar).\n\n## Critérios de Aceitação\n- [x] Em days(), usar getOrCreateForDate() apenas para hoje e dias futuros\n- [x] Para dias passados, usar apenas query (DailyPlan::whereDate('date', $date)->first())\n- [x] Ajustar template para lidar com plan null em dias passados (se necessário)\n- [x] O teste `weekly calendar prevents adding tasks to past days` deve passar\n- [x] O teste `weekly calendar prevents drag to past days` deve passar\n- [x] Rodar `php artisan test --compact --filter=WeeklyCalendarTest`\n\n## Notas Técnicas\n- Arquivo: `resources/views/pages/⚡weekly-calendar.blade.php`\n- Linha: ~78 (método days() computed)\n- Mudança: condicionar getOrCreateForDate vs query simples baseado em $date->isPast()\n- Cuidado: today() não é passado — usar `$date->isBefore(today())` ou `$date->lt(today())`\n- Testes: `tests/Feature/WeeklyCalendarTest.php` (2 testes afetados)",
+            "acceptanceCriteria": [
+                "Em days(), usar getOrCreateForDate() apenas para hoje e dias futuros",
+                "Para dias passados, usar apenas query (DailyPlan::whereDate('date', $date)->first())",
+                "Ajustar template para lidar com plan null em dias passados (se necessário)",
+                "O teste `weekly calendar prevents adding tasks to past days` deve passar",
+                "O teste `weekly calendar prevents drag to past days` deve passar",
+                "Rodar `php artisan test --compact --filter=WeeklyCalendarTest`"
+            ],
+            "priority": 3,
+            "passes": true,
+            "metadata": {
+                "soloboard_task_id": 7,
+                "soloboard_status": "done"
+            }
+        }
+    ]
+}

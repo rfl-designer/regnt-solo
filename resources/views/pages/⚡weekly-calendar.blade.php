@@ -75,13 +75,18 @@ new class extends Component
 
         return collect(range(0, $daysCount - 1))->map(function (int $offset) use ($start, $today): array {
             $date = $start->copy()->addDays($offset);
-            $plan = DailyPlan::getOrCreateForDate($date)
-                ->load(['tasks' => fn ($q) => $q->with('project')->orderByPivot('sort_order')]);
+            $isPast = $date->isBefore($today);
+
+            $plan = $isPast
+                ? DailyPlan::whereDate('date', $date)->first()
+                : DailyPlan::getOrCreateForDate($date);
+
+            $plan?->load(['tasks' => fn ($q) => $q->with('project')->orderByPivot('sort_order')]);
 
             return [
                 'date' => $date,
                 'plan' => $plan,
-                'isPast' => $date->isBefore($today),
+                'isPast' => $isPast,
                 'isToday' => $date->isToday(),
             ];
         });
@@ -95,7 +100,7 @@ new class extends Component
     #[Computed]
     public function availableTasks(): \Illuminate\Database\Eloquent\Collection
     {
-        $plannedTaskIds = $this->days->flatMap(fn (array $day): array => $day['plan']->tasks->pluck('id')->toArray())->unique()->toArray();
+        $plannedTaskIds = $this->days->flatMap(fn (array $day): array => $day['plan']?->tasks->pluck('id')->toArray() ?? [])->unique()->toArray();
 
         return Task::active()
             ->whereNotIn('id', $plannedTaskIds)
@@ -120,9 +125,9 @@ new class extends Component
     /**
      * Calculate total estimated minutes for a day.
      */
-    public function getDayLoad(DailyPlan $plan): int
+    public function getDayLoad(?DailyPlan $plan): int
     {
-        return $plan->tasks->sum('estimated_minutes') ?? 0;
+        return $plan?->tasks->sum('estimated_minutes') ?? 0;
     }
 
     /**
@@ -179,7 +184,7 @@ new class extends Component
             $task = Task::findOrFail($taskId);
 
             foreach ($this->days as $day) {
-                if ($day['plan']->tasks->contains('id', $taskId)) {
+                if ($day['plan']?->tasks->contains('id', $taskId)) {
                     $day['plan']->tasks()->detach($taskId);
                 }
             }
@@ -206,7 +211,7 @@ new class extends Component
         // Find which plan currently has this task
         $currentPlan = null;
         foreach ($this->days as $day) {
-            if ($day['plan']->tasks->contains('id', $taskId)) {
+            if ($day['plan']?->tasks->contains('id', $taskId)) {
                 $currentPlan = $day['plan'];
                 break;
             }
@@ -576,7 +581,7 @@ new class extends Component
                     {{-- Day Load Indicator --}}
                     <div class="flex items-center gap-2">
                         <flux:badge size="sm" color="{{ $loadColor }}">
-                            {{ $plan->tasks->count() }} tasks
+                            {{ $plan?->tasks->count() ?? 0 }} tasks
                         </flux:badge>
                         @if ($dayLoad > 0)
                             <span class="text-[10px] text-zinc-500">
@@ -594,7 +599,7 @@ new class extends Component
                         wire:sort:group-id="{{ $date->toDateString() }}"
                         class="flex min-h-[4rem] flex-col gap-2"
                     >
-                        @forelse ($plan->tasks as $task)
+                        @forelse ($plan?->tasks ?? collect() as $task)
                             @php
                                 $isCompleted = $task->pivot->completed_at !== null;
                             @endphp

@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Models\Feature;
 use App\Models\Task;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -12,7 +13,7 @@ class StartTimerTool extends Tool
 {
     protected string $name = 'start-timer';
 
-    protected string $description = 'Starts a timer for a task. Automatically stops any currently running timer before starting the new one. Only one timer can run at a time.';
+    protected string $description = 'Starts a timer for a task or feature. Automatically stops any currently running timer before starting the new one. Only one timer can run at a time.';
 
     /**
      * Handle the tool request.
@@ -20,19 +21,43 @@ class StartTimerTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'task_id' => 'required|integer|exists:tasks,id',
+            'task_id' => 'nullable|integer|exists:tasks,id',
+            'feature_id' => 'nullable|integer|exists:features,id',
             'focus' => 'nullable|boolean',
         ], [
-            'task_id.required' => 'You must provide a task_id. Use list-tasks to find available task IDs.',
             'task_id.exists' => 'Task not found. Use list-tasks to find available task IDs.',
+            'feature_id.exists' => 'Feature not found.',
         ]);
 
-        $task = Task::findOrFail($validated['task_id']);
+        $taskId = $validated['task_id'] ?? null;
+        $featureId = $validated['feature_id'] ?? null;
+
+        if ($taskId === null && $featureId === null) {
+            return Response::error('You must provide either task_id or feature_id. Use list-tasks to find available task IDs.');
+        }
 
         $isFocus = $validated['focus'] ?? false;
 
-        $entry = $task->startTimer($isFocus);
+        if ($featureId !== null) {
+            $feature = Feature::findOrFail($featureId);
+            $entry = $feature->startTimer($isFocus);
 
+            $data = [
+                'feature_id' => $feature->id,
+                'feature_title' => $feature->title,
+                'entry_id' => $entry->id,
+                'started_at' => $entry->started_at->toDateTimeString(),
+                'is_focus_session' => $isFocus,
+                'message' => $isFocus
+                    ? "Focus session started for feature: {$feature->title}"
+                    : "Timer started for feature: {$feature->title}",
+            ];
+
+            return Response::text(json_encode($data, JSON_PRETTY_PRINT));
+        }
+
+        $task = Task::findOrFail($taskId);
+        $entry = $task->startTimer($isFocus);
         $task->refresh();
 
         $data = [
@@ -57,7 +82,8 @@ class StartTimerTool extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'task_id' => $schema->integer()->description('The ID of the task to start a timer for.')->required(),
+            'task_id' => $schema->integer()->description('The ID of the task to start a timer for.'),
+            'feature_id' => $schema->integer()->description('The ID of the feature to start a timer for. Alternative to task_id.'),
             'focus' => $schema->boolean()->description('Start as a focus/deep work session. Default: false.'),
         ];
     }

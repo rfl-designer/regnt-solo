@@ -20,6 +20,9 @@ new class extends Component
     #[Url]
     public string $filterPriority = '';
 
+    #[Url(as: 'due')]
+    public string $filterDueDate = '';
+
     #[Url(as: 'overdue')]
     public bool $filterOverdue = false;
 
@@ -187,6 +190,17 @@ new class extends Component
             $query->where('priority', $this->filterPriority);
         }
 
+        if ($this->filterDueDate !== '') {
+            $query->whereNotNull('due_date');
+            match ($this->filterDueDate) {
+                'today' => $query->whereDate('due_date', today()),
+                'week' => $query->whereBetween('due_date', [today(), today()->endOfWeek()]),
+                '7days' => $query->whereBetween('due_date', [today(), today()->addDays(7)]),
+                '30days' => $query->whereBetween('due_date', [today(), today()->addDays(30)]),
+                default => null,
+            };
+        }
+
         if ($this->filterOverdue) {
             $query->whereNotNull('due_date')
                 ->where('due_date', '<', Carbon::today());
@@ -238,6 +252,15 @@ new class extends Component
                 @foreach (App\Enums\TaskPriority::cases() as $priority)
                     <option value="{{ $priority->value }}">{{ $priority->label() }}</option>
                 @endforeach
+            </flux:select>
+
+            {{-- Due date filter --}}
+            <flux:select wire:model.live="filterDueDate" size="sm" class="w-40">
+                <option value="">Vence em</option>
+                <option value="today">Hoje</option>
+                <option value="week">Esta semana</option>
+                <option value="7days">Próximos 7 dias</option>
+                <option value="30days">Próximos 30 dias</option>
             </flux:select>
 
             {{-- Overdue toggle --}}

@@ -103,6 +103,25 @@ new class extends Component
     }
 
     /**
+     * Group features by their computed status.
+     *
+     * @return array<string, \Illuminate\Support\Collection<int, Feature>>
+     */
+    #[Computed]
+    public function featuresByStatus(): array
+    {
+        $grouped = [];
+
+        foreach (FeatureStatus::cases() as $status) {
+            $grouped[$status->value] = $this->features
+                ->filter(fn (Feature $f): bool => $f->status === $status)
+                ->values();
+        }
+
+        return $grouped;
+    }
+
+    /**
      * Get features for a specific column by computed status.
      *
      * @return \Illuminate\Support\Collection<int, Feature>
@@ -211,6 +230,13 @@ new class extends Component
         $featureCount = $this->features->count();
         $doneFeatures = $this->features->filter(fn (Feature $f): bool => $f->status === FeatureStatus::Done)->count();
 
+        $featuresByStatus = [];
+        foreach (FeatureStatus::cases() as $featureStatus) {
+            $featuresByStatus[$featureStatus->value] = $this->features
+                ->filter(fn (Feature $f): bool => $f->status === $featureStatus)
+                ->count();
+        }
+
         return [
             'total' => $total,
             'by_status' => $byStatus,
@@ -220,6 +246,8 @@ new class extends Component
             'total_files_changed' => $totalFilesChanged,
             'feature_count' => $featureCount,
             'done_features' => $doneFeatures,
+            'feature_completion_percent' => $featureCount > 0 ? round(($doneFeatures / $featureCount) * 100, 1) : 0,
+            'features_by_status' => $featuresByStatus,
         ];
     }
 
@@ -258,7 +286,7 @@ new class extends Component
     #[On('document-saved')]
     public function refreshProject(): void
     {
-        unset($this->project, $this->features, $this->metrics, $this->projectDocuments, $this->selectedDocument);
+        unset($this->project, $this->features, $this->featuresByStatus, $this->metrics, $this->projectDocuments, $this->selectedDocument);
     }
 }
 
@@ -928,6 +956,53 @@ new class extends Component
                     </div>
                     <flux:heading size="xl">{{ $metrics['total_files_changed'] }}</flux:heading>
                 </flux:card>
+
+                {{-- Total de Features --}}
+                <flux:card class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <flux:icon name="squares-2x2" class="size-5 text-indigo-400" />
+                        <flux:text class="text-sm text-zinc-400">Features</flux:text>
+                    </div>
+                    <flux:heading size="xl">{{ $metrics['feature_count'] }}</flux:heading>
+                </flux:card>
+
+                {{-- Conclusão de Features --}}
+                <flux:card class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <flux:icon name="flag" class="size-5 text-emerald-400" />
+                        <flux:text class="text-sm text-zinc-400">Features Concluídas</flux:text>
+                    </div>
+                    <flux:heading size="xl">{{ $metrics['done_features'] }}/{{ $metrics['feature_count'] }}</flux:heading>
+                    @if ($metrics['feature_count'] > 0)
+                        <div class="h-2 w-full overflow-hidden rounded-full bg-zinc-700">
+                            <div
+                                class="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                                style="width: {{ $metrics['feature_completion_percent'] }}%"
+                            ></div>
+                        </div>
+                    @endif
+                </flux:card>
+            </div>
+
+            {{-- Features por Status --}}
+            <div class="mt-6">
+                <flux:heading size="sm" class="mb-3">Features por Status</flux:heading>
+
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    @foreach (FeatureStatus::cases() as $featureStatus)
+                        @php
+                            $fCount = $metrics['features_by_status'][$featureStatus->value] ?? 0;
+                        @endphp
+
+                        <div class="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900/50 px-4 py-3">
+                            <flux:icon :name="$featureStatus->icon()" class="size-5 text-{{ $featureStatus->color() }}-400" />
+                            <div class="flex flex-1 items-center justify-between">
+                                <span class="text-sm text-zinc-300">{{ $featureStatus->label() }}</span>
+                                <flux:badge size="sm" color="{{ $featureStatus->color() }}">{{ $fCount }}</flux:badge>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
             </div>
 
             {{-- Tasks por Status --}}

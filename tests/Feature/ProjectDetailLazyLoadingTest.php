@@ -1,6 +1,6 @@
 <?php
 
-use App\Enums\TaskStatus;
+use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
@@ -10,84 +10,96 @@ beforeEach(function () {
     $this->actingAs(User::factory()->create());
 });
 
-test('mini kanban shows initial limit of 10 tasks per column', function () {
+test('feature kanban shows initial limit of 10 features per column', function () {
     $project = Project::factory()->create();
 
-    // Create 15 tasks in backlog
-    $tasks = Task::factory()->count(15)->create([
+    // Create 15 features with tasks (so they're in Backlog status)
+    $features = Feature::factory()->count(15)->create([
         'project_id' => $project->id,
-        'status' => TaskStatus::Backlog,
     ]);
+
+    foreach ($features as $feature) {
+        Task::factory()->backlog()->create(['feature_id' => $feature->id, 'project_id' => $project->id]);
+    }
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
-    // Should show only 10 tasks
-    foreach ($tasks->take(10) as $task) {
-        $component->assertSee($task->title);
+    // Should show only 10 features
+    foreach ($features->take(10) as $feature) {
+        $component->assertSee($feature->title);
     }
 
-    // Should not show tasks beyond the limit
-    foreach ($tasks->skip(10) as $task) {
-        $component->assertDontSee($task->title);
+    // Should not show features beyond the limit
+    foreach ($features->skip(10) as $feature) {
+        $component->assertDontSee($feature->title);
     }
 });
 
 test('load more button increases limit by 10', function () {
     $project = Project::factory()->create();
 
-    // Create 25 tasks in todo
-    $tasks = Task::factory()->count(25)->create([
+    // Create 25 features with tasks (Backlog status)
+    $features = Feature::factory()->count(25)->create([
         'project_id' => $project->id,
-        'status' => TaskStatus::Todo,
     ]);
+
+    foreach ($features as $feature) {
+        Task::factory()->backlog()->create(['feature_id' => $feature->id, 'project_id' => $project->id]);
+    }
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
-    // Should not show tasks beyond initial limit
-    $component->assertDontSee($tasks[20]->title);
+    // Should not show features beyond initial limit
+    $component->assertDontSee($features[20]->title);
 
     // Load more
-    $component->call('loadMore', 'todo');
+    $component->call('loadMore', 'backlog');
 
-    // Should now show more tasks
-    $component->assertSee($tasks[15]->title);
+    // Should now show more features
+    $component->assertSee($features[15]->title);
 
     // Should still not show all
-    $component->assertDontSee($tasks[24]->title);
+    $component->assertDontSee($features[24]->title);
 
     // Load more again
-    $component->call('loadMore', 'todo');
+    $component->call('loadMore', 'backlog');
 
-    // Should now show all tasks
-    $component->assertSee($tasks[24]->title);
+    // Should now show all features
+    $component->assertSee($features[24]->title);
 });
 
 test('each column has independent lazy loading', function () {
     $project = Project::factory()->create();
 
-    // Create different counts per status
-    $backlogTasks = Task::factory()->count(15)->create(['project_id' => $project->id, 'status' => TaskStatus::Backlog]);
-    $todoTasks = Task::factory()->count(25)->create(['project_id' => $project->id, 'status' => TaskStatus::Todo]);
+    // Create 15 draft features (no tasks)
+    $draftFeatures = Feature::factory()->count(15)->create(['project_id' => $project->id]);
+
+    // Create 25 features with backlog tasks
+    $backlogFeatures = Feature::factory()->count(25)->create(['project_id' => $project->id]);
+    foreach ($backlogFeatures as $feature) {
+        Task::factory()->backlog()->create(['feature_id' => $feature->id, 'project_id' => $project->id]);
+    }
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
-    // Load more in Todo only
-    $component->call('loadMore', 'todo');
+    // Load more in backlog only
+    $component->call('loadMore', 'backlog');
 
-    // Todo should now show 20
-    $component->assertSee($todoTasks[15]->title);
+    // Backlog should now show 20
+    $component->assertSee($backlogFeatures[15]->title);
 
-    // Backlog should still show only 10
-    $component->assertDontSee($backlogTasks[14]->title);
+    // Draft should still show only 10
+    $component->assertDontSee($draftFeatures[14]->title);
 });
 
-test('mini kanban renders load more button when there are more tasks', function () {
+test('feature kanban renders load more button when there are more features', function () {
     $project = Project::factory()->create();
 
-    Task::factory()->count(15)->create([
-        'project_id' => $project->id,
-        'status' => TaskStatus::Backlog,
-    ]);
+    // Create 15 features with backlog tasks
+    $features = Feature::factory()->count(15)->create(['project_id' => $project->id]);
+    foreach ($features as $feature) {
+        Task::factory()->backlog()->create(['feature_id' => $feature->id, 'project_id' => $project->id]);
+    }
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
@@ -95,13 +107,14 @@ test('mini kanban renders load more button when there are more tasks', function 
     $component->assertSeeHtml('Carregar mais (5 restantes)');
 });
 
-test('mini kanban does not render load more button when all tasks are shown', function () {
+test('feature kanban does not render load more button when all features are shown', function () {
     $project = Project::factory()->create();
 
-    Task::factory()->count(8)->create([
-        'project_id' => $project->id,
-        'status' => TaskStatus::Backlog,
-    ]);
+    // Create 8 features with backlog tasks
+    $features = Feature::factory()->count(8)->create(['project_id' => $project->id]);
+    foreach ($features as $feature) {
+        Task::factory()->backlog()->create(['feature_id' => $feature->id, 'project_id' => $project->id]);
+    }
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
@@ -115,6 +128,7 @@ test('limits property has correct initial values', function () {
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
     expect($component->get('limits'))->toBe([
+        'draft' => 10,
         'backlog' => 10,
         'todo' => 10,
         'doing' => 10,

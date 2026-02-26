@@ -3,12 +3,14 @@
 use App\Enums\FeatureStatus;
 use App\Enums\ProjectStatus;
 use App\Enums\TaskStatus;
+use App\Models\DailyPlan;
 use App\Models\Document;
 use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Task;
 use Carbon\Carbon;
 use Flux\Flux;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
@@ -364,6 +366,47 @@ new class extends Component
     public function loadMoreDrill(string $status): void
     {
         $this->drillLimits[$status] += 20;
+    }
+
+    public function handleTaskSort(int|string $id, int $position, string $groupId): void
+    {
+        $task = Task::findOrFail((int) $id);
+        $newStatus = TaskStatus::from($groupId);
+
+        if (! $this->drillFeatureId || $task->feature_id !== $this->drillFeatureId) {
+            return;
+        }
+
+        DB::transaction(function () use ($task, $newStatus, $position): void {
+            if ($newStatus === TaskStatus::Done && $task->status !== TaskStatus::Done) {
+                $dailyPlan = DailyPlan::getOrCreateForDate(Carbon::today());
+
+                if (! $dailyPlan->tasks()->where('task_id', $task->id)->exists()) {
+                    $maxOrder = $dailyPlan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+                    $dailyPlan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
+                }
+
+                $task->markAsDone();
+
+                Flux::toast(variant: 'success', heading: 'Task concluída', text: $task->title);
+            } else {
+                if ($task->status === TaskStatus::Done && $newStatus !== TaskStatus::Done) {
+                    $task->update([
+                        'status' => $newStatus,
+                        'sort_order' => $position,
+                        'completed_at' => null,
+                    ]);
+                } else {
+                    $task->update([
+                        'status' => $newStatus,
+                        'sort_order' => $position,
+                    ]);
+                }
+            }
+        });
+
+        unset($this->drillFeature);
+        $this->dispatch('task-updated');
     }
 
     #[On('feature-created')]

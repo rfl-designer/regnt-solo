@@ -91,3 +91,18 @@
   - A assinatura `wire:sort` do Livewire 4 é `(int|string $id, int $position, string $groupId)` onde groupId é o `wire:sort:group-id`
   - 1208 testes passando (10 falhas pré-existentes não relacionadas)
 ---
+
+## 2026-02-26 - US-110
+- Criado `tests/Feature/DrillDownFeatureTest.php` com 18 testes Pest Feature organizados em 4 describe blocks
+- Describe "Ver Tasks button": 2 testes (botão aparece com tasks, não aparece sem tasks)
+- Describe "Drill-down on Work page": 7 testes (enterDrill, exitDrill, 4 colunas, isolamento de tasks, header, progresso, URL direta)
+- Describe "Drag-drop in drill mode": 4 testes (update status, mark done, clear completed_at, rejeita task de outra feature)
+- Describe "Drill-down on project-detail": 5 testes (enterDrill, exitDrill, render tasks, URL direta, handleTaskSort)
+- Files changed: `tests/Feature/DrillDownFeatureTest.php`
+- **Learnings for future iterations:**
+  - Features sem tasks têm status Draft — a página Work não tem coluna Draft, então não aparecem no kanban. Para testar features sem tasks, usar project-detail que tem coluna Draft
+  - Livewire::test('pages::features') funciona para testar o componente SFC diretamente
+  - `assertSee` funciona no HTML renderizado pelo Livewire para verificar texto no drill mode
+  - Testes de handleTaskSort precisam chamar `enterDrill` antes, senão o drillFeatureId não está setado
+  - 18 testes novos + 43 testes relacionados passando sem quebrar nada
+---

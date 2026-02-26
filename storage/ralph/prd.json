@@ -82,10 +82,10 @@
                 "Implementar: Testes Pest Feature para o mecanismo de drill-down:\n\n- Botão 'Ver Tasks' aparece no card quando feature tem tasks\n- Botão 'Ver Tasks' não aparece quando feature tem 0 tasks\n- enterDrill seta drillFeatureId e URL query string ?feature=123\n- exitDrill limpa drillFeatureId e remove query string\n- Modo drill renderiza kanban de tasks (4 colunas)\n- Tasks exibidas são apenas da feature selecionada\n- Drag-drop entre colunas atualiza status da task\n- Header mostra título, status, progresso da feature\n- Funciona na página Work\n- Funciona na página project-detail\n- Acesso direto via URL ?feature=123 entra em drill mode\n\nArquivo: tests/Feature/DrillDownFeatureTest.php"
             ],
             "priority": 3,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 110,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         }
     ]

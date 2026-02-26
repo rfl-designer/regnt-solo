@@ -1,108 +1,49 @@
 ## Codebase Patterns
 
-- **SFC pattern**: Todos componentes Livewire são Single-File Components com `@php new class extends Component { } @endphp`
-- **Kanban columns**: features usam `FeatureStatus` (Draft, Backlog, Todo, Doing, Done); tasks usam `TaskStatus` (Inbox, Backlog, Todo, Doing, Done)
-- **Feature status é computed**: baseado nas tasks (todas done = Done, alguma doing = Doing, etc.)
-- **Done column**: filtrar por `completed_at` na semana corrente para tasks
-- **Imports Livewire**: `use Livewire\Attributes\Url;` para `#[Url]`, `use Livewire\Attributes\Computed;` para `#[Computed]`
-- **Limits pattern**: array `$limits` com status como key, `loadMore()` incrementa 20
-- **Refresh pattern**: `unset($this->computedProp)` para invalidar computed properties
-- **Feature card component**: `resources/views/components/feature-card.blade.php` — Blade component com @props
-- **Project-detail tabs**: board, features, docs, metrics — board tab contém kanban de features
-- **Pre-existing test failures**: 10 testes falhando (AiInsightsTest, AiIntegrationTest, AnalyticsPageTest, DocumentIntegrationTest) — não relacionados ao drill-down
+- **Feature card component**: `resources/views/components/feature-card.blade.php` — Blade component com props `$feature`, `$expanded`, `$showProject`
+- **Feature ID format**: `#F-{id}` (ex: #F-12) — padrão para referenciar features
+- **Card visual pattern**: flex layout com título à esquerda, metadata à direita, badges row abaixo
+- **Pre-existing test failures**: AiInsightsTest, AiIntegrationTest, AnalyticsPageTest, DocumentIntegrationTest — não relacionadas a feature cards
+- **Copy-to-clipboard pattern**: Alpine `x-data="{ copied: false }"` + `x-on:click.stop` + `x-show` toggle entre texto original e "Copiado!" + `:class` para cor emerald-400
+- **Feature modal component**: `resources/views/components/⚡feature-modal.blade.php` — SFC Livewire com `$featureId`, `$title`, `$spec`, etc. Header mostra ID `#F-{id}` ao editar
 
 ---
 
-## 2026-02-26 - US-105
-- Adicionado property `drillFeatureId` com `#[Url(as: 'feature')]` em `⚡features.blade.php` e `⚡project-detail.blade.php`
-- Computed property `drillFeature()` carrega Feature com tasks, project, timeEntries
-- Métodos `enterDrill(int $featureId)` e `exitDrill()` para navegar entre modos
-- Métodos `getDrillColumnTasks()` e `getDrillColumnTotal()` para tasks agrupadas por status
-- Array `drillLimits` e `loadMoreDrill()` para lazy loading no drill mode
-- Array `drillTaskStatuses` com [Backlog, Todo, Doing, Done] para colunas do drill
-- Files changed: `⚡features.blade.php`, `⚡project-detail.blade.php`
-- **Learnings for future iterations:**
-  - Os dois componentes (features e project-detail) precisam das mesmas alterações de drill-down
-  - Feature model já tem `tasks()` relationship e eager loading funciona com `with(['tasks.project', 'tasks.timeEntries'])`
-  - Imports necessários: `TaskStatus`, `Task`, `Carbon`, `Url` (project-detail não tinha Url antes)
-  - 82 testes relevantes continuam passando
----
-
-## 2026-02-26 - US-108
-- Implementado template condicional `@if($drillFeatureId && $this->drillFeature)` em ambos componentes
-- Kanban de tasks no drill mode com 4 colunas: Backlog → Todo → Doing → Done
-- Done column filtra por `completed_at` na semana corrente (reutilizando `getDrillColumnTasks`)
-- Cards de task com: handle (grip-vertical), título, projeto, prioridade, estimativa, overdue, timer, session badge
-- `wire:sort="handleTaskSort"` com `wire:sort:group="drill-tasks"` para drag-drop (handler será US-109)
-- Lazy loading via `loadMoreDrill()` com `drillLimits` por coluna
-- Done column colapsável com localStorage (`drill-done-collapsed` / `project-drill-done-collapsed`)
-- Project-detail: no drill mode, não mostra header "Nova Feature" e badge de contagem mostra tasks
-- Files changed: `⚡features.blade.php`, `⚡project-detail.blade.php`
-- **Learnings for future iterations:**
-  - Template de task card é similar ao kanban.blade.php mas sem `withCount('commits')` — tasks da feature vêm via collection, não query builder
-  - No project-detail, o drill mode substitui todo o conteúdo do board tab panel (header + kanban)
-  - wire:sort:group deve ser diferente do features kanban ("drill-tasks" vs grupo de features) para evitar conflito
-  - `wire:key` dos drill tasks usa prefixo "drill-task-" para evitar conflito com outros componentes
----
-
-## 2026-02-26 - US-106
-- Adicionado botão "Ver Tasks" no rodapé do card de feature (`feature-card.blade.php`)
-- Botão aparece apenas quando `$tasksCount > 0` (dentro do bloco existente)
-- Posicionado abaixo da seção expandível de tasks, com `border-t border-zinc-700`
-- Mostra contagem dinâmica: "Ver X tasks" com ícones `squares-plus` e `arrow-right`
-- Ação: `wire:click.stop="enterDrill($feature->id)"` — chama método já implementado na US-105
-- Estilo discreto: `text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50`
+## 2026-02-26 - US-40
+- Implementado: ID `#F-{id}` exibido no card de feature, ao lado do título
+- Alteração: wrap do `<h3>` em `<div class="flex items-start justify-between gap-2">` com `<span>` do ID à direita
+- Estilo: `text-xs font-mono text-zinc-500 shrink-0`
 - Files changed: `resources/views/components/feature-card.blade.php`
 - **Learnings for future iterations:**
-  - O feature-card.blade.php é um Blade component (@props), não um Livewire SFC
-  - `wire:click.stop` é essencial para evitar propagação do click para o card (que abre o modal da feature)
-  - A seção expandível de tasks e o botão drill-down ficam dentro do mesmo `@if ($tasksCount > 0)` block
-  - 1207 testes passando (10 falhas pré-existentes não relacionadas)
+  - O título do card era um `<h3>` simples, agora está dentro de um div flex para acomodar o ID
+  - Testes de WorkPage têm falhas pré-existentes (QueryException) — ignorar
+  - Pint lint passa limpo sem alterações necessárias
 ---
 
-## 2026-02-26 - US-107
-- Implementado header contextual do modo drill-down em ambos componentes (features.blade.php e project-detail.blade.php)
-- Header inclui: botão "Voltar para features" (exitDrill), título da feature, status badge, barra de progresso, contagem de tasks concluídas
-- No features.blade.php: header também mostra emoji + nome do projeto quando existir
-- No project-detail.blade.php: header sem seção de projeto (redundante pois já está no contexto do projeto)
-- Substituído o header simples com badge de contagem por header completo no project-detail
-- Animação x-transition com ease-out no aparecer (opacity + translate-y)
-- Estilo: `rounded-xl border border-zinc-700 bg-zinc-800/80 p-4 mb-4`
-- Files changed: `⚡features.blade.php`, `⚡project-detail.blade.php`
+## 2026-02-26 - US-41
+- Implementado: Copy-to-clipboard no ID `#F-{id}` com feedback visual
+- Alpine.js `x-data="{ copied: false }"` no span do ID
+- Click handler: `x-on:click.stop` copia para clipboard e mostra "Copiado!" por 1.5s
+- Feedback: texto muda para "Copiado!" e cor muda para `text-emerald-400`
+- `cursor-pointer` + `title="Copiar ID"` + `hover:text-zinc-300`
+- `@click.stop` previne abertura do feature modal
+- Files changed: `resources/views/components/feature-card.blade.php`
 - **Learnings for future iterations:**
-  - Feature model tem `progress` (attribute accessor), `tasksCount()` e `completedTasksCount()` — tudo disponível
-  - FeatureStatus enum tem `color()` e `label()` — reutilizáveis nos badges
-  - No project-detail, o header drill-down fica dentro do `<div class="flex flex-col gap-4">` do tab panel board
-  - `flux:separator vertical` é útil para separadores visuais inline
-  - 1208 testes passando (10 falhas pré-existentes não relacionadas)
+  - Alpine `x-on:click.stop` é suficiente para parar propagação — não precisa de `wire:click.stop`
+  - `x-show` com `x-cloak` garante que "Copiado!" não aparece no SSR
+  - `:class` dinâmico do Alpine funciona bem com classes Tailwind de transição
 ---
 
-## 2026-02-26 - US-109
-- Implementado `handleTaskSort(int|string $id, int $position, string $groupId)` em ambos componentes (features.blade.php e project-detail.blade.php)
-- Lógica baseada no kanban.blade.php `handleSort`: DB::transaction, markAsDone + DailyPlan attach, toast de sucesso
-- Validação de segurança: verifica `feature_id` da task contra `drillFeatureId` para garantir escopo
-- Quando task sai de Done: limpa `completed_at`
-- Dispatch `task-updated` e `unset($this->drillFeature)` para refresh reativo
-- Adicionados imports `DailyPlan` em features.blade.php e `DailyPlan` + `DB` em project-detail.blade.php
-- Files changed: `⚡features.blade.php`, `⚡project-detail.blade.php`
+## 2026-02-26 - US-42
+- Implementado: ID `#F-{id}` exibido no header do feature modal ao editar
+- Posição: ao lado do `<flux:heading>` "Editar Feature", usando flex layout
+- Quando criando (`$featureId` é null): ID não aparece
+- Copy-to-clipboard: mesmo padrão Alpine do card (`x-data="{ copied: false }"`, `x-on:click`, feedback "Copiado!")
+- Estilo: `text-sm font-mono text-zinc-500` (ligeiramente maior que no card por estar no modal)
+- Não usa `@click.stop` pois não há propagação a prevenir no header do modal
+- Files changed: `resources/views/components/⚡feature-modal.blade.php`
 - **Learnings for future iterations:**
-  - O kanban.blade.php usa `recalculateSortOrder()` global, mas no drill mode isso não é necessário pois o sort opera sobre collection em memória da feature
-  - project-detail.blade.php não tinha import de `DB` nem `DailyPlan` — ambos necessários para a transação
-  - A assinatura `wire:sort` do Livewire 4 é `(int|string $id, int $position, string $groupId)` onde groupId é o `wire:sort:group-id`
-  - 1208 testes passando (10 falhas pré-existentes não relacionadas)
----
-
-## 2026-02-26 - US-110
-- Criado `tests/Feature/DrillDownFeatureTest.php` com 18 testes Pest Feature organizados em 4 describe blocks
-- Describe "Ver Tasks button": 2 testes (botão aparece com tasks, não aparece sem tasks)
-- Describe "Drill-down on Work page": 7 testes (enterDrill, exitDrill, 4 colunas, isolamento de tasks, header, progresso, URL direta)
-- Describe "Drag-drop in drill mode": 4 testes (update status, mark done, clear completed_at, rejeita task de outra feature)
-- Describe "Drill-down on project-detail": 5 testes (enterDrill, exitDrill, render tasks, URL direta, handleTaskSort)
-- Files changed: `tests/Feature/DrillDownFeatureTest.php`
-- **Learnings for future iterations:**
-  - Features sem tasks têm status Draft — a página Work não tem coluna Draft, então não aparecem no kanban. Para testar features sem tasks, usar project-detail que tem coluna Draft
-  - Livewire::test('pages::features') funciona para testar o componente SFC diretamente
-  - `assertSee` funciona no HTML renderizado pelo Livewire para verificar texto no drill mode
-  - Testes de handleTaskSort precisam chamar `enterDrill` antes, senão o drillFeatureId não está setado
-  - 18 testes novos + 43 testes relacionados passando sem quebrar nada
+  - No modal, não precisa de `.stop` no click handler — não há card pai para interceptar
+  - `$featureId` está disponível como propriedade pública do Livewire, pode ser usado diretamente no template
+  - O `<flux:heading>` não precisa de wrapper flex normalmente, mas adicionamos para alinhar o ID
 ---

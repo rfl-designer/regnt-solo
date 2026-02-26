@@ -1,91 +1,63 @@
 {
-    "project": "Drill-down de Tasks por Feature no Kanban",
-    "branchName": "ralph/drill-down-de-tasks-por-feature-no-kanban",
-    "description": "## User Story\nComo desenvolvedor solo, quero poder ver as tasks de uma feature específica diretamente no kanban, para entender o detalhamento do trabalho sem sair da visualização principal.\n\n## Contexto\nComo os kanbans agora mostram apenas features, é necessário um mecanismo para \"entrar\" em uma feature e ver suas tasks em formato kanban, e depois voltar à visualização de features.\n\n## Critérios de Aceitação\n- [ ] Card de feature tem botão no rodapé \"Ver Tasks\" (ou ícone de expand/drill)\n- [ ] Ao clicar, o kanban isola e mostra apenas tasks daquela feature em formato kanban (Backlog → Todo → Doing → Done)\n- [ ] Header do kanban isolado mostra: título da feature, status, progresso, botão \"Voltar\"\n- [ ] Botão \"Voltar\" retorna à visualização normal de features\n- [ ] Estado de drill-down persistido na URL (ex: ?feature=123) para compartilhamento\n- [ ] Funciona tanto na página Work quanto no kanban de projeto\n\n## Notas Técnicas\n- Implementar como estado no componente Livewire (property `drillFeatureId`)\n- Quando `drillFeatureId` está preenchido, filtrar tasks da feature\n- Usar wire:navigate ou query string para persistir estado\n- Reutilizar lógica de kanban de tasks existente para renderizar as tasks",
+    "project": "ID da Feature Visível nos Cards do Kanban",
+    "branchName": "ralph/id-da-feature-visivel-nos-cards-do-kanban",
+    "description": "## User Story\nComo desenvolvedor solo, quero ver o ID de cada feature nos cards do kanban para referenciá-las facilmente em conversas com AI e no MCP.\n\n## Contexto\nAo trabalhar com AI assistants via MCP, é útil referenciar features pelo ID. Atualmente o ID não é exibido nos cards.\n\n## Critérios de Aceitação\n- [ ] ID da feature exibido no card em todos os kanbans (Work, Projeto)\n- [ ] Formato: \"#F-{id}\" (ex: #F-12) em texto discreto (zinc-500, text-xs)\n- [ ] Posição: canto superior direito ou ao lado do título\n- [ ] ID copiável ao clicar (copy to clipboard com feedback visual)\n\n## Notas Técnicas\n- Atualizar componente de card de feature\n- Usar Alpine.js para copy-to-clipboard\n- Estilo: `text-xs text-zinc-500 font-mono`",
     "maxIterations": 10,
     "userStories": [
         {
-            "id": "US-105",
-            "title": "Adicionar property drillFeatureId com #[Url] ao componente",
-            "description": "Adicionar property Livewire `drillFeatureId` com `#[Url(as: 'feature')]` nos componentes de kanban (features.blade.php e project-detail.blade.php).\n\n- Quando `drillFeatureId` é null: modo normal (kanban de features)\n- Quando `drillFeatureId` é preenchido: modo drill-down (kanban de tasks da feature)\n- Computed property `drillFeature()`: carrega Feature::with(['tasks', 'project'])->find(drillFeatureId)\n- Método `enterDrill(int $featureId)`: seta drillFeatureId\n- Método `exitDrill()`: limpa drillFeatureId (volta ao normal)\n- Carregar tasks da feature agrupadas por TaskStatus quando em drill mode\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção PHP class)",
+            "id": "US-40",
+            "title": "Exibir ID #F-{id} no card de feature",
+            "description": "Adicionar o ID da feature no componente feature-card.blade.php.\n\n- Formato: `#F-{id}` (ex: #F-12)\n- Posição: linha do título, alinhado à direita (flex justify-between)\n- Estilo: `text-xs text-zinc-500 font-mono` — discreto mas legível\n- Layout: título à esquerda (flex-1 line-clamp-2), ID à direita (shrink-0)\n\nAlteração na linha 23-26 do feature-card.blade.php:\n```blade\n<div class=\"flex items-start justify-between gap-2\">\n    <h3 class=\"line-clamp-2 text-sm font-medium text-zinc-200\">{{ $feature->title }}</h3>\n    <span class=\"shrink-0 text-xs font-mono text-zinc-500\">#F-{{ $feature->id }}</span>\n</div>\n```\n\nArquivo: resources/views/components/feature-card.blade.php",
             "acceptanceCriteria": [
-                "Implementar: Adicionar property Livewire `drillFeatureId` com `#[Url(as: 'feature')]` nos componentes de kanban (features.blade.php e project-detail.blade.php).\n\n- Quando `drillFeatureId` é null: modo normal (kanban de features)\n- Quando `drillFeatureId` é preenchido: modo drill-down (kanban de tasks da feature)\n- Computed property `drillFeature()`: carrega Feature::with(['tasks', 'project'])->find(drillFeatureId)\n- Método `enterDrill(int $featureId)`: seta drillFeatureId\n- Método `exitDrill()`: limpa drillFeatureId (volta ao normal)\n- Carregar tasks da feature agrupadas por TaskStatus quando em drill mode\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção PHP class)"
-            ],
-            "priority": 1,
-            "passes": true,
-            "metadata": {
-                "soloboard_task_id": 105,
-                "soloboard_status": "done"
-            }
-        },
-        {
-            "id": "US-106",
-            "title": "Adicionar botão \"Ver Tasks\" no rodapé do card de feature",
-            "description": "No componente de card de feature, adicionar um botão no rodapé para entrar no drill-down.\n\n- Posição: rodapé do card, abaixo da seção expandível de tasks\n- Botão: ícone `arrow-right-circle` ou `squares-plus` + texto 'Ver Tasks'\n- Estilo: discreto (text-xs text-zinc-400 hover:text-zinc-200), border-t border-zinc-700\n- Ação: `wire:click.stop=\"enterDrill($feature->id)\"`\n- Só aparece se feature tem tasks (tasksCount > 0)\n- Mostrar contagem: 'Ver 5 tasks →'\n\nArquivo: resources/views/components/feature-card.blade.php (ou inline no template)",
-            "acceptanceCriteria": [
-                "Implementar: No componente de card de feature, adicionar um botão no rodapé para entrar no drill-down.\n\n- Posição: rodapé do card, abaixo da seção expandível de tasks\n- Botão: ícone `arrow-right-circle` ou `squares-plus` + texto 'Ver Tasks'\n- Estilo: discreto (text-xs text-zinc-400 hover:text-zinc-200), border-t border-zinc-700\n- Ação: `wire:click.stop=\"enterDrill($feature->id)\"`\n- Só aparece se feature tem tasks (tasksCount > 0)\n- Mostrar contagem: 'Ver 5 tasks →'\n\nArquivo: resources/views/components/feature-card.blade.php (ou inline no template)"
+                "Implementar: Adicionar o ID da feature no componente feature-card.blade.php.\n\n- Formato: `#F-{id}` (ex: #F-12)\n- Posição: linha do título, alinhado à direita (flex justify-between)\n- Estilo: `text-xs text-zinc-500 font-mono` — discreto mas legível\n- Layout: título à esquerda (flex-1 line-clamp-2), ID à direita (shrink-0)\n\nAlteração na linha 23-26 do feature-card.blade.php:\n```blade\n<div class=\"flex items-start justify-between gap-2\">\n    <h3 class=\"line-clamp-2 text-sm font-medium text-zinc-200\">{{ $feature->title }}</h3>\n    <span class=\"shrink-0 text-xs font-mono text-zinc-500\">#F-{{ $feature->id }}</span>\n</div>\n```\n\nArquivo: resources/views/components/feature-card.blade.php"
             ],
             "priority": 2,
             "passes": true,
             "metadata": {
-                "soloboard_task_id": 106,
+                "soloboard_task_id": 40,
                 "soloboard_status": "done"
             }
         },
         {
-            "id": "US-107",
-            "title": "Implementar header do modo drill-down",
-            "description": "Quando drillFeatureId está ativo, renderizar um header contextual acima do kanban.\n\n- Background: `bg-zinc-800/80 border border-zinc-700 rounded-xl p-4 mb-4`\n- Conteúdo:\n  - Botão 'Voltar' à esquerda: `← Voltar para features` (wire:click=\"exitDrill\")\n  - Título da feature (h2, font-semibold)\n  - Status badge (FeatureStatus com cor)\n  - Progresso: 'X/Y tasks concluídas' + barra de progresso\n  - Projeto: emoji + nome (se existir)\n- Animação: x-transition ao aparecer/desaparecer\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção template)",
+            "id": "US-41",
+            "title": "Copy-to-clipboard no ID com feedback visual",
+            "description": "Ao clicar no ID `#F-{id}`, copiar para o clipboard e mostrar feedback visual.\n\n- Usar Alpine.js: `x-data=\"{ copied: false }\"` no span do ID\n- Click handler: `@click.stop=\"navigator.clipboard.writeText('#F-{id}'); copied = true; setTimeout(() => copied = false, 1500)\"`\n- Feedback: trocar texto para 'Copiado!' ou mudar cor para emerald-400 por 1.5s\n- Cursor: `cursor-pointer` no span\n- Tooltip: `title=\"Copiar ID\"`\n- Importante: `wire:click.stop` / `@click.stop` para não abrir o feature modal\n\nArquivo: resources/views/components/feature-card.blade.php",
             "acceptanceCriteria": [
-                "Implementar: Quando drillFeatureId está ativo, renderizar um header contextual acima do kanban.\n\n- Background: `bg-zinc-800/80 border border-zinc-700 rounded-xl p-4 mb-4`\n- Conteúdo:\n  - Botão 'Voltar' à esquerda: `← Voltar para features` (wire:click=\"exitDrill\")\n  - Título da feature (h2, font-semibold)\n  - Status badge (FeatureStatus com cor)\n  - Progresso: 'X/Y tasks concluídas' + barra de progresso\n  - Projeto: emoji + nome (se existir)\n- Animação: x-transition ao aparecer/desaparecer\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção template)"
-            ],
-            "priority": 2,
-            "passes": true,
-            "metadata": {
-                "soloboard_task_id": 107,
-                "soloboard_status": "done"
-            }
-        },
-        {
-            "id": "US-108",
-            "title": "Renderizar kanban de tasks no modo drill-down",
-            "description": "Quando em drill mode, substituir o kanban de features pelo kanban de tasks da feature selecionada.\n\n- Reutilizar a estrutura de kanban de tasks existente (⚡kanban.blade.php como referência)\n- 4 colunas: Backlog → Todo → Doing → Done\n- Done: filtrar por completed_at na semana corrente\n- Cards de task: título, prioridade badge, estimativa, overdue, timer, session badge\n- wire:sort para drag-drop entre colunas (handleSort atualiza task.status)\n- Lazy loading com limits por coluna\n- Template condicional: `@if($drillFeatureId) ... @else ... @endif`\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção template)",
-            "acceptanceCriteria": [
-                "Implementar: Quando em drill mode, substituir o kanban de features pelo kanban de tasks da feature selecionada.\n\n- Reutilizar a estrutura de kanban de tasks existente (⚡kanban.blade.php como referência)\n- 4 colunas: Backlog → Todo → Doing → Done\n- Done: filtrar por completed_at na semana corrente\n- Cards de task: título, prioridade badge, estimativa, overdue, timer, session badge\n- wire:sort para drag-drop entre colunas (handleSort atualiza task.status)\n- Lazy loading com limits por coluna\n- Template condicional: `@if($drillFeatureId) ... @else ... @endif`\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção template)"
-            ],
-            "priority": 1,
-            "passes": true,
-            "metadata": {
-                "soloboard_task_id": 108,
-                "soloboard_status": "done"
-            }
-        },
-        {
-            "id": "US-109",
-            "title": "Implementar handleSort para tasks no drill mode",
-            "description": "Adicionar método de drag-drop para tasks quando em modo drill-down.\n\n- Novo método `handleTaskSort($items, $column)` nos componentes\n- Lógica: mesma do kanban.blade.php — atualizar status e sort_order em DB::transaction\n- Quando task muda para Done: preencher completed_at, adicionar ao daily plan\n- Quando task sai de Done: limpar completed_at\n- Dispatch events: 'task-updated' para refresh\n- Escopo: apenas tasks da feature em drill (validar feature_id)\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção PHP class)",
-            "acceptanceCriteria": [
-                "Implementar: Adicionar método de drag-drop para tasks quando em modo drill-down.\n\n- Novo método `handleTaskSort($items, $column)` nos componentes\n- Lógica: mesma do kanban.blade.php — atualizar status e sort_order em DB::transaction\n- Quando task muda para Done: preencher completed_at, adicionar ao daily plan\n- Quando task sai de Done: limpar completed_at\n- Dispatch events: 'task-updated' para refresh\n- Escopo: apenas tasks da feature em drill (validar feature_id)\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção PHP class)"
-            ],
-            "priority": 2,
-            "passes": true,
-            "metadata": {
-                "soloboard_task_id": 109,
-                "soloboard_status": "done"
-            }
-        },
-        {
-            "id": "US-110",
-            "title": "Testes do drill-down de tasks por feature",
-            "description": "Testes Pest Feature para o mecanismo de drill-down:\n\n- Botão 'Ver Tasks' aparece no card quando feature tem tasks\n- Botão 'Ver Tasks' não aparece quando feature tem 0 tasks\n- enterDrill seta drillFeatureId e URL query string ?feature=123\n- exitDrill limpa drillFeatureId e remove query string\n- Modo drill renderiza kanban de tasks (4 colunas)\n- Tasks exibidas são apenas da feature selecionada\n- Drag-drop entre colunas atualiza status da task\n- Header mostra título, status, progresso da feature\n- Funciona na página Work\n- Funciona na página project-detail\n- Acesso direto via URL ?feature=123 entra em drill mode\n\nArquivo: tests/Feature/DrillDownFeatureTest.php",
-            "acceptanceCriteria": [
-                "Implementar: Testes Pest Feature para o mecanismo de drill-down:\n\n- Botão 'Ver Tasks' aparece no card quando feature tem tasks\n- Botão 'Ver Tasks' não aparece quando feature tem 0 tasks\n- enterDrill seta drillFeatureId e URL query string ?feature=123\n- exitDrill limpa drillFeatureId e remove query string\n- Modo drill renderiza kanban de tasks (4 colunas)\n- Tasks exibidas são apenas da feature selecionada\n- Drag-drop entre colunas atualiza status da task\n- Header mostra título, status, progresso da feature\n- Funciona na página Work\n- Funciona na página project-detail\n- Acesso direto via URL ?feature=123 entra em drill mode\n\nArquivo: tests/Feature/DrillDownFeatureTest.php"
+                "Implementar: Ao clicar no ID `#F-{id}`, copiar para o clipboard e mostrar feedback visual.\n\n- Usar Alpine.js: `x-data=\"{ copied: false }\"` no span do ID\n- Click handler: `@click.stop=\"navigator.clipboard.writeText('#F-{id}'); copied = true; setTimeout(() => copied = false, 1500)\"`\n- Feedback: trocar texto para 'Copiado!' ou mudar cor para emerald-400 por 1.5s\n- Cursor: `cursor-pointer` no span\n- Tooltip: `title=\"Copiar ID\"`\n- Importante: `wire:click.stop` / `@click.stop` para não abrir o feature modal\n\nArquivo: resources/views/components/feature-card.blade.php"
             ],
             "priority": 3,
             "passes": true,
             "metadata": {
-                "soloboard_task_id": 110,
+                "soloboard_task_id": 41,
                 "soloboard_status": "done"
+            }
+        },
+        {
+            "id": "US-42",
+            "title": "Exibir ID no feature modal",
+            "description": "Além do card, exibir o ID também no header do feature modal (⚡feature-modal.blade.php).\n\n- Posição: ao lado do título no header do modal (ex: 'Editar Feature #F-12')\n- Quando criando: não mostrar ID (feature ainda não existe)\n- Quando editando: mostrar `#F-{id}` no header\n- Mesmo estilo: `text-sm font-mono text-zinc-500`\n- Copy-to-clipboard: mesmo comportamento do card\n\nArquivo: resources/views/components/⚡feature-modal.blade.php",
+            "acceptanceCriteria": [
+                "Implementar: Além do card, exibir o ID também no header do feature modal (⚡feature-modal.blade.php).\n\n- Posição: ao lado do título no header do modal (ex: 'Editar Feature #F-12')\n- Quando criando: não mostrar ID (feature ainda não existe)\n- Quando editando: mostrar `#F-{id}` no header\n- Mesmo estilo: `text-sm font-mono text-zinc-500`\n- Copy-to-clipboard: mesmo comportamento do card\n\nArquivo: resources/views/components/⚡feature-modal.blade.php"
+            ],
+            "priority": 4,
+            "passes": true,
+            "metadata": {
+                "soloboard_task_id": 42,
+                "soloboard_status": "done"
+            }
+        },
+        {
+            "id": "US-43",
+            "title": "Testes do ID da feature nos cards",
+            "description": "Testes Pest para validar exibição do ID:\n\n- Card de feature renderiza '#F-{id}' com o ID correto\n- ID aparece na página Work (kanban)\n- ID aparece no kanban de projeto\n- Feature modal exibe ID ao editar\n- Feature modal não exibe ID ao criar\n\nArquivo: tests/Feature/FeatureIdDisplayTest.php",
+            "acceptanceCriteria": [
+                "Implementar: Testes Pest para validar exibição do ID:\n\n- Card de feature renderiza '#F-{id}' com o ID correto\n- ID aparece na página Work (kanban)\n- ID aparece no kanban de projeto\n- Feature modal exibe ID ao editar\n- Feature modal não exibe ID ao criar\n\nArquivo: tests/Feature/FeatureIdDisplayTest.php"
+            ],
+            "priority": 3,
+            "passes": false,
+            "metadata": {
+                "soloboard_task_id": 43,
+                "soloboard_status": "todo"
             }
         }
     ]

@@ -1,91 +1,91 @@
 {
-    "project": "Página Work — Renomear Features e Dual View",
-    "branchName": "ralph/pagina-work-renomear-features-e-dual-view",
-    "description": "## User Story\nComo desenvolvedor solo, quero que a página \"Features\" seja renomeada para \"Work\" e tenha visualizações alternáveis (Kanban e Table/List) para gerenciar meu trabalho de forma mais flexível.\n\n## Contexto\nAtualmente a sidebar tem links separados para Tasks e Features. A proposta é unificar sob \"Work\", removendo as páginas de tasks da aplicação e da sidebar. Features passam a ser a unidade principal de trabalho visível.\n\n## Critérios de Aceitação\n- [ ] Renomear \"Features\" para \"Work\" na sidebar (label, rota, ícone)\n- [ ] Remover links de páginas de tasks da sidebar (Kanban de tasks, Inbox de tasks)\n- [ ] Adicionar toggle de visualização na página Work: Kanban (padrão) e Table/List\n- [ ] Visualização Table/List mostra: ID, título, status, prioridade, projeto, progresso, tempo total, due date\n- [ ] Table deve ser ordenável por colunas e filtrável como o Kanban\n- [ ] Manter filtros existentes (projeto, prioridade, overdue) em ambas as views\n- [ ] Persistir preferência de view na URL via query string\n\n## Notas Técnicas\n- Página: resources/views/pages/⚡features.blade.php (renomear rota para 'work')\n- Usar `<flux:table>` para a visualização table/list\n- Toggle via tabs ou segmented control com `<flux:tab>`\n- Manter atalho de teclado (atualizar de Ctrl+F para algo adequado)",
+    "project": "Kanban de Features nos Projetos + Aba de Specs",
+    "branchName": "ralph/kanban-de-features-nos-projetos-aba-de-specs",
+    "description": "## User Story\nComo desenvolvedor solo, quero ver features (incluindo drafts) no kanban de projetos e ter uma aba dedicada com as specs completas de cada feature, para ter visão macro do progresso por projeto.\n\n## Contexto\nAtualmente o kanban na página de projeto mostra tasks individuais. A mudança faz o kanban de projeto exibir features ao invés de tasks, alinhando com a nova hierarquia onde features são a unidade principal de trabalho.\n\n## Critérios de Aceitação\n- [ ] Kanban na página de projeto exibe features ao invés de tasks\n- [ ] Features em status \"Draft\" aparecem no kanban de projeto (nova coluna ou seção)\n- [ ] Cards de features no kanban de projeto seguem mesmo padrão visual da página Work\n- [ ] Nova aba \"Features\" na página de projeto (ao lado de informações existentes)\n- [ ] Aba Features mostra specs como documentos: título, status, progresso, spec completa em markdown\n- [ ] Specs renderizadas como documentos legíveis (não editáveis nesta view)\n- [ ] Clicar na feature na aba abre o feature modal para edição\n\n## Notas Técnicas\n- Página de projeto: resources/views/pages/⚡project-show.blade.php (ou similar)\n- Reutilizar componente de card de feature existente\n- Adicionar coluna \"Draft\" (zinc) no kanban quando há features draft\n- Aba pode usar `<flux:tab>` para navegação",
     "maxIterations": 10,
     "userStories": [
         {
-            "id": "US-928",
-            "title": "Renomear rota e sidebar: Features → Work",
-            "description": "Alterar o label \"Features\" para \"Work\" na sidebar, atualizar a rota de `/features` para `/work`, e ajustar o route name para `work`. Atualizar o ícone se necessário (sugestão: `briefcase` ou manter `squares-2x2`). Arquivos: sidebar.blade.php, routes/web.php.",
+            "id": "US-40",
+            "title": "Substituir kanban de tasks por features na project-detail",
+            "description": "Na página project-detail (⚡project-detail.blade.php), a aba 'Tasks' atualmente mostra um kanban de tasks (Backlog→Todo→Doing→Done). Substituir por um kanban de features do projeto.\n\n- Computed property: carregar features do projeto ao invés de tasks\n- Colunas: Draft, Backlog, Todo, Doing, Done (5 colunas)\n- Cards de feature: reutilizar o padrão visual da página Work (título, progresso, prioridade, tempo, due date)\n- Manter wire:sort para reordenação\n- Manter load more por coluna\n- Renomear aba de 'Tasks' para 'Board' ou 'Kanban'\n\nArquivo: resources/views/pages/⚡project-detail.blade.php (linhas 418-638 — seção tasks tab)",
             "acceptanceCriteria": [
-                "Implementar: Alterar o label \"Features\" para \"Work\" na sidebar, atualizar a rota de `/features` para `/work`, e ajustar o route name para `work`. Atualizar o ícone se necessário (sugestão: `briefcase` ou manter `squares-2x2`). Arquivos: sidebar.blade.php, routes/web.php."
+                "Implementar: Na página project-detail (⚡project-detail.blade.php), a aba 'Tasks' atualmente mostra um kanban de tasks (Backlog→Todo→Doing→Done). Substituir por um kanban de features do projeto.\n\n- Computed property: carregar features do projeto ao invés de tasks\n- Colunas: Draft, Backlog, Todo, Doing, Done (5 colunas)\n- Cards de feature: reutilizar o padrão visual da página Work (título, progresso, prioridade, tempo, due date)\n- Manter wire:sort para reordenação\n- Manter load more por coluna\n- Renomear aba de 'Tasks' para 'Board' ou 'Kanban'\n\nArquivo: resources/views/pages/⚡project-detail.blade.php (linhas 418-638 — seção tasks tab)"
             ],
             "priority": 1,
             "passes": true,
             "metadata": {
-                "soloboard_task_id": 928,
+                "soloboard_task_id": 40,
                 "soloboard_status": "done"
             }
         },
         {
-            "id": "US-929",
-            "title": "Remover páginas de tasks da sidebar",
-            "description": "Remover os itens \"Caixa de Entrada\" (inbox) e \"Kanban\" (kanban de tasks) da sidebar. Essas páginas deixam de ser acessíveis pela navegação principal — features/work passam a ser a unidade principal. Manter as rotas por enquanto (não quebrar URLs), apenas esconder da navegação. Arquivo: sidebar.blade.php.",
+            "id": "US-41",
+            "title": "Adicionar coluna Draft ao kanban de projeto",
+            "description": "Features com status 'Draft' (sem tasks) precisam aparecer no kanban do projeto. Atualmente o kanban tem 4 colunas, precisa de 5.\n\n- Adicionar FeatureStatus::Draft ao array kanbanStatuses\n- Cor da coluna Draft: zinc (#71717a)\n- Ícone: document\n- Label: 'Rascunho'\n- Draft deve ser a primeira coluna (à esquerda)\n\nNota: FeatureStatus é computado (não persistido), então filtrar features onde tasks()->count() === 0 para Draft.",
             "acceptanceCriteria": [
-                "Implementar: Remover os itens \"Caixa de Entrada\" (inbox) e \"Kanban\" (kanban de tasks) da sidebar. Essas páginas deixam de ser acessíveis pela navegação principal — features/work passam a ser a unidade principal. Manter as rotas por enquanto (não quebrar URLs), apenas esconder da navegação. Arquivo: sidebar.blade.php."
+                "Implementar: Features com status 'Draft' (sem tasks) precisam aparecer no kanban do projeto. Atualmente o kanban tem 4 colunas, precisa de 5.\n\n- Adicionar FeatureStatus::Draft ao array kanbanStatuses\n- Cor da coluna Draft: zinc (#71717a)\n- Ícone: document\n- Label: 'Rascunho'\n- Draft deve ser a primeira coluna (à esquerda)\n\nNota: FeatureStatus é computado (não persistido), então filtrar features onde tasks()->count() === 0 para Draft."
+            ],
+            "priority": 2,
+            "passes": false,
+            "metadata": {
+                "soloboard_task_id": 41,
+                "soloboard_status": "todo"
+            }
+        },
+        {
+            "id": "US-42",
+            "title": "Criar aba \"Features\" com specs como documentos",
+            "description": "Nova aba na página de projeto com título 'Features'. Mostra as specs de todas as features do projeto como documentos legíveis.\n\n- Usar <flux:tab> para adicionar a aba (ao lado de Board/Docs/Metrics)\n- Cada feature renderizada como um card/documento:\n  - Título da feature + status badge + progresso (X/Y tasks)\n  - Spec completa renderizada em markdown (read-only)\n  - Prioridade e due date se existirem\n- Ordenar por: priority desc, sort_order asc\n- Clicar no título ou botão de editar dispara open-feature-modal\n- Empty state: 'Nenhuma feature neste projeto' + CTA para criar\n\nArquivo: resources/views/pages/⚡project-detail.blade.php",
+            "acceptanceCriteria": [
+                "Implementar: Nova aba na página de projeto com título 'Features'. Mostra as specs de todas as features do projeto como documentos legíveis.\n\n- Usar <flux:tab> para adicionar a aba (ao lado de Board/Docs/Metrics)\n- Cada feature renderizada como um card/documento:\n  - Título da feature + status badge + progresso (X/Y tasks)\n  - Spec completa renderizada em markdown (read-only)\n  - Prioridade e due date se existirem\n- Ordenar por: priority desc, sort_order asc\n- Clicar no título ou botão de editar dispara open-feature-modal\n- Empty state: 'Nenhuma feature neste projeto' + CTA para criar\n\nArquivo: resources/views/pages/⚡project-detail.blade.php"
+            ],
+            "priority": 2,
+            "passes": false,
+            "metadata": {
+                "soloboard_task_id": 42,
+                "soloboard_status": "todo"
+            }
+        },
+        {
+            "id": "US-43",
+            "title": "Extrair componente reutilizável de card de feature",
+            "description": "Atualmente o card de feature está inline na página ⚡features.blade.php. Para reutilizar no kanban de projeto, extrair para um componente Blade parcial ou Livewire component.\n\n- Criar componente: resources/views/components/feature-card.blade.php (Blade component, não Livewire)\n- Props: $feature, $expanded (bool), $showProject (bool — false no contexto de projeto)\n- Inclui: título, progresso, badges, timer controls, tasks expandíveis\n- Usar tanto na página Work quanto no kanban de projeto\n\nNota: componente Blade simples (não SFC Livewire) pois é apenas template.",
+            "acceptanceCriteria": [
+                "Implementar: Atualmente o card de feature está inline na página ⚡features.blade.php. Para reutilizar no kanban de projeto, extrair para um componente Blade parcial ou Livewire component.\n\n- Criar componente: resources/views/components/feature-card.blade.php (Blade component, não Livewire)\n- Props: $feature, $expanded (bool), $showProject (bool — false no contexto de projeto)\n- Inclui: título, progresso, badges, timer controls, tasks expandíveis\n- Usar tanto na página Work quanto no kanban de projeto\n\nNota: componente Blade simples (não SFC Livewire) pois é apenas template."
+            ],
+            "priority": 2,
+            "passes": false,
+            "metadata": {
+                "soloboard_task_id": 43,
+                "soloboard_status": "todo"
+            }
+        },
+        {
+            "id": "US-44",
+            "title": "Atualizar computed properties e queries da project-detail",
+            "description": "Adaptar o backend do componente project-detail para trabalhar com features ao invés de tasks.\n\n- Novo computed: features() — Feature::forProject($project->id)->with(['tasks', 'timeEntries'])->ordered()->get()\n- Novo método: featuresByStatus() — agrupa features por status computado\n- Novo método: getColumnFeatures(FeatureStatus) — com paginação (limits)\n- Atualizar metrics() para incluir contagens de features\n- Manter listeners: #[On('feature-created')], #[On('feature-updated')], etc.\n\nArquivo: resources/views/pages/⚡project-detail.blade.php (seção PHP class)",
+            "acceptanceCriteria": [
+                "Implementar: Adaptar o backend do componente project-detail para trabalhar com features ao invés de tasks.\n\n- Novo computed: features() — Feature::forProject($project->id)->with(['tasks', 'timeEntries'])->ordered()->get()\n- Novo método: featuresByStatus() — agrupa features por status computado\n- Novo método: getColumnFeatures(FeatureStatus) — com paginação (limits)\n- Atualizar metrics() para incluir contagens de features\n- Manter listeners: #[On('feature-created')], #[On('feature-updated')], etc.\n\nArquivo: resources/views/pages/⚡project-detail.blade.php (seção PHP class)"
             ],
             "priority": 1,
-            "passes": true,
+            "passes": false,
             "metadata": {
-                "soloboard_task_id": 929,
-                "soloboard_status": "done"
+                "soloboard_task_id": 44,
+                "soloboard_status": "todo"
             }
         },
         {
-            "id": "US-930",
-            "title": "Adicionar toggle de visualização Kanban/Table",
-            "description": "Na página Work (ex-features), adicionar um controle para alternar entre visualização Kanban (padrão) e Table/List. Usar `<flux:tab>` ou botões com ícones (grid/list). O toggle deve ser visível na toolbar ao lado dos filtros. Property Livewire `viewMode` com #[Url]. Arquivo: ⚡features.blade.php.",
+            "id": "US-45",
+            "title": "Testes do kanban de features no projeto e aba specs",
+            "description": "Testes Pest Feature para:\n- Página de projeto renderiza kanban com features (não tasks)\n- Coluna Draft aparece quando há features sem tasks\n- Aba 'Features' renderiza specs em markdown\n- Clicar em feature dispara evento open-feature-modal\n- Features de outro projeto não aparecem\n- Empty state quando projeto não tem features\n- Métricas atualizadas com contagem de features\n\nArquivo: tests/Feature/ProjectDetailFeaturesTest.php",
             "acceptanceCriteria": [
-                "Implementar: Na página Work (ex-features), adicionar um controle para alternar entre visualização Kanban (padrão) e Table/List. Usar `<flux:tab>` ou botões com ícones (grid/list). O toggle deve ser visível na toolbar ao lado dos filtros. Property Livewire `viewMode` com #[Url]. Arquivo: ⚡features.blade.php."
-            ],
-            "priority": 2,
-            "passes": true,
-            "metadata": {
-                "soloboard_task_id": 930,
-                "soloboard_status": "done"
-            }
-        },
-        {
-            "id": "US-931",
-            "title": "Implementar visualização Table/List com flux:table",
-            "description": "Criar a visualização table/list usando `<flux:table>`. Colunas: ID (#F-{id}), Título, Status (badge colorido), Prioridade (ícone+label), Projeto (emoji+nome), Progresso (barra %), Tempo Total, Due Date. Ordenável por colunas. Respeitar os mesmos filtros do Kanban (projeto, prioridade, overdue). Arquivo: ⚡features.blade.php.",
-            "acceptanceCriteria": [
-                "Implementar: Criar a visualização table/list usando `<flux:table>`. Colunas: ID (#F-{id}), Título, Status (badge colorido), Prioridade (ícone+label), Projeto (emoji+nome), Progresso (barra %), Tempo Total, Due Date. Ordenável por colunas. Respeitar os mesmos filtros do Kanban (projeto, prioridade, overdue). Arquivo: ⚡features.blade.php."
-            ],
-            "priority": 2,
-            "passes": true,
-            "metadata": {
-                "soloboard_task_id": 931,
-                "soloboard_status": "done"
-            }
-        },
-        {
-            "id": "US-932",
-            "title": "Atualizar atalhos de teclado e command palette",
-            "description": "Atualizar Ctrl+F para navegar para `/work` (ou manter Ctrl+F com nova rota). Atualizar referências no command palette: label \"Work\" ao invés de \"Features\", rota atualizada. Atualizar help text de atalhos. Arquivos: layouts/app.blade.php, command-palette.blade.php.",
-            "acceptanceCriteria": [
-                "Implementar: Atualizar Ctrl+F para navegar para `/work` (ou manter Ctrl+F com nova rota). Atualizar referências no command palette: label \"Work\" ao invés de \"Features\", rota atualizada. Atualizar help text de atalhos. Arquivos: layouts/app.blade.php, command-palette.blade.php."
+                "Implementar: Testes Pest Feature para:\n- Página de projeto renderiza kanban com features (não tasks)\n- Coluna Draft aparece quando há features sem tasks\n- Aba 'Features' renderiza specs em markdown\n- Clicar em feature dispara evento open-feature-modal\n- Features de outro projeto não aparecem\n- Empty state quando projeto não tem features\n- Métricas atualizadas com contagem de features\n\nArquivo: tests/Feature/ProjectDetailFeaturesTest.php"
             ],
             "priority": 3,
-            "passes": true,
+            "passes": false,
             "metadata": {
-                "soloboard_task_id": 932,
-                "soloboard_status": "done"
-            }
-        },
-        {
-            "id": "US-933",
-            "title": "Testes da página Work",
-            "description": "Testes Pest para: rota /work responde 200, rota /features redireciona para /work (ou 404), sidebar renderiza \"Work\" e não \"Features\", toggle de view funciona, table renderiza colunas corretas, filtros funcionam em ambas views, atalho Ctrl+F navega corretamente.",
-            "acceptanceCriteria": [
-                "Implementar: Testes Pest para: rota /work responde 200, rota /features redireciona para /work (ou 404), sidebar renderiza \"Work\" e não \"Features\", toggle de view funciona, table renderiza colunas corretas, filtros funcionam em ambas views, atalho Ctrl+F navega corretamente."
-            ],
-            "priority": 3,
-            "passes": true,
-            "metadata": {
-                "soloboard_task_id": 933,
-                "soloboard_status": "done"
+                "soloboard_task_id": 45,
+                "soloboard_status": "todo"
             }
         }
     ]

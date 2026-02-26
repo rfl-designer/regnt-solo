@@ -22,6 +22,9 @@ new class extends Component
     #[Url(as: 'overdue')]
     public bool $filterOverdue = false;
 
+    #[Url(as: 'view')]
+    public string $viewMode = 'kanban';
+
     /** @var array<string, int> */
     public array $limits = [
         'draft' => 20,
@@ -219,6 +222,12 @@ new class extends Component
                 @endif
             </flux:button>
 
+            {{-- View mode toggle --}}
+            <flux:radio.group wire:model.live="viewMode" variant="segmented" size="sm">
+                <flux:radio value="kanban" icon="view-columns" title="Kanban" />
+                <flux:radio value="table" icon="list-bullet" title="Tabela" />
+            </flux:radio.group>
+
             {{-- New Feature button --}}
             <flux:button
                 wire:click="$dispatch('open-feature-modal')"
@@ -234,6 +243,7 @@ new class extends Component
     {{-- Separator --}}
     <flux:separator class="my-4" />
 
+    @if ($viewMode === 'kanban')
     {{-- Kanban Board --}}
     <div
         x-data="{
@@ -498,5 +508,13 @@ new class extends Component
             </div>
         @endforeach
     </div>
+    @else
+    {{-- Table/List View --}}
+    <div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/50 py-16">
+        <flux:icon name="list-bullet" class="mb-3 size-12 text-zinc-600" />
+        <flux:heading size="sm" class="text-zinc-400">Visualização em tabela</flux:heading>
+        <flux:text size="sm" class="mt-1 text-zinc-500">Em breve</flux:text>
+    </div>
+    @endif
 
 </div>

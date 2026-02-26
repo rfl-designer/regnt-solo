@@ -1,91 +1,91 @@
 {
-    "project": "Kanban de Features nos Projetos + Aba de Specs",
-    "branchName": "ralph/kanban-de-features-nos-projetos-aba-de-specs",
-    "description": "## User Story\nComo desenvolvedor solo, quero ver features (incluindo drafts) no kanban de projetos e ter uma aba dedicada com as specs completas de cada feature, para ter visão macro do progresso por projeto.\n\n## Contexto\nAtualmente o kanban na página de projeto mostra tasks individuais. A mudança faz o kanban de projeto exibir features ao invés de tasks, alinhando com a nova hierarquia onde features são a unidade principal de trabalho.\n\n## Critérios de Aceitação\n- [ ] Kanban na página de projeto exibe features ao invés de tasks\n- [ ] Features em status \"Draft\" aparecem no kanban de projeto (nova coluna ou seção)\n- [ ] Cards de features no kanban de projeto seguem mesmo padrão visual da página Work\n- [ ] Nova aba \"Features\" na página de projeto (ao lado de informações existentes)\n- [ ] Aba Features mostra specs como documentos: título, status, progresso, spec completa em markdown\n- [ ] Specs renderizadas como documentos legíveis (não editáveis nesta view)\n- [ ] Clicar na feature na aba abre o feature modal para edição\n\n## Notas Técnicas\n- Página de projeto: resources/views/pages/⚡project-show.blade.php (ou similar)\n- Reutilizar componente de card de feature existente\n- Adicionar coluna \"Draft\" (zinc) no kanban quando há features draft\n- Aba pode usar `<flux:tab>` para navegação",
+    "project": "Drill-down de Tasks por Feature no Kanban",
+    "branchName": "ralph/drill-down-de-tasks-por-feature-no-kanban",
+    "description": "## User Story\nComo desenvolvedor solo, quero poder ver as tasks de uma feature específica diretamente no kanban, para entender o detalhamento do trabalho sem sair da visualização principal.\n\n## Contexto\nComo os kanbans agora mostram apenas features, é necessário um mecanismo para \"entrar\" em uma feature e ver suas tasks em formato kanban, e depois voltar à visualização de features.\n\n## Critérios de Aceitação\n- [ ] Card de feature tem botão no rodapé \"Ver Tasks\" (ou ícone de expand/drill)\n- [ ] Ao clicar, o kanban isola e mostra apenas tasks daquela feature em formato kanban (Backlog → Todo → Doing → Done)\n- [ ] Header do kanban isolado mostra: título da feature, status, progresso, botão \"Voltar\"\n- [ ] Botão \"Voltar\" retorna à visualização normal de features\n- [ ] Estado de drill-down persistido na URL (ex: ?feature=123) para compartilhamento\n- [ ] Funciona tanto na página Work quanto no kanban de projeto\n\n## Notas Técnicas\n- Implementar como estado no componente Livewire (property `drillFeatureId`)\n- Quando `drillFeatureId` está preenchido, filtrar tasks da feature\n- Usar wire:navigate ou query string para persistir estado\n- Reutilizar lógica de kanban de tasks existente para renderizar as tasks",
     "maxIterations": 10,
     "userStories": [
         {
-            "id": "US-40",
-            "title": "Substituir kanban de tasks por features na project-detail",
-            "description": "Na página project-detail (⚡project-detail.blade.php), a aba 'Tasks' atualmente mostra um kanban de tasks (Backlog→Todo→Doing→Done). Substituir por um kanban de features do projeto.\n\n- Computed property: carregar features do projeto ao invés de tasks\n- Colunas: Draft, Backlog, Todo, Doing, Done (5 colunas)\n- Cards de feature: reutilizar o padrão visual da página Work (título, progresso, prioridade, tempo, due date)\n- Manter wire:sort para reordenação\n- Manter load more por coluna\n- Renomear aba de 'Tasks' para 'Board' ou 'Kanban'\n\nArquivo: resources/views/pages/⚡project-detail.blade.php (linhas 418-638 — seção tasks tab)",
+            "id": "US-105",
+            "title": "Adicionar property drillFeatureId com #[Url] ao componente",
+            "description": "Adicionar property Livewire `drillFeatureId` com `#[Url(as: 'feature')]` nos componentes de kanban (features.blade.php e project-detail.blade.php).\n\n- Quando `drillFeatureId` é null: modo normal (kanban de features)\n- Quando `drillFeatureId` é preenchido: modo drill-down (kanban de tasks da feature)\n- Computed property `drillFeature()`: carrega Feature::with(['tasks', 'project'])->find(drillFeatureId)\n- Método `enterDrill(int $featureId)`: seta drillFeatureId\n- Método `exitDrill()`: limpa drillFeatureId (volta ao normal)\n- Carregar tasks da feature agrupadas por TaskStatus quando em drill mode\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção PHP class)",
             "acceptanceCriteria": [
-                "Implementar: Na página project-detail (⚡project-detail.blade.php), a aba 'Tasks' atualmente mostra um kanban de tasks (Backlog→Todo→Doing→Done). Substituir por um kanban de features do projeto.\n\n- Computed property: carregar features do projeto ao invés de tasks\n- Colunas: Draft, Backlog, Todo, Doing, Done (5 colunas)\n- Cards de feature: reutilizar o padrão visual da página Work (título, progresso, prioridade, tempo, due date)\n- Manter wire:sort para reordenação\n- Manter load more por coluna\n- Renomear aba de 'Tasks' para 'Board' ou 'Kanban'\n\nArquivo: resources/views/pages/⚡project-detail.blade.php (linhas 418-638 — seção tasks tab)"
+                "Implementar: Adicionar property Livewire `drillFeatureId` com `#[Url(as: 'feature')]` nos componentes de kanban (features.blade.php e project-detail.blade.php).\n\n- Quando `drillFeatureId` é null: modo normal (kanban de features)\n- Quando `drillFeatureId` é preenchido: modo drill-down (kanban de tasks da feature)\n- Computed property `drillFeature()`: carrega Feature::with(['tasks', 'project'])->find(drillFeatureId)\n- Método `enterDrill(int $featureId)`: seta drillFeatureId\n- Método `exitDrill()`: limpa drillFeatureId (volta ao normal)\n- Carregar tasks da feature agrupadas por TaskStatus quando em drill mode\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção PHP class)"
             ],
             "priority": 1,
             "passes": true,
             "metadata": {
-                "soloboard_task_id": 40,
+                "soloboard_task_id": 105,
                 "soloboard_status": "done"
             }
         },
         {
-            "id": "US-41",
-            "title": "Adicionar coluna Draft ao kanban de projeto",
-            "description": "Features com status 'Draft' (sem tasks) precisam aparecer no kanban do projeto. Atualmente o kanban tem 4 colunas, precisa de 5.\n\n- Adicionar FeatureStatus::Draft ao array kanbanStatuses\n- Cor da coluna Draft: zinc (#71717a)\n- Ícone: document\n- Label: 'Rascunho'\n- Draft deve ser a primeira coluna (à esquerda)\n\nNota: FeatureStatus é computado (não persistido), então filtrar features onde tasks()->count() === 0 para Draft.",
+            "id": "US-106",
+            "title": "Adicionar botão \"Ver Tasks\" no rodapé do card de feature",
+            "description": "No componente de card de feature, adicionar um botão no rodapé para entrar no drill-down.\n\n- Posição: rodapé do card, abaixo da seção expandível de tasks\n- Botão: ícone `arrow-right-circle` ou `squares-plus` + texto 'Ver Tasks'\n- Estilo: discreto (text-xs text-zinc-400 hover:text-zinc-200), border-t border-zinc-700\n- Ação: `wire:click.stop=\"enterDrill($feature->id)\"`\n- Só aparece se feature tem tasks (tasksCount > 0)\n- Mostrar contagem: 'Ver 5 tasks →'\n\nArquivo: resources/views/components/feature-card.blade.php (ou inline no template)",
             "acceptanceCriteria": [
-                "Implementar: Features com status 'Draft' (sem tasks) precisam aparecer no kanban do projeto. Atualmente o kanban tem 4 colunas, precisa de 5.\n\n- Adicionar FeatureStatus::Draft ao array kanbanStatuses\n- Cor da coluna Draft: zinc (#71717a)\n- Ícone: document\n- Label: 'Rascunho'\n- Draft deve ser a primeira coluna (à esquerda)\n\nNota: FeatureStatus é computado (não persistido), então filtrar features onde tasks()->count() === 0 para Draft."
+                "Implementar: No componente de card de feature, adicionar um botão no rodapé para entrar no drill-down.\n\n- Posição: rodapé do card, abaixo da seção expandível de tasks\n- Botão: ícone `arrow-right-circle` ou `squares-plus` + texto 'Ver Tasks'\n- Estilo: discreto (text-xs text-zinc-400 hover:text-zinc-200), border-t border-zinc-700\n- Ação: `wire:click.stop=\"enterDrill($feature->id)\"`\n- Só aparece se feature tem tasks (tasksCount > 0)\n- Mostrar contagem: 'Ver 5 tasks →'\n\nArquivo: resources/views/components/feature-card.blade.php (ou inline no template)"
             ],
             "priority": 2,
-            "passes": true,
+            "passes": false,
             "metadata": {
-                "soloboard_task_id": 41,
-                "soloboard_status": "done"
+                "soloboard_task_id": 106,
+                "soloboard_status": "todo"
             }
         },
         {
-            "id": "US-42",
-            "title": "Criar aba \"Features\" com specs como documentos",
-            "description": "Nova aba na página de projeto com título 'Features'. Mostra as specs de todas as features do projeto como documentos legíveis.\n\n- Usar <flux:tab> para adicionar a aba (ao lado de Board/Docs/Metrics)\n- Cada feature renderizada como um card/documento:\n  - Título da feature + status badge + progresso (X/Y tasks)\n  - Spec completa renderizada em markdown (read-only)\n  - Prioridade e due date se existirem\n- Ordenar por: priority desc, sort_order asc\n- Clicar no título ou botão de editar dispara open-feature-modal\n- Empty state: 'Nenhuma feature neste projeto' + CTA para criar\n\nArquivo: resources/views/pages/⚡project-detail.blade.php",
+            "id": "US-107",
+            "title": "Implementar header do modo drill-down",
+            "description": "Quando drillFeatureId está ativo, renderizar um header contextual acima do kanban.\n\n- Background: `bg-zinc-800/80 border border-zinc-700 rounded-xl p-4 mb-4`\n- Conteúdo:\n  - Botão 'Voltar' à esquerda: `← Voltar para features` (wire:click=\"exitDrill\")\n  - Título da feature (h2, font-semibold)\n  - Status badge (FeatureStatus com cor)\n  - Progresso: 'X/Y tasks concluídas' + barra de progresso\n  - Projeto: emoji + nome (se existir)\n- Animação: x-transition ao aparecer/desaparecer\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção template)",
             "acceptanceCriteria": [
-                "Implementar: Nova aba na página de projeto com título 'Features'. Mostra as specs de todas as features do projeto como documentos legíveis.\n\n- Usar <flux:tab> para adicionar a aba (ao lado de Board/Docs/Metrics)\n- Cada feature renderizada como um card/documento:\n  - Título da feature + status badge + progresso (X/Y tasks)\n  - Spec completa renderizada em markdown (read-only)\n  - Prioridade e due date se existirem\n- Ordenar por: priority desc, sort_order asc\n- Clicar no título ou botão de editar dispara open-feature-modal\n- Empty state: 'Nenhuma feature neste projeto' + CTA para criar\n\nArquivo: resources/views/pages/⚡project-detail.blade.php"
+                "Implementar: Quando drillFeatureId está ativo, renderizar um header contextual acima do kanban.\n\n- Background: `bg-zinc-800/80 border border-zinc-700 rounded-xl p-4 mb-4`\n- Conteúdo:\n  - Botão 'Voltar' à esquerda: `← Voltar para features` (wire:click=\"exitDrill\")\n  - Título da feature (h2, font-semibold)\n  - Status badge (FeatureStatus com cor)\n  - Progresso: 'X/Y tasks concluídas' + barra de progresso\n  - Projeto: emoji + nome (se existir)\n- Animação: x-transition ao aparecer/desaparecer\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção template)"
             ],
             "priority": 2,
-            "passes": true,
+            "passes": false,
             "metadata": {
-                "soloboard_task_id": 42,
-                "soloboard_status": "done"
+                "soloboard_task_id": 107,
+                "soloboard_status": "todo"
             }
         },
         {
-            "id": "US-43",
-            "title": "Extrair componente reutilizável de card de feature",
-            "description": "Atualmente o card de feature está inline na página ⚡features.blade.php. Para reutilizar no kanban de projeto, extrair para um componente Blade parcial ou Livewire component.\n\n- Criar componente: resources/views/components/feature-card.blade.php (Blade component, não Livewire)\n- Props: $feature, $expanded (bool), $showProject (bool — false no contexto de projeto)\n- Inclui: título, progresso, badges, timer controls, tasks expandíveis\n- Usar tanto na página Work quanto no kanban de projeto\n\nNota: componente Blade simples (não SFC Livewire) pois é apenas template.",
+            "id": "US-108",
+            "title": "Renderizar kanban de tasks no modo drill-down",
+            "description": "Quando em drill mode, substituir o kanban de features pelo kanban de tasks da feature selecionada.\n\n- Reutilizar a estrutura de kanban de tasks existente (⚡kanban.blade.php como referência)\n- 4 colunas: Backlog → Todo → Doing → Done\n- Done: filtrar por completed_at na semana corrente\n- Cards de task: título, prioridade badge, estimativa, overdue, timer, session badge\n- wire:sort para drag-drop entre colunas (handleSort atualiza task.status)\n- Lazy loading com limits por coluna\n- Template condicional: `@if($drillFeatureId) ... @else ... @endif`\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção template)",
             "acceptanceCriteria": [
-                "Implementar: Atualmente o card de feature está inline na página ⚡features.blade.php. Para reutilizar no kanban de projeto, extrair para um componente Blade parcial ou Livewire component.\n\n- Criar componente: resources/views/components/feature-card.blade.php (Blade component, não Livewire)\n- Props: $feature, $expanded (bool), $showProject (bool — false no contexto de projeto)\n- Inclui: título, progresso, badges, timer controls, tasks expandíveis\n- Usar tanto na página Work quanto no kanban de projeto\n\nNota: componente Blade simples (não SFC Livewire) pois é apenas template."
-            ],
-            "priority": 2,
-            "passes": true,
-            "metadata": {
-                "soloboard_task_id": 43,
-                "soloboard_status": "done"
-            }
-        },
-        {
-            "id": "US-44",
-            "title": "Atualizar computed properties e queries da project-detail",
-            "description": "Adaptar o backend do componente project-detail para trabalhar com features ao invés de tasks.\n\n- Novo computed: features() — Feature::forProject($project->id)->with(['tasks', 'timeEntries'])->ordered()->get()\n- Novo método: featuresByStatus() — agrupa features por status computado\n- Novo método: getColumnFeatures(FeatureStatus) — com paginação (limits)\n- Atualizar metrics() para incluir contagens de features\n- Manter listeners: #[On('feature-created')], #[On('feature-updated')], etc.\n\nArquivo: resources/views/pages/⚡project-detail.blade.php (seção PHP class)",
-            "acceptanceCriteria": [
-                "Implementar: Adaptar o backend do componente project-detail para trabalhar com features ao invés de tasks.\n\n- Novo computed: features() — Feature::forProject($project->id)->with(['tasks', 'timeEntries'])->ordered()->get()\n- Novo método: featuresByStatus() — agrupa features por status computado\n- Novo método: getColumnFeatures(FeatureStatus) — com paginação (limits)\n- Atualizar metrics() para incluir contagens de features\n- Manter listeners: #[On('feature-created')], #[On('feature-updated')], etc.\n\nArquivo: resources/views/pages/⚡project-detail.blade.php (seção PHP class)"
+                "Implementar: Quando em drill mode, substituir o kanban de features pelo kanban de tasks da feature selecionada.\n\n- Reutilizar a estrutura de kanban de tasks existente (⚡kanban.blade.php como referência)\n- 4 colunas: Backlog → Todo → Doing → Done\n- Done: filtrar por completed_at na semana corrente\n- Cards de task: título, prioridade badge, estimativa, overdue, timer, session badge\n- wire:sort para drag-drop entre colunas (handleSort atualiza task.status)\n- Lazy loading com limits por coluna\n- Template condicional: `@if($drillFeatureId) ... @else ... @endif`\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção template)"
             ],
             "priority": 1,
-            "passes": true,
+            "passes": false,
             "metadata": {
-                "soloboard_task_id": 44,
-                "soloboard_status": "done"
+                "soloboard_task_id": 108,
+                "soloboard_status": "todo"
             }
         },
         {
-            "id": "US-45",
-            "title": "Testes do kanban de features no projeto e aba specs",
-            "description": "Testes Pest Feature para:\n- Página de projeto renderiza kanban com features (não tasks)\n- Coluna Draft aparece quando há features sem tasks\n- Aba 'Features' renderiza specs em markdown\n- Clicar em feature dispara evento open-feature-modal\n- Features de outro projeto não aparecem\n- Empty state quando projeto não tem features\n- Métricas atualizadas com contagem de features\n\nArquivo: tests/Feature/ProjectDetailFeaturesTest.php",
+            "id": "US-109",
+            "title": "Implementar handleSort para tasks no drill mode",
+            "description": "Adicionar método de drag-drop para tasks quando em modo drill-down.\n\n- Novo método `handleTaskSort($items, $column)` nos componentes\n- Lógica: mesma do kanban.blade.php — atualizar status e sort_order em DB::transaction\n- Quando task muda para Done: preencher completed_at, adicionar ao daily plan\n- Quando task sai de Done: limpar completed_at\n- Dispatch events: 'task-updated' para refresh\n- Escopo: apenas tasks da feature em drill (validar feature_id)\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção PHP class)",
             "acceptanceCriteria": [
-                "Implementar: Testes Pest Feature para:\n- Página de projeto renderiza kanban com features (não tasks)\n- Coluna Draft aparece quando há features sem tasks\n- Aba 'Features' renderiza specs em markdown\n- Clicar em feature dispara evento open-feature-modal\n- Features de outro projeto não aparecem\n- Empty state quando projeto não tem features\n- Métricas atualizadas com contagem de features\n\nArquivo: tests/Feature/ProjectDetailFeaturesTest.php"
+                "Implementar: Adicionar método de drag-drop para tasks quando em modo drill-down.\n\n- Novo método `handleTaskSort($items, $column)` nos componentes\n- Lógica: mesma do kanban.blade.php — atualizar status e sort_order em DB::transaction\n- Quando task muda para Done: preencher completed_at, adicionar ao daily plan\n- Quando task sai de Done: limpar completed_at\n- Dispatch events: 'task-updated' para refresh\n- Escopo: apenas tasks da feature em drill (validar feature_id)\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção PHP class)"
+            ],
+            "priority": 2,
+            "passes": false,
+            "metadata": {
+                "soloboard_task_id": 109,
+                "soloboard_status": "todo"
+            }
+        },
+        {
+            "id": "US-110",
+            "title": "Testes do drill-down de tasks por feature",
+            "description": "Testes Pest Feature para o mecanismo de drill-down:\n\n- Botão 'Ver Tasks' aparece no card quando feature tem tasks\n- Botão 'Ver Tasks' não aparece quando feature tem 0 tasks\n- enterDrill seta drillFeatureId e URL query string ?feature=123\n- exitDrill limpa drillFeatureId e remove query string\n- Modo drill renderiza kanban de tasks (4 colunas)\n- Tasks exibidas são apenas da feature selecionada\n- Drag-drop entre colunas atualiza status da task\n- Header mostra título, status, progresso da feature\n- Funciona na página Work\n- Funciona na página project-detail\n- Acesso direto via URL ?feature=123 entra em drill mode\n\nArquivo: tests/Feature/DrillDownFeatureTest.php",
+            "acceptanceCriteria": [
+                "Implementar: Testes Pest Feature para o mecanismo de drill-down:\n\n- Botão 'Ver Tasks' aparece no card quando feature tem tasks\n- Botão 'Ver Tasks' não aparece quando feature tem 0 tasks\n- enterDrill seta drillFeatureId e URL query string ?feature=123\n- exitDrill limpa drillFeatureId e remove query string\n- Modo drill renderiza kanban de tasks (4 colunas)\n- Tasks exibidas são apenas da feature selecionada\n- Drag-drop entre colunas atualiza status da task\n- Header mostra título, status, progresso da feature\n- Funciona na página Work\n- Funciona na página project-detail\n- Acesso direto via URL ?feature=123 entra em drill mode\n\nArquivo: tests/Feature/DrillDownFeatureTest.php"
             ],
             "priority": 3,
-            "passes": true,
+            "passes": false,
             "metadata": {
-                "soloboard_task_id": 45,
-                "soloboard_status": "done"
+                "soloboard_task_id": 110,
+                "soloboard_status": "todo"
             }
         }
     ]

@@ -1,105 +1,29 @@
 ## Codebase Patterns
 
-- **Feature status é computado**: FeatureStatus no model Feature é um accessor (não persistido). Draft = sem tasks, Done = todas tasks done, Doing = alguma task doing, etc.
-- **Feature kanban padrão visual**: Cards extraídos para `<x-feature-card>` (componente Blade reutilizável). Props: `:feature`, `:expanded`, `:show-project`.
-- **getColumnFeatures pattern**: Filtrar features por computed status usando `->filter(fn (Feature $f) => $f->status === $status)->take($limit)`. Não usar query builder (status não é coluna).
-- **Testes de feature kanban**: Criar features com tasks específicas para forçar status desejado. Ex: feature sem tasks = Draft, feature com task backlog = Backlog.
-- **SFC project-detail**: Arquivo grande (~1000 linhas). PHP class + Blade template. Tabs: Board, Docs, Métricas.
+- **SFC pattern**: Todos componentes Livewire são Single-File Components com `@php new class extends Component { } @endphp`
+- **Kanban columns**: features usam `FeatureStatus` (Draft, Backlog, Todo, Doing, Done); tasks usam `TaskStatus` (Inbox, Backlog, Todo, Doing, Done)
+- **Feature status é computed**: baseado nas tasks (todas done = Done, alguma doing = Doing, etc.)
+- **Done column**: filtrar por `completed_at` na semana corrente para tasks
+- **Imports Livewire**: `use Livewire\Attributes\Url;` para `#[Url]`, `use Livewire\Attributes\Computed;` para `#[Computed]`
+- **Limits pattern**: array `$limits` com status como key, `loadMore()` incrementa 20
+- **Refresh pattern**: `unset($this->computedProp)` para invalidar computed properties
+- **Feature card component**: `resources/views/components/feature-card.blade.php` — Blade component com @props
+- **Project-detail tabs**: board, features, docs, metrics — board tab contém kanban de features
+- **Pre-existing test failures**: 10 testes falhando (AiInsightsTest, AiIntegrationTest, AnalyticsPageTest, DocumentIntegrationTest) — não relacionados ao drill-down
 
 ---
 
-## 2026-02-26 - US-40
-- Substituído kanban de tasks por features na project-detail
-- Aba renomeada de 'Tasks' para 'Board'
-- 5 colunas: Draft, Backlog, A Fazer, Em Progresso, Concluída
-- Cards de feature com progresso, prioridade, tempo, due date, timer controls, tasks expandíveis
-- Computed property `features()` com eager loading (tasks, timeEntries)
-- Métodos: `getColumnFeatures(FeatureStatus)`, `getColumnTotal(FeatureStatus)`, `startTimer()`, `stopTimer()`, `toggleExpanded()`, `isExpanded()`
-- Removidos: `tasksByStatus`, `getColumnTasks`, `getColumnTotal(TaskStatus)`, `getColumnEstimate`, `handleSort`, `recalculateSortOrder`
-- Event listeners atualizados: +feature-created, +feature-updated, +timer-updated
-- Metrics atualizado com `feature_count` e `done_features`
-- Testes: ProjectDetailTest.php reescrito (46 tests passando), ProjectDetailLazyLoadingTest.php adaptado para features
-- Files changed: ⚡project-detail.blade.php, ProjectDetailTest.php, ProjectDetailLazyLoadingTest.php
+## 2026-02-26 - US-105
+- Adicionado property `drillFeatureId` com `#[Url(as: 'feature')]` em `⚡features.blade.php` e `⚡project-detail.blade.php`
+- Computed property `drillFeature()` carrega Feature com tasks, project, timeEntries
+- Métodos `enterDrill(int $featureId)` e `exitDrill()` para navegar entre modos
+- Métodos `getDrillColumnTasks()` e `getDrillColumnTotal()` para tasks agrupadas por status
+- Array `drillLimits` e `loadMoreDrill()` para lazy loading no drill mode
+- Array `drillTaskStatuses` com [Backlog, Todo, Doing, Done] para colunas do drill
+- Files changed: `⚡features.blade.php`, `⚡project-detail.blade.php`
 - **Learnings for future iterations:**
-  - US-41 (coluna Draft) já foi implementada como parte de US-40 — validar e marcar como done
-  - US-44 (computed properties) já foi largamente implementada em US-40 — falta apenas `featuresByStatus()` explícito
-  - wire:sort foi removido pois feature status é computado (não pode drag-drop entre colunas)
-  - formatDuration mudou de `int $minutes` para `float $minutes` para compatibilidade com Feature::total_time
-  - 10 testes pré-existentes falhando (AiInsightsTest, AiIntegrationTest, AnalyticsPageTest, DocumentIntegrationTest) — não relacionados
----
-
-## 2026-02-26 - US-44
-- Adicionado computed `featuresByStatus()` que agrupa features por status computado
-- Atualizado `metrics()` com `feature_completion_percent` e `features_by_status`
-- Adicionados cards de features na aba Métricas: Total de Features, Features Concluídas (com progress bar)
-- Adicionada seção "Features por Status" na aba Métricas (5 colunas: Draft, Backlog, A Fazer, Em Progresso, Concluída)
-- Atualizado `refreshProject()` para limpar cache de `featuresByStatus`
-- Files changed: ⚡project-detail.blade.php
-- 46 testes passando
-- **Learnings for future iterations:**
-  - Grande parte de US-44 já estava implementada em US-40 (features(), getColumnFeatures(), metrics básicas, listeners)
-  - O método featuresByStatus() é um agrupamento simples usando filter sobre a collection já carregada
-  - As métricas de features (feature_completion_percent, features_by_status) complementam as métricas existentes de tasks
----
-
-## 2026-02-26 - US-41
-- Validada como já implementada durante US-40
-- FeatureStatus::Draft existe com cor zinc (#71717a), ícone document, label Rascunho
-- Draft é a primeira coluna no kanbanStatuses
-- 46 testes ProjectDetail passando
-- Files changed: nenhum (já implementado)
-- **Learnings for future iterations:**
-  - Quando uma story é implementada como parte de outra, validar e marcar done rapidamente
----
-
-## 2026-02-26 - US-42
-- Nova aba "Features" na página project-detail (entre Board e Docs)
-- Tab com ícone rectangle-stack, condicionada a `$tab === 'features'` para evitar conflito com lazy loading
-- Cada feature renderizada como card/documento: título clicável, status badge, progresso (X/Y tasks), priority, due date, progress bar
-- Spec renderizada via `<livewire:markdown-viewer>` (read-only, sem botões de copiar)
-- Empty state com ícone, texto e CTA para criar feature
-- Botão de editar dispara open-feature-modal
-- Ordenação natural via `$this->features` (scope ordered: priority desc, sort_order asc)
-- Files changed: ⚡project-detail.blade.php
-- 46 testes passando
-- **Learnings for future iterations:**
-  - flux:tab.panel renderiza TODOS os painéis no HTML — usar `@if ($tab === 'name')` para condicionar conteúdo que pode conflitar com assertDontSee em testes
-  - `<livewire:markdown-viewer>` aceita :content e :show-copy-buttons como props
-  - A collection features já vem ordenada pelo scope ordered(), não precisa de sortBy extra no blade
----
-
-## 2026-02-26 - US-43
-- Extraído card de feature para componente Blade reutilizável: `resources/views/components/feature-card.blade.php`
-- Props: `$feature` (Feature model), `$expanded` (bool), `$showProject` (bool, default true)
-- Refatorado `⚡features.blade.php` (Work page) para usar `<x-feature-card :show-project="true">`
-- Refatorado `⚡project-detail.blade.php` (Board tab) para usar `<x-feature-card :show-project="false">`
-- Removido `formatDuration()` do project-detail (não mais necessário, cálculo feito inline no componente)
-- 166 linhas adicionadas, 303 removidas — eliminação de duplicação significativa
-- Files changed: feature-card.blade.php (novo), ⚡features.blade.php, ⚡project-detail.blade.php
-- 46 testes ProjectDetail + 58 Work + 19 FeaturesKanban passando
-- **Learnings for future iterations:**
-  - Componentes Blade anônimos (`@props`) funcionam bem com wire: directives — bubble up para o parent Livewire
-  - `formatDuration` pode ser calculado inline no componente com `intdiv()` e `%` — não precisa de método no parent
-  - O padrão `<x-feature-card>` simplifica futuras mudanças visuais no card (muda uma vez, reflete em ambas páginas)
----
-
-## 2026-02-26 - US-45
-- Criado `tests/Feature/ProjectDetailFeaturesTest.php` com 24 testes (48 assertions)
-- Cobertura completa dos cenários pedidos:
-  - Board mostra features agrupadas por status computado (Draft/Backlog/Todo/Doing/Done)
-  - 5 headers de coluna presentes
-  - Draft column mostra apenas features sem tasks, com contagem correta
-  - Aba Features renderiza specs, status badge, progresso, priority, due date
-  - Mensagem "Nenhuma spec definida" para features sem spec
-  - Botão edit e título clicável disparam open-feature-modal com featureId
-  - Isolamento: features de outro projeto não aparecem (board e aba Features)
-  - Empty state: "Nenhuma feature neste projeto" + botão Nova Feature
-  - Métricas: feature_count, done_features, feature_completion_percent, features_by_status breakdown
-  - featuresByStatus computed property agrupa corretamente
-- Files changed: ProjectDetailFeaturesTest.php (novo)
-- 24 testes novos + 46 ProjectDetail + 46 LazyLoading = 116 testes project-detail passando
-- **Learnings for future iterations:**
-  - assertSeeHtml precisa do formato exato do Blade renderizado — usar aspas simples `'open-feature-modal'` para dispatch strings
-  - Para testar tabs, usar `->set('tab', 'features')` — flux:tab.panel é condicional com `@if ($tab === 'features')`
-  - Criar features com Factory states: sem tasks = Draft, com task backlog = Backlog, com task done = Done, etc.
+  - Os dois componentes (features e project-detail) precisam das mesmas alterações de drill-down
+  - Feature model já tem `tasks()` relationship e eager loading funciona com `with(['tasks.project', 'tasks.timeEntries'])`
+  - Imports necessários: `TaskStatus`, `Task`, `Carbon`, `Url` (project-detail não tinha Url antes)
+  - 82 testes relevantes continuam passando
 ---

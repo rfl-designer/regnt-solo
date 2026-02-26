@@ -143,29 +143,6 @@ new class extends Component
             ->count();
     }
 
-    /**
-     * Format minutes as human-readable duration (e.g., "2h 30m" or "45m").
-     */
-    public function formatDuration(float $minutes): string
-    {
-        if ($minutes === 0.0) {
-            return '';
-        }
-
-        $hours = intdiv((int) $minutes, 60);
-        $mins = (int) $minutes % 60;
-
-        if ($hours > 0 && $mins > 0) {
-            return "{$hours}h {$mins}m";
-        }
-
-        if ($hours > 0) {
-            return "{$hours}h";
-        }
-
-        return "{$mins}m";
-    }
-
     public function loadMore(string $status): void
     {
         $this->limits[$status] += 10;
@@ -496,143 +473,11 @@ new class extends Component
                                 class="flex-1 space-y-3 overflow-y-auto p-3"
                             >
                                 @forelse ($features as $feature)
-                                    @php
-                                        $isExpanded = $this->isExpanded($feature->id);
-                                        $tasksCount = $feature->tasksCount();
-                                        $completedCount = $feature->completedTasksCount();
-                                        $totalTime = $feature->total_time;
-                                    @endphp
-
-                                    <div
-                                        wire:key="feature-{{ $feature->id }}"
-                                        class="group rounded-lg border border-zinc-700 bg-zinc-800 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
-                                    >
-                                        {{-- Card Header --}}
-                                        <div
-                                            class="cursor-pointer p-3"
-                                            wire:click="$dispatch('open-feature-modal', { featureId: {{ $feature->id }} })"
-                                        >
-                                            {{-- Title --}}
-                                            <h3 class="line-clamp-2 text-sm font-medium text-zinc-200">
-                                                {{ $feature->title }}
-                                            </h3>
-
-                                            {{-- Progress Bar --}}
-                                            @if ($tasksCount > 0)
-                                                <div class="mt-3">
-                                                    <div class="mb-1 flex items-center justify-between text-xs">
-                                                        <span class="text-zinc-400">Progresso</span>
-                                                        <span class="font-medium text-zinc-300">{{ $completedCount }}/{{ $tasksCount }} tasks</span>
-                                                    </div>
-                                                    <div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-700">
-                                                        <div
-                                                            class="h-full rounded-full bg-{{ $status->color() }}-500 transition-all duration-300"
-                                                            style="width: {{ $feature->progress }}%"
-                                                        ></div>
-                                                    </div>
-                                                </div>
-                                            @endif
-
-                                            {{-- Badges Row --}}
-                                            <div class="mt-3 flex flex-wrap items-center gap-1.5">
-                                                {{-- Priority Badge --}}
-                                                @if ($feature->priority)
-                                                    <flux:badge size="sm" color="{{ $feature->priority->color() }}" icon="{{ $feature->priority->icon() }}">
-                                                        {{ $feature->priority->label() }}
-                                                    </flux:badge>
-                                                @endif
-
-                                                {{-- Time Badge --}}
-                                                @if ($totalTime > 0)
-                                                    <flux:badge size="sm" color="zinc" icon="clock">
-                                                        {{ $this->formatDuration($totalTime) }}
-                                                    </flux:badge>
-                                                @endif
-
-                                                {{-- Due Date --}}
-                                                @if ($feature->due_date)
-                                                    @php
-                                                        $isOverdue = $feature->due_date->isPast();
-                                                    @endphp
-                                                    <flux:badge size="sm" color="{{ $isOverdue ? 'red' : 'zinc' }}" icon="{{ $isOverdue ? 'exclamation-triangle' : 'calendar' }}">
-                                                        {{ $feature->due_date->format('d/m') }}
-                                                    </flux:badge>
-                                                @endif
-
-                                                {{-- Timer Control --}}
-                                                <div class="ml-auto">
-                                                    @if ($feature->isRunning())
-                                                        <button
-                                                            type="button"
-                                                            wire:click.stop="stopTimer({{ $feature->id }})"
-                                                            class="flex items-center gap-1 rounded-md bg-violet-600/20 px-2 py-1 text-xs font-medium text-violet-400 transition hover:bg-violet-600/30"
-                                                            title="Parar timer"
-                                                        >
-                                                            <div class="size-2 animate-pulse rounded-full bg-violet-400"></div>
-                                                            <span>Timer</span>
-                                                            <flux:icon name="stop" class="size-3" />
-                                                        </button>
-                                                    @else
-                                                        <button
-                                                            type="button"
-                                                            wire:click.stop="startTimer({{ $feature->id }})"
-                                                            class="flex items-center gap-1 rounded-md bg-zinc-700/50 px-2 py-1 text-xs font-medium text-zinc-400 opacity-0 transition group-hover:opacity-100 hover:bg-zinc-600 hover:text-zinc-200"
-                                                            title="Iniciar timer"
-                                                        >
-                                                            <flux:icon name="play" class="size-3" />
-                                                        </button>
-                                                    @endif
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {{-- Expand/Collapse Tasks --}}
-                                        @if ($tasksCount > 0)
-                                            <div class="border-t border-zinc-700">
-                                                <button
-                                                    type="button"
-                                                    wire:click.stop="toggleExpanded({{ $feature->id }})"
-                                                    aria-expanded="{{ $isExpanded ? 'true' : 'false' }}"
-                                                    aria-controls="tasks-list-{{ $feature->id }}"
-                                                    class="flex w-full items-center justify-between px-3 py-2 text-xs text-zinc-400 transition hover:bg-zinc-700/50 hover:text-zinc-300"
-                                                >
-                                                    <span>{{ $tasksCount }} {{ $tasksCount === 1 ? 'task' : 'tasks' }}</span>
-                                                    <flux:icon
-                                                        :name="$isExpanded ? 'chevron-up' : 'chevron-down'"
-                                                        class="size-4"
-                                                    />
-                                                </button>
-
-                                                {{-- Tasks List (Expandable) --}}
-                                                @if ($isExpanded)
-                                                    <div id="tasks-list-{{ $feature->id }}" class="border-t border-zinc-700/50 bg-zinc-800/50 px-3 py-2">
-                                                        <ul class="space-y-1.5">
-                                                            @foreach ($feature->tasks->sortBy('sort_order') as $task)
-                                                                <li
-                                                                    wire:click.stop="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
-                                                                    class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs transition hover:bg-zinc-700"
-                                                                >
-                                                                    {{-- Status indicator --}}
-                                                                    <div class="size-2 shrink-0 rounded-full bg-{{ $task->status->color() }}-400"></div>
-
-                                                                    {{-- Title --}}
-                                                                    <span class="flex-1 truncate text-zinc-300">{{ $task->title }}</span>
-
-                                                                    {{-- Priority --}}
-                                                                    @if ($task->priority)
-                                                                        <flux:icon
-                                                                            :name="$task->priority->icon()"
-                                                                            class="size-3 shrink-0 text-{{ $task->priority->color() }}-400"
-                                                                        />
-                                                                    @endif
-                                                                </li>
-                                                            @endforeach
-                                                        </ul>
-                                                    </div>
-                                                @endif
-                                            </div>
-                                        @endif
-                                    </div>
+                                    <x-feature-card
+                                        :feature="$feature"
+                                        :expanded="$this->isExpanded($feature->id)"
+                                        :show-project="false"
+                                    />
                                 @empty
                                     <div class="py-8 text-center text-sm text-zinc-600">
                                         Nenhuma feature

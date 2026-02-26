@@ -65,7 +65,7 @@ jobs:
           sed -i "s|DB_USERNAME=root|DB_USERNAME=${{ secrets.DB_USERNAME }}|g" .env
           sed -i "s|DB_PASSWORD=|DB_PASSWORD=${{ secrets.DB_PASSWORD }}|g" .env
           sed -i "s|MAIL_USERNAME=null|MAIL_USERNAME=${{ secrets.MAIL_USERNAME }}|g" .env
-          sed -i 's|MAIL_PASSWORD=null|MAIL_PASSWORD="${{ secrets.MAIL_PASSWORD }}"|g' .env
+          sed -i "s|MAIL_PASSWORD=null|MAIL_PASSWORD=\"\${{ secrets.MAIL_PASSWORD }}\"|g" .env
           sed -i 's|^MAIL_FROM_ADDRESS=.*|MAIL_FROM_ADDRESS="${{ secrets.MAIL_USERNAME }}"|' .env
           sed -i "s|SOLO_USER_EMAIL=admin@soloboard.local|SOLO_USER_EMAIL=${{ secrets.MAIL_USERNAME }}|g" .env
           sed -i "s|SOLO_USER_PASSWORD=password|SOLO_USER_PASSWORD=${{ secrets.MAIL_PASSWORD }}|g" .env

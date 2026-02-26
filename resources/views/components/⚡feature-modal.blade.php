@@ -189,9 +189,23 @@ new class extends Component
 
 <flux:modal name="feature-modal" class="w-full max-w-3xl space-y-6" variant="flyout">
     <div>
-        <flux:heading size="lg">
-            {{ $featureId ? 'Editar Feature' : 'Nova Feature' }}
-        </flux:heading>
+        <div class="flex items-center gap-2">
+            <flux:heading size="lg">
+                {{ $featureId ? 'Editar Feature' : 'Nova Feature' }}
+            </flux:heading>
+            @if ($featureId)
+                <span
+                    x-data="{ copied: false }"
+                    x-on:click="navigator.clipboard.writeText('#F-{{ $featureId }}'); copied = true; setTimeout(() => copied = false, 1500)"
+                    class="cursor-pointer text-sm font-mono transition-colors duration-200"
+                    :class="copied ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'"
+                    title="Copiar ID"
+                >
+                    <span x-show="!copied">#F-{{ $featureId }}</span>
+                    <span x-show="copied" x-cloak>Copiado!</span>
+                </span>
+            @endif
+        </div>
         <flux:text class="mt-1">
             {{ $featureId ? 'Atualize os detalhes da feature.' : 'Crie uma nova feature para agrupar tasks relacionadas.' }}
         </flux:text>

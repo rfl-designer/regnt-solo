@@ -64,3 +64,30 @@
   - Sorting de computed attributes (status, progress, total_time) exige sortBy na collection, não na query — `$collection->sortBy()` com closure funciona bem
   - `$this->sortedFeatures` precisa ser limpo em `refreshBoard()` junto com `$this->features`
 ---
+
+## 2026-02-26 - US-932
+- Atualizado atalho `Ctrl+F` de `/features` para `/work` em app.blade.php
+- Atualizado label no command palette: "Features" → "Work" nos hints de atalho
+- Files changed: app.blade.php, ⚡command-palette.blade.php
+- **Learnings for future iterations:**
+  - Mudança mínima — apenas 2 strings a alterar (URL do atalho e label do hint)
+  - 11 testes falhando são pré-existentes (AiInsights, AiIntegration, Analytics, Document, ProjectDetail) — não relacionados
+---
+
+## 2026-02-26 - US-933
+- Criado `tests/Feature/WorkPageTest.php` com 29 testes Pest cobrindo:
+  - Routing: /work responde 200, /features redireciona para /work, auth obrigatória, named route
+  - Sidebar: renderiza "Work", grupo "Planejamento", sem "Features" como nav item
+  - View Mode Toggle: default kanban, switch para table, persistência na URL
+  - Table View Columns: ID (#F-{id}), título, status badge, prioridade, projeto, progresso, due date, empty state
+  - Table Sorting: sort por coluna, toggle direction, reset ao mudar coluna
+  - Filtros em ambas views: projeto, prioridade, overdue funcionam na table view
+  - Keyboard shortcuts: Ctrl+F aponta para /work
+  - Command Palette: mostra "Work" ao invés de "Features"
+- Files changed: tests/Feature/WorkPageTest.php, storage/ralph/prd.json, storage/ralph/progress.txt
+- **Learnings for future iterations:**
+  - Flux UI renderiza ícones como SVG inline — não testar presença de string literal do nome do ícone no HTML
+  - Labels de enums (ex: `TaskStatus::Inbox->label()` = "Caixa de Entrada") podem aparecer no HTML mesmo que o item foi removido da sidebar — cuidado com assertDontSee genéricos
+  - Livewire `pages::features` é o nome do componente para testes (baseado no caminho do arquivo SFC)
+  - `->set('viewMode', 'table')` no Livewire test funciona para alternar view mode e testar conteúdo condicional
+---

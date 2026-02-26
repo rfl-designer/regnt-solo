@@ -68,10 +68,10 @@
                 "Implementar: Atualizar Ctrl+F para navegar para `/work` (ou manter Ctrl+F com nova rota). Atualizar referências no command palette: label \"Work\" ao invés de \"Features\", rota atualizada. Atualizar help text de atalhos. Arquivos: layouts/app.blade.php, command-palette.blade.php."
             ],
             "priority": 3,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 932,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {
@@ -82,10 +82,10 @@
                 "Implementar: Testes Pest para: rota /work responde 200, rota /features redireciona para /work (ou 404), sidebar renderiza \"Work\" e não \"Features\", toggle de view funciona, table renderiza colunas corretas, filtros funcionam em ambas views, atalho Ctrl+F navega corretamente."
             ],
             "priority": 3,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 933,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         }
     ]

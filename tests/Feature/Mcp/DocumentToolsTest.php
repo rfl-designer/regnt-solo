@@ -24,8 +24,8 @@ test('list-documents returns all documents', function () {
 
 test('list-documents filters by project slug', function () {
     $project = Project::factory()->create(['slug' => 'my-project']);
-    Document::factory()->create(['project_id' => $project->id, 'title' => 'Project Doc']);
-    Document::factory()->create(['project_id' => null, 'title' => 'Global Doc']);
+    Document::factory()->context()->create(['project_id' => $project->id, 'title' => 'Project Doc']);
+    Document::factory()->context()->create(['project_id' => null, 'title' => 'Global Doc']);
 
     $response = SoloBoardServer::tool(ListDocumentsTool::class, [
         'project_slug' => 'my-project',
@@ -37,8 +37,8 @@ test('list-documents filters by project slug', function () {
 });
 
 test('list-documents filters by type', function () {
-    Document::factory()->create(['type' => DocumentType::Prd, 'title' => 'PRD Doc']);
-    Document::factory()->create(['type' => DocumentType::Note, 'title' => 'Note Doc']);
+    Document::factory()->context()->create(['type' => DocumentType::Prd, 'title' => 'PRD Doc']);
+    Document::factory()->context()->create(['type' => DocumentType::Note, 'title' => 'Note Doc']);
 
     $response = SoloBoardServer::tool(ListDocumentsTool::class, [
         'type' => 'prd',
@@ -60,8 +60,8 @@ test('list-documents respects limit', function () {
 });
 
 test('list-documents shows pinned first', function () {
-    Document::factory()->create(['is_pinned' => false, 'title' => 'Regular Doc']);
-    Document::factory()->create(['is_pinned' => true, 'title' => 'Pinned Doc']);
+    Document::factory()->context()->create(['is_pinned' => false, 'title' => 'Regular Doc']);
+    Document::factory()->context()->create(['is_pinned' => true, 'title' => 'Pinned Doc']);
 
     $response = SoloBoardServer::tool(ListDocumentsTool::class, []);
 

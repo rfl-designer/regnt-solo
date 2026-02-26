@@ -82,3 +82,24 @@
   - `formatDuration` pode ser calculado inline no componente com `intdiv()` e `%` — não precisa de método no parent
   - O padrão `<x-feature-card>` simplifica futuras mudanças visuais no card (muda uma vez, reflete em ambas páginas)
 ---
+
+## 2026-02-26 - US-45
+- Criado `tests/Feature/ProjectDetailFeaturesTest.php` com 24 testes (48 assertions)
+- Cobertura completa dos cenários pedidos:
+  - Board mostra features agrupadas por status computado (Draft/Backlog/Todo/Doing/Done)
+  - 5 headers de coluna presentes
+  - Draft column mostra apenas features sem tasks, com contagem correta
+  - Aba Features renderiza specs, status badge, progresso, priority, due date
+  - Mensagem "Nenhuma spec definida" para features sem spec
+  - Botão edit e título clicável disparam open-feature-modal com featureId
+  - Isolamento: features de outro projeto não aparecem (board e aba Features)
+  - Empty state: "Nenhuma feature neste projeto" + botão Nova Feature
+  - Métricas: feature_count, done_features, feature_completion_percent, features_by_status breakdown
+  - featuresByStatus computed property agrupa corretamente
+- Files changed: ProjectDetailFeaturesTest.php (novo)
+- 24 testes novos + 46 ProjectDetail + 46 LazyLoading = 116 testes project-detail passando
+- **Learnings for future iterations:**
+  - assertSeeHtml precisa do formato exato do Blade renderizado — usar aspas simples `'open-feature-modal'` para dispatch strings
+  - Para testar tabs, usar `->set('tab', 'features')` — flux:tab.panel é condicional com `@if ($tab === 'features')`
+  - Criar features com Factory states: sem tasks = Draft, com task backlog = Backlog, com task done = Done, etc.
+---

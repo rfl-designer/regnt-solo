@@ -82,10 +82,10 @@
                 "Implementar: Testes Pest Feature para:\n- Página de projeto renderiza kanban com features (não tasks)\n- Coluna Draft aparece quando há features sem tasks\n- Aba 'Features' renderiza specs em markdown\n- Clicar em feature dispara evento open-feature-modal\n- Features de outro projeto não aparecem\n- Empty state quando projeto não tem features\n- Métricas atualizadas com contagem de features\n\nArquivo: tests/Feature/ProjectDetailFeaturesTest.php"
             ],
             "priority": 3,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 45,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         }
     ]

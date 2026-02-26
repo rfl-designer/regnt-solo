@@ -54,10 +54,10 @@
                 "Implementar: Testes Pest para validar exibição do ID:\n\n- Card de feature renderiza '#F-{id}' com o ID correto\n- ID aparece na página Work (kanban)\n- ID aparece no kanban de projeto\n- Feature modal exibe ID ao editar\n- Feature modal não exibe ID ao criar\n\nArquivo: tests/Feature/FeatureIdDisplayTest.php"
             ],
             "priority": 3,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 43,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         }
     ]

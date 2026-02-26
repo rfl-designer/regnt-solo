@@ -47,3 +47,18 @@
   - `$featureId` está disponível como propriedade pública do Livewire, pode ser usado diretamente no template
   - O `<flux:heading>` não precisa de wrapper flex normalmente, mas adicionamos para alinhar o ID
 ---
+
+## 2026-02-26 - US-43
+- Implementado: 5 testes Pest para validar exibição do ID da feature
+- Testes criados em `tests/Feature/FeatureIdDisplayTest.php`:
+  1. Card de feature renderiza `#F-{id}` com ID correto
+  2. IDs aparecem na página Work (kanban) para múltiplas features
+  3. ID aparece no kanban de projeto (project-detail)
+  4. Feature modal exibe ID ao editar
+  5. Feature modal não exibe `#F-` ao criar (novo)
+- Files changed: `tests/Feature/FeatureIdDisplayTest.php`
+- **Learnings for future iterations:**
+  - `Livewire::test('pages::project-detail', ['slug' => $project->slug])` é o padrão para testar projeto com features
+  - `assertSee("#F-{$feature->id}")` funciona bem para validar presença do ID
+  - `assertDontSee('#F-')` é suficiente para garantir que nenhum ID aparece no modo criação
+---

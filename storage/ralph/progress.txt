@@ -27,3 +27,17 @@
   - formatDuration mudou de `int $minutes` para `float $minutes` para compatibilidade com Feature::total_time
   - 10 testes pré-existentes falhando (AiInsightsTest, AiIntegrationTest, AnalyticsPageTest, DocumentIntegrationTest) — não relacionados
 ---
+
+## 2026-02-26 - US-44
+- Adicionado computed `featuresByStatus()` que agrupa features por status computado
+- Atualizado `metrics()` com `feature_completion_percent` e `features_by_status`
+- Adicionados cards de features na aba Métricas: Total de Features, Features Concluídas (com progress bar)
+- Adicionada seção "Features por Status" na aba Métricas (5 colunas: Draft, Backlog, A Fazer, Em Progresso, Concluída)
+- Atualizado `refreshProject()` para limpar cache de `featuresByStatus`
+- Files changed: ⚡project-detail.blade.php
+- 46 testes passando
+- **Learnings for future iterations:**
+  - Grande parte de US-44 já estava implementada em US-40 (features(), getColumnFeatures(), metrics básicas, listeners)
+  - O método featuresByStatus() é um agrupamento simples usando filter sobre a collection já carregada
+  - As métricas de features (feature_completion_percent, features_by_status) complementam as métricas existentes de tasks
+---

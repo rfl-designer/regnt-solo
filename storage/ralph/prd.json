@@ -68,10 +68,10 @@
                 "Implementar: Adaptar o backend do componente project-detail para trabalhar com features ao invés de tasks.\n\n- Novo computed: features() — Feature::forProject($project->id)->with(['tasks', 'timeEntries'])->ordered()->get()\n- Novo método: featuresByStatus() — agrupa features por status computado\n- Novo método: getColumnFeatures(FeatureStatus) — com paginação (limits)\n- Atualizar metrics() para incluir contagens de features\n- Manter listeners: #[On('feature-created')], #[On('feature-updated')], etc.\n\nArquivo: resources/views/pages/⚡project-detail.blade.php (seção PHP class)"
             ],
             "priority": 1,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 44,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {

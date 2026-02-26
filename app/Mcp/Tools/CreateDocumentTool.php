@@ -28,6 +28,7 @@ class CreateDocumentTool extends Tool
             'project_slug' => 'nullable|string|exists:projects,slug',
             'type' => ['nullable', 'string', Rule::enum(DocumentType::class)],
             'is_pinned' => 'nullable|boolean',
+            'is_context' => 'nullable|boolean',
         ], [
             'title.required' => 'You must provide a title for the document.',
             'content.required' => 'You must provide content for the document.',
@@ -46,6 +47,7 @@ class CreateDocumentTool extends Tool
             'project_id' => $projectId,
             'type' => $validated['type'] ?? DocumentType::Note,
             'is_pinned' => $validated['is_pinned'] ?? false,
+            'is_context' => $validated['is_context'] ?? false,
         ]);
 
         $document->load('project');
@@ -75,6 +77,7 @@ class CreateDocumentTool extends Tool
             'project_slug' => $schema->string()->description('Slug of the project to assign the document to. Leave empty for a global document.'),
             'type' => $schema->string()->enum(['prd', 'spec', 'decision', 'note', 'reference'])->description('Document type. Default: note.'),
             'is_pinned' => $schema->boolean()->description('Whether to pin the document. Default: false.'),
+            'is_context' => $schema->boolean()->description('Whether this document should be available as AI context via MCP. Default: false.'),
         ];
     }
 }

@@ -26,10 +26,10 @@
                 "Implementar: Modificar a MCP tool list-documents para:\n\n1. **Filtrar por contexto**: adicionar `->where('is_context', true)` ao query por padrão\n2. **Novo parâmetro opcional** `include_all` (bool, default false): quando true, retorna todos os documentos (não filtra por is_context)\n3. **Truncar conteúdo**: ao invés do excerpt de 200 chars, retornar os primeiros 255 e últimos 255 caracteres:\n   ```php\n   $content = $doc->content;\n   if (strlen($content) > 510) {\n       $preview = Str::limit($content, 255, '') . \"\\n[...]\\n\" . Str::substr($content, -255);\n   } else {\n       $preview = $content;\n   }\n   ```\n4. **Incluir ID**: adicionar `'id' => $doc->id` no mapeamento (já existe)\n5. **Incluir is_context**: adicionar `'is_context' => $doc->is_context` no mapeamento\n6. Atualizar description da tool para refletir comportamento\n\nArquivo: app/Mcp/Tools/ListDocumentsTool.php"
             ],
             "priority": 1,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 6,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {

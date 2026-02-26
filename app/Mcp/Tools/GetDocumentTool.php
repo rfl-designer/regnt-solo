@@ -59,6 +59,7 @@ class GetDocumentTool extends Tool
                 'slug' => $document->project->slug,
             ] : null,
             'is_pinned' => $document->is_pinned,
+            'is_context' => $document->is_context,
             'created_at' => $document->created_at->toDateTimeString(),
             'updated_at' => $document->updated_at->toDateTimeString(),
         ];

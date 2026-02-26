@@ -21,3 +21,18 @@
   - Padrão de scope no Document: `scopeXxx(Builder $query): void`
   - Factory states seguem padrão: `->state(fn (array $attributes) => [...])`
 ---
+
+## 2026-02-26 - US-6
+- ListDocumentsTool atualizado: filtro padrão `is_context=true`, parâmetro `include_all`
+- Conteúdo truncado: primeiros 255 + últimos 255 chars quando > 510
+- Campo `is_context` incluído no mapeamento, `excerpt` substituído por `content_preview`
+- 3 testes existentes adaptados para usar `->context()` factory state
+- Files changed:
+  - app/Mcp/Tools/ListDocumentsTool.php
+  - tests/Feature/Mcp/DocumentToolsTest.php
+- **Learnings for future iterations:**
+  - Ao mudar filtro padrão de query (ex: `context()`), testes existentes quebram — precisam ser adaptados
+  - `Str::length()` / `Str::substr()` são preferíveis a `strlen()` / `substr()` para suporte Unicode
+  - `$schema->boolean()` funciona para parâmetros MCP (confirmado em ToggleRecurringTaskTool, StartTimerTool)
+  - Campo renomeado de `excerpt` para `content_preview` para refletir o novo comportamento de truncamento
+---

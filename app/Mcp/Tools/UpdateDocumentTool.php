@@ -30,6 +30,7 @@ class UpdateDocumentTool extends Tool
             'project_slug' => 'nullable|string',
             'type' => ['nullable', 'string', Rule::enum(DocumentType::class)],
             'is_pinned' => 'nullable|boolean',
+            'is_context' => 'nullable|boolean',
         ], [
             'type.Illuminate\Validation\Rules\Enum' => 'Invalid type. Valid values: prd, spec, decision, note, reference.',
         ]);
@@ -80,8 +81,12 @@ class UpdateDocumentTool extends Tool
             $updates['is_pinned'] = $validated['is_pinned'];
         }
 
+        if (isset($validated['is_context'])) {
+            $updates['is_context'] = $validated['is_context'];
+        }
+
         if (empty($updates)) {
-            return Response::error('No fields to update. Provide at least one field: title, content, project_slug, type, or is_pinned.');
+            return Response::error('No fields to update. Provide at least one field: title, content, project_slug, type, is_pinned, or is_context.');
         }
 
         $document->update($updates);
@@ -115,6 +120,7 @@ class UpdateDocumentTool extends Tool
             'project_slug' => $schema->string()->description('Slug of the project to assign the document to. Set to empty string to remove from project.'),
             'type' => $schema->string()->enum(['prd', 'spec', 'decision', 'note', 'reference'])->description('New document type.'),
             'is_pinned' => $schema->boolean()->description('Whether to pin the document.'),
+            'is_context' => $schema->boolean()->description('Whether this document should be available as AI context via MCP.'),
         ];
     }
 }

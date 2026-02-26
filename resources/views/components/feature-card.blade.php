@@ -20,10 +20,13 @@
         class="cursor-pointer p-3"
         wire:click="$dispatch('open-feature-modal', { featureId: {{ $feature->id }} })"
     >
-        {{-- Title --}}
-        <h3 class="line-clamp-2 text-sm font-medium text-zinc-200">
-            {{ $feature->title }}
-        </h3>
+        {{-- Title + ID --}}
+        <div class="flex items-start justify-between gap-2">
+            <h3 class="line-clamp-2 text-sm font-medium text-zinc-200">
+                {{ $feature->title }}
+            </h3>
+            <span class="shrink-0 text-xs font-mono text-zinc-500">#F-{{ $feature->id }}</span>
+        </div>
 
         {{-- Project Info --}}
         @if ($showProject && $feature->project)

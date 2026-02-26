@@ -44,3 +44,18 @@
   - wire:sort:group deve ser diferente do features kanban ("drill-tasks" vs grupo de features) para evitar conflito
   - `wire:key` dos drill tasks usa prefixo "drill-task-" para evitar conflito com outros componentes
 ---
+
+## 2026-02-26 - US-106
+- Adicionado botão "Ver Tasks" no rodapé do card de feature (`feature-card.blade.php`)
+- Botão aparece apenas quando `$tasksCount > 0` (dentro do bloco existente)
+- Posicionado abaixo da seção expandível de tasks, com `border-t border-zinc-700`
+- Mostra contagem dinâmica: "Ver X tasks" com ícones `squares-plus` e `arrow-right`
+- Ação: `wire:click.stop="enterDrill($feature->id)"` — chama método já implementado na US-105
+- Estilo discreto: `text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50`
+- Files changed: `resources/views/components/feature-card.blade.php`
+- **Learnings for future iterations:**
+  - O feature-card.blade.php é um Blade component (@props), não um Livewire SFC
+  - `wire:click.stop` é essencial para evitar propagação do click para o card (que abre o modal da feature)
+  - A seção expandível de tasks e o botão drill-down ficam dentro do mesmo `@if ($tasksCount > 0)` block
+  - 1207 testes passando (10 falhas pré-existentes não relacionadas)
+---

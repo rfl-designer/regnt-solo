@@ -26,10 +26,10 @@
                 "Implementar: No componente de card de feature, adicionar um botão no rodapé para entrar no drill-down.\n\n- Posição: rodapé do card, abaixo da seção expandível de tasks\n- Botão: ícone `arrow-right-circle` ou `squares-plus` + texto 'Ver Tasks'\n- Estilo: discreto (text-xs text-zinc-400 hover:text-zinc-200), border-t border-zinc-700\n- Ação: `wire:click.stop=\"enterDrill($feature->id)\"`\n- Só aparece se feature tem tasks (tasksCount > 0)\n- Mostrar contagem: 'Ver 5 tasks →'\n\nArquivo: resources/views/components/feature-card.blade.php (ou inline no template)"
             ],
             "priority": 2,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 106,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {

@@ -404,6 +404,62 @@ new class extends Component
     @if ($viewMode === 'kanban')
 
     @if ($drillFeatureId && $this->drillFeature)
+    {{-- Drill-down Header --}}
+    @php
+        $df = $this->drillFeature;
+        $dfTasksCount = $df->tasksCount();
+        $dfCompletedCount = $df->completedTasksCount();
+    @endphp
+    <div
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 -translate-y-2"
+        x-transition:enter-end="opacity-100 translate-y-0"
+        class="rounded-xl border border-zinc-700 bg-zinc-800/80 p-4 mb-4"
+    >
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-center gap-3">
+                <flux:button
+                    wire:click="exitDrill"
+                    variant="ghost"
+                    size="sm"
+                    icon="arrow-left"
+                >
+                    Voltar para features
+                </flux:button>
+
+                <flux:separator vertical class="mx-1 h-6" />
+
+                <div class="flex items-center gap-2">
+                    @if ($df->project)
+                        <span class="text-sm">{{ $df->project->emoji }}</span>
+                    @endif
+                    <flux:heading size="lg">{{ $df->title }}</flux:heading>
+                </div>
+
+                <flux:badge size="sm" color="{{ $df->status->color() }}">
+                    {{ $df->status->label() }}
+                </flux:badge>
+            </div>
+
+            <div class="flex items-center gap-3">
+                @if ($df->project)
+                    <span class="text-sm text-zinc-400">{{ $df->project->emoji }} {{ $df->project->name }}</span>
+                    <flux:separator vertical class="mx-1 h-4" />
+                @endif
+
+                <div class="flex items-center gap-2">
+                    <div class="h-1.5 w-24 overflow-hidden rounded-full bg-zinc-700">
+                        <div
+                            class="h-full rounded-full bg-{{ $df->status->color() }}-500 transition-all duration-300"
+                            style="width: {{ $df->progress }}%"
+                        ></div>
+                    </div>
+                    <span class="text-xs text-zinc-400">{{ $dfCompletedCount }}/{{ $dfTasksCount }} concluídas</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- Drill-down: Task Kanban --}}
     <div
         x-data="{

@@ -25,6 +25,12 @@ new class extends Component
     #[Url(as: 'view')]
     public string $viewMode = 'kanban';
 
+    #[Url(as: 'sort')]
+    public string $sortBy = 'priority';
+
+    #[Url(as: 'dir')]
+    public string $sortDirection = 'asc';
+
     /** @var array<string, int> */
     public array $limits = [
         'draft' => 20,
@@ -86,6 +92,44 @@ new class extends Component
         }
 
         return $features;
+    }
+
+    /**
+     * Get features sorted for table view.
+     *
+     * @return \Illuminate\Support\Collection<int, Feature>
+     */
+    #[Computed]
+    public function sortedFeatures(): \Illuminate\Support\Collection
+    {
+        $features = $this->features;
+
+        $priorityOrder = ['urgent' => 0, 'high' => 1, 'medium' => 2, 'low' => 3];
+
+        return $features->sortBy(function (Feature $f) use ($priorityOrder) {
+            return match ($this->sortBy) {
+                'id' => $f->id,
+                'title' => mb_strtolower($f->title),
+                'status' => array_search($f->status->value, ['draft', 'backlog', 'todo', 'doing', 'done']),
+                'priority' => $priorityOrder[$f->priority?->value ?? 'low'],
+                'progress' => $f->progress,
+                'time' => $f->total_time,
+                'due_date' => $f->due_date?->timestamp ?? PHP_INT_MAX,
+                default => $f->id,
+            };
+        }, descending: $this->sortDirection === 'desc')->values();
+    }
+
+    public function sort(string $column): void
+    {
+        if ($this->sortBy === $column) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $column;
+            $this->sortDirection = 'asc';
+        }
+
+        unset($this->sortedFeatures);
     }
 
     /**
@@ -157,6 +201,7 @@ new class extends Component
     public function refreshBoard(): void
     {
         unset($this->features);
+        unset($this->sortedFeatures);
         unset($this->projects);
     }
 
@@ -510,10 +555,116 @@ new class extends Component
     </div>
     @else
     {{-- Table/List View --}}
-    <div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/50 py-16">
-        <flux:icon name="list-bullet" class="mb-3 size-12 text-zinc-600" />
-        <flux:heading size="sm" class="text-zinc-400">Visualização em tabela</flux:heading>
-        <flux:text size="sm" class="mt-1 text-zinc-500">Em breve</flux:text>
+    <div class="flex-1 overflow-auto rounded-xl border border-zinc-700 bg-zinc-900/50">
+        @if ($this->sortedFeatures->isEmpty())
+            <div class="flex flex-col items-center justify-center py-16">
+                <flux:icon name="list-bullet" class="mb-3 size-12 text-zinc-600" />
+                <flux:heading size="sm" class="text-zinc-400">Nenhuma feature encontrada</flux:heading>
+                <flux:text size="sm" class="mt-1 text-zinc-500">Crie uma nova feature para começar</flux:text>
+            </div>
+        @else
+            <flux:table>
+                <flux:table.columns>
+                    <flux:table.column sortable :sorted="$sortBy === 'id'" :direction="$sortDirection" wire:click="sort('id')">ID</flux:table.column>
+                    <flux:table.column sortable :sorted="$sortBy === 'title'" :direction="$sortDirection" wire:click="sort('title')">Título</flux:table.column>
+                    <flux:table.column sortable :sorted="$sortBy === 'status'" :direction="$sortDirection" wire:click="sort('status')">Status</flux:table.column>
+                    <flux:table.column sortable :sorted="$sortBy === 'priority'" :direction="$sortDirection" wire:click="sort('priority')">Prioridade</flux:table.column>
+                    <flux:table.column>Projeto</flux:table.column>
+                    <flux:table.column sortable :sorted="$sortBy === 'progress'" :direction="$sortDirection" wire:click="sort('progress')">Progresso</flux:table.column>
+                    <flux:table.column sortable :sorted="$sortBy === 'time'" :direction="$sortDirection" wire:click="sort('time')" align="end">Tempo</flux:table.column>
+                    <flux:table.column sortable :sorted="$sortBy === 'due_date'" :direction="$sortDirection" wire:click="sort('due_date')" align="end">Vencimento</flux:table.column>
+                </flux:table.columns>
+
+                <flux:table.rows>
+                    @foreach ($this->sortedFeatures as $feature)
+                        @php
+                            $tasksCount = $feature->tasksCount();
+                            $completedCount = $feature->completedTasksCount();
+                            $totalTime = $feature->total_time;
+                            $isOverdue = $feature->due_date?->isPast() && $feature->status !== FeatureStatus::Done;
+                        @endphp
+
+                        <flux:table.row
+                            :key="$feature->id"
+                            wire:click="$dispatch('open-feature-modal', { featureId: {{ $feature->id }} })"
+                            class="cursor-pointer hover:bg-zinc-800/50"
+                        >
+                            {{-- ID --}}
+                            <flux:table.cell class="whitespace-nowrap text-zinc-500">
+                                #F-{{ $feature->id }}
+                            </flux:table.cell>
+
+                            {{-- Título --}}
+                            <flux:table.cell variant="strong" class="max-w-xs truncate">
+                                {{ $feature->title }}
+                            </flux:table.cell>
+
+                            {{-- Status --}}
+                            <flux:table.cell>
+                                <flux:badge size="sm" :color="$feature->status->color()" inset="top bottom">
+                                    {{ $feature->status->label() }}
+                                </flux:badge>
+                            </flux:table.cell>
+
+                            {{-- Prioridade --}}
+                            <flux:table.cell>
+                                @if ($feature->priority)
+                                    <flux:badge size="sm" :color="$feature->priority->color()" :icon="$feature->priority->icon()" inset="top bottom">
+                                        {{ $feature->priority->label() }}
+                                    </flux:badge>
+                                @else
+                                    <span class="text-zinc-600">—</span>
+                                @endif
+                            </flux:table.cell>
+
+                            {{-- Projeto --}}
+                            <flux:table.cell>
+                                @if ($feature->project)
+                                    <span class="whitespace-nowrap text-sm">
+                                        {{ $feature->project->emoji }} {{ $feature->project->name }}
+                                    </span>
+                                @else
+                                    <span class="text-zinc-600">—</span>
+                                @endif
+                            </flux:table.cell>
+
+                            {{-- Progresso --}}
+                            <flux:table.cell>
+                                <div class="flex items-center gap-2">
+                                    <div class="h-1.5 w-20 overflow-hidden rounded-full bg-zinc-700">
+                                        <div
+                                            class="h-full rounded-full bg-{{ $feature->status->color() }}-500"
+                                            style="width: {{ $feature->progress }}%"
+                                        ></div>
+                                    </div>
+                                    <span class="whitespace-nowrap text-xs text-zinc-400">{{ $completedCount }}/{{ $tasksCount }}</span>
+                                </div>
+                            </flux:table.cell>
+
+                            {{-- Tempo Total --}}
+                            <flux:table.cell align="end" class="whitespace-nowrap text-zinc-400">
+                                @if ($totalTime > 0)
+                                    {{ $this->formatDuration($totalTime) }}
+                                @else
+                                    <span class="text-zinc-600">—</span>
+                                @endif
+                            </flux:table.cell>
+
+                            {{-- Due Date --}}
+                            <flux:table.cell align="end" class="whitespace-nowrap">
+                                @if ($feature->due_date)
+                                    <span class="{{ $isOverdue ? 'text-red-400' : 'text-zinc-400' }}">
+                                        {{ $feature->due_date->format('d/m/Y') }}
+                                    </span>
+                                @else
+                                    <span class="text-zinc-600">—</span>
+                                @endif
+                            </flux:table.cell>
+                        </flux:table.row>
+                    @endforeach
+                </flux:table.rows>
+            </flux:table>
+        @endif
     </div>
     @endif
 

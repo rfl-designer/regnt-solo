@@ -1,52 +1,66 @@
 ## Codebase Patterns
 
-- **Kanban filters**: Cada filtro é uma property com `#[Url]`, aplicada em `buildColumnQuery()` com AND logic. Template usa `<flux:select>` e `<flux:button>` na barra de filtros (linhas ~226-256).
-- **Livewire test pattern**: `beforeEach` com `$this->actingAs(User::factory()->create())`, `Livewire::test('pages::nome')`, `set()` para filtros, `assertSee/assertDontSee` para verificar conteúdo. Para verificar ordem, usar `assertSeeInOrder()` — NÃO usar `viewData('__instance')` que não funciona no Livewire 4.
-- **Flux sortable columns**: `<flux:table.column sortable :sorted="$sortBy === 'col'" :direction="$sortDirection" wire:click="sort('col')">Label</flux:table.column>`
-- **Task factory states**: `->todo()`, `->backlog()`, `->doing()`, `->done()`, `->overdue()`, `->urgent()`, `->withDueDate()`, `->withEstimate()`.
-- **Database**: PostgreSQL — usar `ilike` para case-insensitive search, não `like`.
-- **Features computed status**: Feature.status é um Attribute computado (não coluna DB). Para filtrar por status, aplicar `->filter()` após `->get()`, não no query builder.
+- **Sidebar**: `resources/views/layouts/app/sidebar.blade.php` — grupos: Visão Geral, Planejamento (Work, Hoje, Semana), Acompanhamento, Análise
+- **Rotas**: `routes/web.php` — usa `Route::livewire()` com middleware `auth`
+- **Features page**: `resources/views/pages/⚡features.blade.php` — SFC Livewire com Kanban
+- **Testes Features**: `tests/Feature/FeaturesKanbanTest.php` — usa `route('work')` após renomeação
+- **Keyboard shortcuts**: `resources/views/layouts/app.blade.php` — Alpine.js x-on:keydown.window
+- **Command Palette**: `resources/views/components/⚡command-palette.blade.php` — referencia shortcuts inline
+- **Redirect backward compat**: `Route::redirect('/features', '/work')` adicionado em web.php
+- **Table sorting pattern**: `$sortBy`/`$sortDirection` com `#[Url]`, `sort()` method, `sortedFeatures()` computed que ordena collection em memória
 
 ---
 
-## 2026-02-25 19:06 - US-166
-- Implementado filtro de due date no Kanban com 5 opções: Todas, Hoje, Esta semana, 7 dias, 30 dias
-- Adicionado property `$filterDueDate` com `#[Url(as: 'due')]`
-- Lógica de filtro em `buildColumnQuery()` usando `match` expression
-- `<flux:select>` no template entre filtro de prioridade e botão overdue
-- Files changed: `resources/views/pages/⚡kanban.blade.php`, `tests/Feature/KanbanDueDateFilterTest.php`
+## 2026-02-26 - US-928
+- Renomeado label "Features" para "Work" na sidebar com ícone `briefcase`
+- Atualizada rota `/features` → `/work` com nome `work`
+- Adicionado redirect `/features` → `/work` para backward compatibility
+- Atualizado heading da página de "Features" para "Work"
+- Atualizado FeaturesKanbanTest: `route('features')` → `route('work')` em todas as ocorrências
+- Files changed: sidebar.blade.php, routes/web.php, ⚡features.blade.php, FeaturesKanbanTest.php
 - **Learnings for future iterations:**
-  - O padrão de filtro no Kanban é: property -> buildColumnQuery() -> template select/button
-  - `match` expression com `default => null` evita match exaustivo sem quebrar
-  - Testes usam factory states combinados: `Task::factory()->todo()->create(['due_date' => ...])`
-  - Todos os 102 testes de Kanban continuam passando após a mudança
+  - `replace_all` no Edit tool só substitui a string exata — `route('features')` ≠ `route('features', [...])` — precisa tratar variações manualmente
+  - 10 testes pré-existentes falhando (AiInsightsTest, AiIntegrationTest, AnalyticsPageTest, DocumentIntegrationTest) — não relacionados a esta mudança
+  - O atalho `Ctrl+F` em app.blade.php navega para `/features` (agora redireciona) — será atualizado em US-932
+  - Command palette referencia "Features" — será atualizado em US-932
 ---
 
-## 2026-02-25 - US-167
-- Implementado busca por texto no Inbox com `ilike` (case-insensitive, PostgreSQL)
-- Adicionado campo `<flux:input>` com `wire:model.live.debounce.300ms` e ícone de busca
-- Colunas sortable: Task (title), Prioridade (priority), Criada (created_at) usando `<flux:table.column sortable>`
-- Properties `$search`, `$sortBy`, `$sortDirection` com `#[Url]` para persistência na URL
-- Método `sort()` alterna direção se mesma coluna, ou seta novo sortBy com asc
-- Files changed: `resources/views/pages/⚡inbox.blade.php`, `tests/Feature/InboxSearchSortTest.php`
+## 2026-02-26 - US-929
+- Removidos itens "Caixa de Entrada" (inbox) e "Kanban" (kanban de tasks) da sidebar
+- Rotas /inbox e /kanban mantidas — apenas escondidas da navegação
+- Files changed: sidebar.blade.php
 - **Learnings for future iterations:**
-  - `viewData('__instance')` NÃO funciona no Livewire 4 para acessar computed properties em testes — usar `assertSeeInOrder()` para verificar ordenação
-  - Padrão de sort no Flux: `<flux:table.column sortable :sorted="$sortBy === 'col'" :direction="$sortDirection" wire:click="sort('col')">`
-  - `ilike` é essencial para busca case-insensitive no PostgreSQL
-  - Todos os 65 testes de Inbox continuam passando após as mudanças
+  - Mudança simples — apenas remoção de linhas na sidebar, sem impacto em testes existentes
+  - 19 testes de FeaturesKanban continuam passando — sidebar não é testada diretamente nesses testes
 ---
 
-## 2026-02-25 - US-168
-- Implementado filtro de overdue na página Features com botão toggle
-- Adicionado property `$filterOverdue` (bool) com `#[Url(as: 'overdue')]`
-- Filtro aplica `->filter()` após `->get()` porque `Feature.status` é computed (não coluna DB)
-- Lógica: `due_date < today() && status !== Done` — exclui features concluídas
-- Botão toggle com variant condicional e contagem de features filtradas
-- AND logic com filtros de projeto e prioridade existentes
-- Files changed: `resources/views/pages/⚡features.blade.php`, `tests/Feature/FeaturesOverdueFilterTest.php`
+## 2026-02-26 - US-930
+- Adicionada property `viewMode` com `#[Url(as: 'view')]` (default: 'kanban')
+- Toggle segmented com `<flux:radio.group variant="segmented">` e ícones `view-columns`/`list-bullet`
+- Kanban board condicionado a `$viewMode === 'kanban'`
+- Placeholder para Table view com empty state (será implementado em US-931)
+- View mode persiste na URL como `?view=kanban` ou `?view=table`
+- Files changed: ⚡features.blade.php
 - **Learnings for future iterations:**
-  - Feature.status é um Attribute computado — não pode ser filtrado via query builder
-  - Padrão overdue no Kanban usa `<flux:button>` com `$toggle()` e variant condicional
-  - FeatureFactory tem `->withDueDate()` state, mas para testes é mais claro passar `due_date` direto
-  - Todos os 19 testes de FeaturesKanban + 8 novos passando
+  - `<flux:radio.group variant="segmented" size="sm">` com `<flux:radio icon="..." />` (sem label) cria toggle compacto icon-only
+  - `#[Url(as: 'view')]` permite alias customizado no query string — importante para URLs limpas
+  - 19 testes existentes continuam passando — o viewMode default 'kanban' garante backward compat
+---
+
+## 2026-02-26 - US-931
+- Implementada visualização Table/List completa com `<flux:table>`
+- 8 colunas: ID (#F-{id}), Título, Status (badge colorido), Prioridade (ícone+label), Projeto (emoji+nome), Progresso (barra %), Tempo Total, Due Date
+- Sorting por 7 colunas (todas exceto Projeto) via `sortBy`/`sortDirection` com `#[Url]`
+- Computed property `sortedFeatures()` ordena collection em memória (suporta campos computados: status, progress, total_time)
+- Mesmos filtros do Kanban (projeto, prioridade, overdue) funcionam automaticamente pois ambas views usam `$this->features`
+- Rows clicáveis abrem `open-feature-modal` — mesma interação do Kanban card
+- Empty state quando nenhuma feature encontrada
+- Due date com destaque vermelho para vencidas
+- Files changed: ⚡features.blade.php
+- **Learnings for future iterations:**
+  - `flux:table.column` aceita `sortable`, `:sorted`, `:direction`, `wire:click` para sorting completo
+  - `flux:badge` com `inset="top bottom"` cria badges compactos sem padding vertical excessivo (ideal para tabelas)
+  - `flux:table.row` aceita `wire:click` para tornar rows clicáveis
+  - Sorting de computed attributes (status, progress, total_time) exige sortBy na collection, não na query — `$collection->sortBy()` com closure funciona bem
+  - `$this->sortedFeatures` precisa ser limpo em `refreshBoard()` junto com `$this->features`
 ---

@@ -54,10 +54,10 @@
                 "Implementar: Quando em drill mode, substituir o kanban de features pelo kanban de tasks da feature selecionada.\n\n- Reutilizar a estrutura de kanban de tasks existente (⚡kanban.blade.php como referência)\n- 4 colunas: Backlog → Todo → Doing → Done\n- Done: filtrar por completed_at na semana corrente\n- Cards de task: título, prioridade badge, estimativa, overdue, timer, session badge\n- wire:sort para drag-drop entre colunas (handleSort atualiza task.status)\n- Lazy loading com limits por coluna\n- Template condicional: `@if($drillFeatureId) ... @else ... @endif`\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção template)"
             ],
             "priority": 1,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 108,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {

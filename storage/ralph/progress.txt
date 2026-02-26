@@ -27,3 +27,20 @@
   - Imports necessários: `TaskStatus`, `Task`, `Carbon`, `Url` (project-detail não tinha Url antes)
   - 82 testes relevantes continuam passando
 ---
+
+## 2026-02-26 - US-108
+- Implementado template condicional `@if($drillFeatureId && $this->drillFeature)` em ambos componentes
+- Kanban de tasks no drill mode com 4 colunas: Backlog → Todo → Doing → Done
+- Done column filtra por `completed_at` na semana corrente (reutilizando `getDrillColumnTasks`)
+- Cards de task com: handle (grip-vertical), título, projeto, prioridade, estimativa, overdue, timer, session badge
+- `wire:sort="handleTaskSort"` com `wire:sort:group="drill-tasks"` para drag-drop (handler será US-109)
+- Lazy loading via `loadMoreDrill()` com `drillLimits` por coluna
+- Done column colapsável com localStorage (`drill-done-collapsed` / `project-drill-done-collapsed`)
+- Project-detail: no drill mode, não mostra header "Nova Feature" e badge de contagem mostra tasks
+- Files changed: `⚡features.blade.php`, `⚡project-detail.blade.php`
+- **Learnings for future iterations:**
+  - Template de task card é similar ao kanban.blade.php mas sem `withCount('commits')` — tasks da feature vêm via collection, não query builder
+  - No project-detail, o drill mode substitui todo o conteúdo do board tab panel (header + kanban)
+  - wire:sort:group deve ser diferente do features kanban ("drill-tasks" vs grupo de features) para evitar conflito
+  - `wire:key` dos drill tasks usa prefixo "drill-task-" para evitar conflito com outros componentes
+---

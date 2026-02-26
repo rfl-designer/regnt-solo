@@ -151,6 +151,19 @@
                     </ul>
                 </div>
             @endif
+
+            {{-- Drill-down Button --}}
+            <div class="border-t border-zinc-700">
+                <button
+                    type="button"
+                    wire:click.stop="enterDrill({{ $feature->id }})"
+                    class="flex w-full items-center justify-center gap-1.5 px-3 py-2 text-xs text-zinc-400 transition hover:bg-zinc-700/50 hover:text-zinc-200"
+                >
+                    <flux:icon name="squares-plus" class="size-3.5" />
+                    <span>Ver {{ $tasksCount }} {{ $tasksCount === 1 ? 'task' : 'tasks' }}</span>
+                    <flux:icon name="arrow-right" class="size-3" />
+                </button>
+            </div>
         </div>
     @endif
 </div>

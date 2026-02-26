@@ -79,6 +79,16 @@ class DocumentFactory extends Factory
     }
 
     /**
+     * Indicate that the document is a context document for AI assistants.
+     */
+    public function context(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_context' => true,
+        ]);
+    }
+
+    /**
      * Indicate that the document belongs to a specific project.
      */
     public function forProject(Project $project): static

@@ -26,6 +26,7 @@ class Document extends Model
         'content',
         'type',
         'is_pinned',
+        'is_context',
         'sort_order',
     ];
 
@@ -39,6 +40,7 @@ class Document extends Model
         return [
             'type' => DocumentType::class,
             'is_pinned' => 'boolean',
+            'is_context' => 'boolean',
         ];
     }
 
@@ -119,6 +121,14 @@ class Document extends Model
     public function scopePinned(Builder $query): void
     {
         $query->where('is_pinned', true);
+    }
+
+    /**
+     * Scope to context documents (available for AI assistants via MCP).
+     */
+    public function scopeContext(Builder $query): void
+    {
+        $query->where('is_context', true);
     }
 
     /**

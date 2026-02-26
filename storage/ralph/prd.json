@@ -1,63 +1,91 @@
 {
-    "project": "ID da Feature Visível nos Cards do Kanban",
-    "branchName": "ralph/id-da-feature-visivel-nos-cards-do-kanban",
-    "description": "## User Story\nComo desenvolvedor solo, quero ver o ID de cada feature nos cards do kanban para referenciá-las facilmente em conversas com AI e no MCP.\n\n## Contexto\nAo trabalhar com AI assistants via MCP, é útil referenciar features pelo ID. Atualmente o ID não é exibido nos cards.\n\n## Critérios de Aceitação\n- [ ] ID da feature exibido no card em todos os kanbans (Work, Projeto)\n- [ ] Formato: \"#F-{id}\" (ex: #F-12) em texto discreto (zinc-500, text-xs)\n- [ ] Posição: canto superior direito ou ao lado do título\n- [ ] ID copiável ao clicar (copy to clipboard com feedback visual)\n\n## Notas Técnicas\n- Atualizar componente de card de feature\n- Usar Alpine.js para copy-to-clipboard\n- Estilo: `text-xs text-zinc-500 font-mono`",
+    "project": "Melhorias em Documentos — Contexto, ID e list-documents",
+    "branchName": "ralph/melhorias-em-documentos-contexto-id-e-list-documents",
+    "description": "## User Story\nComo desenvolvedor solo, quero marcar documentos como \"contexto\", ver seus IDs, e que a tool list-documents seja otimizada para retornar apenas documentos de contexto com conteúdo resumido.\n\n## Contexto\nA tool list-documents atualmente retorna o conteúdo completo de todos os documentos, o que é pesado. Além disso, nem todos os documentos são relevantes como contexto para AI — preciso poder marcar quais são.\n\n## Critérios de Aceitação\n- [ ] Novo campo booleano `is_context` na tabela documents (default false)\n- [ ] Toggle visual na UI de documentos para marcar/desmarcar como contexto\n- [ ] Badge \"Contexto\" nos documentos marcados\n- [ ] Tool list-documents retorna apenas documentos com `is_context = true`\n- [ ] Tool list-documents retorna apenas os primeiros 255 e últimos 255 caracteres do conteúdo (não o documento inteiro)\n- [ ] ID do documento visível na UI (formato \"#D-{id}\")\n- [ ] ID do documento retornado na tool list-documents e get-document\n\n## Notas Técnicas\n- Migration: adicionar coluna `is_context` boolean default false à tabela documents\n- Atualizar ListDocumentsTool para filtrar `where('is_context', true)`\n- Truncar conteúdo: `Str::limit($content, 255) . ' [...] ' . Str::substr($content, -255)`\n- Atualizar UI de documentos para mostrar ID e toggle de contexto",
     "maxIterations": 10,
     "userStories": [
         {
-            "id": "US-40",
-            "title": "Exibir ID #F-{id} no card de feature",
-            "description": "Adicionar o ID da feature no componente feature-card.blade.php.\n\n- Formato: `#F-{id}` (ex: #F-12)\n- Posição: linha do título, alinhado à direita (flex justify-between)\n- Estilo: `text-xs text-zinc-500 font-mono` — discreto mas legível\n- Layout: título à esquerda (flex-1 line-clamp-2), ID à direita (shrink-0)\n\nAlteração na linha 23-26 do feature-card.blade.php:\n```blade\n<div class=\"flex items-start justify-between gap-2\">\n    <h3 class=\"line-clamp-2 text-sm font-medium text-zinc-200\">{{ $feature->title }}</h3>\n    <span class=\"shrink-0 text-xs font-mono text-zinc-500\">#F-{{ $feature->id }}</span>\n</div>\n```\n\nArquivo: resources/views/components/feature-card.blade.php",
+            "id": "US-5",
+            "title": "Migration: adicionar coluna is_context à tabela documents",
+            "description": "Criar migration para adicionar campo `is_context` boolean com default false à tabela documents.\n\n- `$table->boolean('is_context')->default(false)->after('is_pinned')`\n- `$table->index('is_context')`\n- Atualizar model Document: adicionar `is_context` ao $fillable e cast `'is_context' => 'boolean'`\n- Adicionar scope `scopeContext(Builder $query)`: `$query->where('is_context', true)`\n\nArquivos:\n- Migration nova via `php artisan make:migration`\n- app/Models/Document.php ($fillable, casts, scope)",
             "acceptanceCriteria": [
-                "Implementar: Adicionar o ID da feature no componente feature-card.blade.php.\n\n- Formato: `#F-{id}` (ex: #F-12)\n- Posição: linha do título, alinhado à direita (flex justify-between)\n- Estilo: `text-xs text-zinc-500 font-mono` — discreto mas legível\n- Layout: título à esquerda (flex-1 line-clamp-2), ID à direita (shrink-0)\n\nAlteração na linha 23-26 do feature-card.blade.php:\n```blade\n<div class=\"flex items-start justify-between gap-2\">\n    <h3 class=\"line-clamp-2 text-sm font-medium text-zinc-200\">{{ $feature->title }}</h3>\n    <span class=\"shrink-0 text-xs font-mono text-zinc-500\">#F-{{ $feature->id }}</span>\n</div>\n```\n\nArquivo: resources/views/components/feature-card.blade.php"
+                "Implementar: Criar migration para adicionar campo `is_context` boolean com default false à tabela documents.\n\n- `$table->boolean('is_context')->default(false)->after('is_pinned')`\n- `$table->index('is_context')`\n- Atualizar model Document: adicionar `is_context` ao $fillable e cast `'is_context' => 'boolean'`\n- Adicionar scope `scopeContext(Builder $query)`: `$query->where('is_context', true)`\n\nArquivos:\n- Migration nova via `php artisan make:migration`\n- app/Models/Document.php ($fillable, casts, scope)"
+            ],
+            "priority": 1,
+            "passes": true,
+            "metadata": {
+                "soloboard_task_id": 5,
+                "soloboard_status": "done"
+            }
+        },
+        {
+            "id": "US-6",
+            "title": "Atualizar ListDocumentsTool: filtrar por is_context e truncar conteúdo",
+            "description": "Modificar a MCP tool list-documents para:\n\n1. **Filtrar por contexto**: adicionar `->where('is_context', true)` ao query por padrão\n2. **Novo parâmetro opcional** `include_all` (bool, default false): quando true, retorna todos os documentos (não filtra por is_context)\n3. **Truncar conteúdo**: ao invés do excerpt de 200 chars, retornar os primeiros 255 e últimos 255 caracteres:\n   ```php\n   $content = $doc->content;\n   if (strlen($content) > 510) {\n       $preview = Str::limit($content, 255, '') . \"\\n[...]\\n\" . Str::substr($content, -255);\n   } else {\n       $preview = $content;\n   }\n   ```\n4. **Incluir ID**: adicionar `'id' => $doc->id` no mapeamento (já existe)\n5. **Incluir is_context**: adicionar `'is_context' => $doc->is_context` no mapeamento\n6. Atualizar description da tool para refletir comportamento\n\nArquivo: app/Mcp/Tools/ListDocumentsTool.php",
+            "acceptanceCriteria": [
+                "Implementar: Modificar a MCP tool list-documents para:\n\n1. **Filtrar por contexto**: adicionar `->where('is_context', true)` ao query por padrão\n2. **Novo parâmetro opcional** `include_all` (bool, default false): quando true, retorna todos os documentos (não filtra por is_context)\n3. **Truncar conteúdo**: ao invés do excerpt de 200 chars, retornar os primeiros 255 e últimos 255 caracteres:\n   ```php\n   $content = $doc->content;\n   if (strlen($content) > 510) {\n       $preview = Str::limit($content, 255, '') . \"\\n[...]\\n\" . Str::substr($content, -255);\n   } else {\n       $preview = $content;\n   }\n   ```\n4. **Incluir ID**: adicionar `'id' => $doc->id` no mapeamento (já existe)\n5. **Incluir is_context**: adicionar `'is_context' => $doc->is_context` no mapeamento\n6. Atualizar description da tool para refletir comportamento\n\nArquivo: app/Mcp/Tools/ListDocumentsTool.php"
+            ],
+            "priority": 1,
+            "passes": false,
+            "metadata": {
+                "soloboard_task_id": 6,
+                "soloboard_status": "todo"
+            }
+        },
+        {
+            "id": "US-7",
+            "title": "Atualizar GetDocumentTool e demais tools com campo is_context",
+            "description": "Atualizar as MCP tools de documentos para suportar o campo is_context:\n\n**GetDocumentTool**:\n- Adicionar `'is_context' => $document->is_context` na response\n- ID já é retornado\n\n**CreateDocumentTool**:\n- Adicionar parâmetro opcional `is_context` (bool, default false)\n- Adicionar ao schema e validação\n- Incluir no create\n\n**UpdateDocumentTool**:\n- Adicionar parâmetro opcional `is_context` (bool)\n- Adicionar ao schema e validação\n- Incluir nos updates quando fornecido\n\nArquivos:\n- app/Mcp/Tools/GetDocumentTool.php\n- app/Mcp/Tools/CreateDocumentTool.php\n- app/Mcp/Tools/UpdateDocumentTool.php",
+            "acceptanceCriteria": [
+                "Implementar: Atualizar as MCP tools de documentos para suportar o campo is_context:\n\n**GetDocumentTool**:\n- Adicionar `'is_context' => $document->is_context` na response\n- ID já é retornado\n\n**CreateDocumentTool**:\n- Adicionar parâmetro opcional `is_context` (bool, default false)\n- Adicionar ao schema e validação\n- Incluir no create\n\n**UpdateDocumentTool**:\n- Adicionar parâmetro opcional `is_context` (bool)\n- Adicionar ao schema e validação\n- Incluir nos updates quando fornecido\n\nArquivos:\n- app/Mcp/Tools/GetDocumentTool.php\n- app/Mcp/Tools/CreateDocumentTool.php\n- app/Mcp/Tools/UpdateDocumentTool.php"
             ],
             "priority": 2,
-            "passes": true,
+            "passes": false,
             "metadata": {
-                "soloboard_task_id": 40,
-                "soloboard_status": "done"
+                "soloboard_task_id": 7,
+                "soloboard_status": "todo"
             }
         },
         {
-            "id": "US-41",
-            "title": "Copy-to-clipboard no ID com feedback visual",
-            "description": "Ao clicar no ID `#F-{id}`, copiar para o clipboard e mostrar feedback visual.\n\n- Usar Alpine.js: `x-data=\"{ copied: false }\"` no span do ID\n- Click handler: `@click.stop=\"navigator.clipboard.writeText('#F-{id}'); copied = true; setTimeout(() => copied = false, 1500)\"`\n- Feedback: trocar texto para 'Copiado!' ou mudar cor para emerald-400 por 1.5s\n- Cursor: `cursor-pointer` no span\n- Tooltip: `title=\"Copiar ID\"`\n- Importante: `wire:click.stop` / `@click.stop` para não abrir o feature modal\n\nArquivo: resources/views/components/feature-card.blade.php",
+            "id": "US-8",
+            "title": "Toggle de contexto e badge na UI de documentos",
+            "description": "Adicionar toggle e indicador visual de 'Contexto' nas interfaces de documentos.\n\n**Document Edit (⚡document-edit.blade.php)**:\n- Checkbox/toggle `<flux:checkbox>` ou `<flux:switch>` para is_context\n- Label: 'Documento de Contexto'\n- Descrição: 'Disponível para AI assistants via MCP'\n- Posição: próximo ao toggle de 'Fixado' (is_pinned)\n\n**Document View (⚡document-view.blade.php)**:\n- Badge 'Contexto' (cor violet ou indigo) ao lado do tipo, quando is_context=true\n- Ícone: `cpu-chip` ou `sparkles`\n\n**Project Detail — Docs tab**:\n- Badge 'Contexto' no card do documento na listagem\n- Ícone discreto no card\n\nArquivos:\n- resources/views/pages/⚡document-edit.blade.php\n- resources/views/pages/⚡document-view.blade.php\n- resources/views/pages/⚡project-detail.blade.php (seção docs tab)",
             "acceptanceCriteria": [
-                "Implementar: Ao clicar no ID `#F-{id}`, copiar para o clipboard e mostrar feedback visual.\n\n- Usar Alpine.js: `x-data=\"{ copied: false }\"` no span do ID\n- Click handler: `@click.stop=\"navigator.clipboard.writeText('#F-{id}'); copied = true; setTimeout(() => copied = false, 1500)\"`\n- Feedback: trocar texto para 'Copiado!' ou mudar cor para emerald-400 por 1.5s\n- Cursor: `cursor-pointer` no span\n- Tooltip: `title=\"Copiar ID\"`\n- Importante: `wire:click.stop` / `@click.stop` para não abrir o feature modal\n\nArquivo: resources/views/components/feature-card.blade.php"
+                "Implementar: Adicionar toggle e indicador visual de 'Contexto' nas interfaces de documentos.\n\n**Document Edit (⚡document-edit.blade.php)**:\n- Checkbox/toggle `<flux:checkbox>` ou `<flux:switch>` para is_context\n- Label: 'Documento de Contexto'\n- Descrição: 'Disponível para AI assistants via MCP'\n- Posição: próximo ao toggle de 'Fixado' (is_pinned)\n\n**Document View (⚡document-view.blade.php)**:\n- Badge 'Contexto' (cor violet ou indigo) ao lado do tipo, quando is_context=true\n- Ícone: `cpu-chip` ou `sparkles`\n\n**Project Detail — Docs tab**:\n- Badge 'Contexto' no card do documento na listagem\n- Ícone discreto no card\n\nArquivos:\n- resources/views/pages/⚡document-edit.blade.php\n- resources/views/pages/⚡document-view.blade.php\n- resources/views/pages/⚡project-detail.blade.php (seção docs tab)"
+            ],
+            "priority": 2,
+            "passes": false,
+            "metadata": {
+                "soloboard_task_id": 8,
+                "soloboard_status": "todo"
+            }
+        },
+        {
+            "id": "US-9",
+            "title": "Exibir ID #D-{id} na UI de documentos",
+            "description": "Mostrar o ID do documento em formato `#D-{id}` nas interfaces.\n\n**Document View (⚡document-view.blade.php)**:\n- ID no header ao lado do título: `#D-{id}` em `text-sm font-mono text-zinc-500`\n- Copy-to-clipboard ao clicar (Alpine.js, mesmo padrão do feature ID)\n\n**Document Edit (⚡document-edit.blade.php)**:\n- ID no header quando editando (não ao criar)\n\n**Project Detail — Docs tab**:\n- ID discreto no card do documento: `text-xs font-mono text-zinc-500`\n\n**Document List/Cards em geral**:\n- ID visível para facilitar referência via MCP\n\nArquivos:\n- resources/views/pages/⚡document-view.blade.php\n- resources/views/pages/⚡document-edit.blade.php\n- resources/views/pages/⚡project-detail.blade.php",
+            "acceptanceCriteria": [
+                "Implementar: Mostrar o ID do documento em formato `#D-{id}` nas interfaces.\n\n**Document View (⚡document-view.blade.php)**:\n- ID no header ao lado do título: `#D-{id}` em `text-sm font-mono text-zinc-500`\n- Copy-to-clipboard ao clicar (Alpine.js, mesmo padrão do feature ID)\n\n**Document Edit (⚡document-edit.blade.php)**:\n- ID no header quando editando (não ao criar)\n\n**Project Detail — Docs tab**:\n- ID discreto no card do documento: `text-xs font-mono text-zinc-500`\n\n**Document List/Cards em geral**:\n- ID visível para facilitar referência via MCP\n\nArquivos:\n- resources/views/pages/⚡document-view.blade.php\n- resources/views/pages/⚡document-edit.blade.php\n- resources/views/pages/⚡project-detail.blade.php"
             ],
             "priority": 3,
-            "passes": true,
+            "passes": false,
             "metadata": {
-                "soloboard_task_id": 41,
-                "soloboard_status": "done"
+                "soloboard_task_id": 9,
+                "soloboard_status": "todo"
             }
         },
         {
-            "id": "US-42",
-            "title": "Exibir ID no feature modal",
-            "description": "Além do card, exibir o ID também no header do feature modal (⚡feature-modal.blade.php).\n\n- Posição: ao lado do título no header do modal (ex: 'Editar Feature #F-12')\n- Quando criando: não mostrar ID (feature ainda não existe)\n- Quando editando: mostrar `#F-{id}` no header\n- Mesmo estilo: `text-sm font-mono text-zinc-500`\n- Copy-to-clipboard: mesmo comportamento do card\n\nArquivo: resources/views/components/⚡feature-modal.blade.php",
+            "id": "US-10",
+            "title": "Testes das melhorias em documentos",
+            "description": "Testes Pest Feature para:\n\n**Migration/Model**:\n- Campo is_context existe e tem default false\n- Scope context() filtra corretamente\n- Document pode ser criado com is_context=true\n\n**MCP Tools**:\n- list-documents retorna apenas documentos com is_context=true por padrão\n- list-documents com include_all=true retorna todos\n- list-documents retorna conteúdo truncado (primeiros 255 + últimos 255)\n- list-documents retorna conteúdo completo quando <= 510 chars\n- get-document retorna is_context no response\n- create-document aceita is_context\n- update-document aceita is_context\n\n**UI**:\n- Toggle de contexto renderiza na página de edição\n- Badge 'Contexto' aparece na visualização quando is_context=true\n- ID #D-{id} renderiza na visualização\n\nArquivo: tests/Feature/DocumentContextTest.php",
             "acceptanceCriteria": [
-                "Implementar: Além do card, exibir o ID também no header do feature modal (⚡feature-modal.blade.php).\n\n- Posição: ao lado do título no header do modal (ex: 'Editar Feature #F-12')\n- Quando criando: não mostrar ID (feature ainda não existe)\n- Quando editando: mostrar `#F-{id}` no header\n- Mesmo estilo: `text-sm font-mono text-zinc-500`\n- Copy-to-clipboard: mesmo comportamento do card\n\nArquivo: resources/views/components/⚡feature-modal.blade.php"
-            ],
-            "priority": 4,
-            "passes": true,
-            "metadata": {
-                "soloboard_task_id": 42,
-                "soloboard_status": "done"
-            }
-        },
-        {
-            "id": "US-43",
-            "title": "Testes do ID da feature nos cards",
-            "description": "Testes Pest para validar exibição do ID:\n\n- Card de feature renderiza '#F-{id}' com o ID correto\n- ID aparece na página Work (kanban)\n- ID aparece no kanban de projeto\n- Feature modal exibe ID ao editar\n- Feature modal não exibe ID ao criar\n\nArquivo: tests/Feature/FeatureIdDisplayTest.php",
-            "acceptanceCriteria": [
-                "Implementar: Testes Pest para validar exibição do ID:\n\n- Card de feature renderiza '#F-{id}' com o ID correto\n- ID aparece na página Work (kanban)\n- ID aparece no kanban de projeto\n- Feature modal exibe ID ao editar\n- Feature modal não exibe ID ao criar\n\nArquivo: tests/Feature/FeatureIdDisplayTest.php"
+                "Implementar: Testes Pest Feature para:\n\n**Migration/Model**:\n- Campo is_context existe e tem default false\n- Scope context() filtra corretamente\n- Document pode ser criado com is_context=true\n\n**MCP Tools**:\n- list-documents retorna apenas documentos com is_context=true por padrão\n- list-documents com include_all=true retorna todos\n- list-documents retorna conteúdo truncado (primeiros 255 + últimos 255)\n- list-documents retorna conteúdo completo quando <= 510 chars\n- get-document retorna is_context no response\n- create-document aceita is_context\n- update-document aceita is_context\n\n**UI**:\n- Toggle de contexto renderiza na página de edição\n- Badge 'Contexto' aparece na visualização quando is_context=true\n- ID #D-{id} renderiza na visualização\n\nArquivo: tests/Feature/DocumentContextTest.php"
             ],
             "priority": 3,
-            "passes": true,
+            "passes": false,
             "metadata": {
-                "soloboard_task_id": 43,
-                "soloboard_status": "done"
+                "soloboard_task_id": 10,
+                "soloboard_status": "todo"
             }
         }
     ]

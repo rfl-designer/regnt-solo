@@ -1,64 +1,23 @@
 ## Codebase Patterns
 
-- **Feature card component**: `resources/views/components/feature-card.blade.php` — Blade component com props `$feature`, `$expanded`, `$showProject`
-- **Feature ID format**: `#F-{id}` (ex: #F-12) — padrão para referenciar features
-- **Card visual pattern**: flex layout com título à esquerda, metadata à direita, badges row abaixo
-- **Pre-existing test failures**: AiInsightsTest, AiIntegrationTest, AnalyticsPageTest, DocumentIntegrationTest — não relacionadas a feature cards
-- **Copy-to-clipboard pattern**: Alpine `x-data="{ copied: false }"` + `x-on:click.stop` + `x-show` toggle entre texto original e "Copiado!" + `:class` para cor emerald-400
-- **Feature modal component**: `resources/views/components/⚡feature-modal.blade.php` — SFC Livewire com `$featureId`, `$title`, `$spec`, etc. Header mostra ID `#F-{id}` ao editar
+- **Document model**: `app/Models/Document.php` — SFC pattern with fillable, casts(), scopes
+- **DocumentFactory**: `database/factories/DocumentFactory.php` — states: prd(), spec(), decision(), reference(), pinned(), context(), forProject()
+- **MCP Tools de documento**: `app/Mcp/Tools/` — ListDocumentsTool, GetDocumentTool, CreateDocumentTool, UpdateDocumentTool
+- **Testes pré-existentes com falhas**: AiInsightsTest (5), AiIntegrationTest (1), AnalyticsPageTest (3), DocumentIntegrationTest (1) — não relacionados às mudanças de documentos
 
 ---
 
-## 2026-02-26 - US-40
-- Implementado: ID `#F-{id}` exibido no card de feature, ao lado do título
-- Alteração: wrap do `<h3>` em `<div class="flex items-start justify-between gap-2">` com `<span>` do ID à direita
-- Estilo: `text-xs font-mono text-zinc-500 shrink-0`
-- Files changed: `resources/views/components/feature-card.blade.php`
+## 2026-02-26 - US-5
+- Migration `add_is_context_to_documents_table`: coluna `is_context` boolean default false, com índice
+- Model Document: adicionado `is_context` ao $fillable, cast boolean, scope `context()`
+- Factory DocumentFactory: adicionado state `context()`
+- Files changed:
+  - database/migrations/2026_02_26_212531_add_is_context_to_documents_table.php (new)
+  - app/Models/Document.php
+  - database/factories/DocumentFactory.php
 - **Learnings for future iterations:**
-  - O título do card era um `<h3>` simples, agora está dentro de um div flex para acomodar o ID
-  - Testes de WorkPage têm falhas pré-existentes (QueryException) — ignorar
-  - Pint lint passa limpo sem alterações necessárias
----
-
-## 2026-02-26 - US-41
-- Implementado: Copy-to-clipboard no ID `#F-{id}` com feedback visual
-- Alpine.js `x-data="{ copied: false }"` no span do ID
-- Click handler: `x-on:click.stop` copia para clipboard e mostra "Copiado!" por 1.5s
-- Feedback: texto muda para "Copiado!" e cor muda para `text-emerald-400`
-- `cursor-pointer` + `title="Copiar ID"` + `hover:text-zinc-300`
-- `@click.stop` previne abertura do feature modal
-- Files changed: `resources/views/components/feature-card.blade.php`
-- **Learnings for future iterations:**
-  - Alpine `x-on:click.stop` é suficiente para parar propagação — não precisa de `wire:click.stop`
-  - `x-show` com `x-cloak` garante que "Copiado!" não aparece no SSR
-  - `:class` dinâmico do Alpine funciona bem com classes Tailwind de transição
----
-
-## 2026-02-26 - US-42
-- Implementado: ID `#F-{id}` exibido no header do feature modal ao editar
-- Posição: ao lado do `<flux:heading>` "Editar Feature", usando flex layout
-- Quando criando (`$featureId` é null): ID não aparece
-- Copy-to-clipboard: mesmo padrão Alpine do card (`x-data="{ copied: false }"`, `x-on:click`, feedback "Copiado!")
-- Estilo: `text-sm font-mono text-zinc-500` (ligeiramente maior que no card por estar no modal)
-- Não usa `@click.stop` pois não há propagação a prevenir no header do modal
-- Files changed: `resources/views/components/⚡feature-modal.blade.php`
-- **Learnings for future iterations:**
-  - No modal, não precisa de `.stop` no click handler — não há card pai para interceptar
-  - `$featureId` está disponível como propriedade pública do Livewire, pode ser usado diretamente no template
-  - O `<flux:heading>` não precisa de wrapper flex normalmente, mas adicionamos para alinhar o ID
----
-
-## 2026-02-26 - US-43
-- Implementado: 5 testes Pest para validar exibição do ID da feature
-- Testes criados em `tests/Feature/FeatureIdDisplayTest.php`:
-  1. Card de feature renderiza `#F-{id}` com ID correto
-  2. IDs aparecem na página Work (kanban) para múltiplas features
-  3. ID aparece no kanban de projeto (project-detail)
-  4. Feature modal exibe ID ao editar
-  5. Feature modal não exibe `#F-` ao criar (novo)
-- Files changed: `tests/Feature/FeatureIdDisplayTest.php`
-- **Learnings for future iterations:**
-  - `Livewire::test('pages::project-detail', ['slug' => $project->slug])` é o padrão para testar projeto com features
-  - `assertSee("#F-{$feature->id}")` funciona bem para validar presença do ID
-  - `assertDontSee('#F-')` é suficiente para garantir que nenhum ID aparece no modo criação
+  - O banco local está vazio (sem tasks) — as tasks do SoloBoard estão na instância remota
+  - 10 testes pré-existentes falhando (AI, Analytics, DocumentIntegration) — não relacionados
+  - Padrão de scope no Document: `scopeXxx(Builder $query): void`
+  - Factory states seguem padrão: `->state(fn (array $attributes) => [...])`
 ---

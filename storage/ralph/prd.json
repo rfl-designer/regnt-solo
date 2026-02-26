@@ -68,10 +68,10 @@
                 "Implementar: Adicionar método de drag-drop para tasks quando em modo drill-down.\n\n- Novo método `handleTaskSort($items, $column)` nos componentes\n- Lógica: mesma do kanban.blade.php — atualizar status e sort_order em DB::transaction\n- Quando task muda para Done: preencher completed_at, adicionar ao daily plan\n- Quando task sai de Done: limpar completed_at\n- Dispatch events: 'task-updated' para refresh\n- Escopo: apenas tasks da feature em drill (validar feature_id)\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção PHP class)"
             ],
             "priority": 2,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 109,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {

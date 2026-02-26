@@ -76,3 +76,18 @@
   - `flux:separator vertical` é útil para separadores visuais inline
   - 1208 testes passando (10 falhas pré-existentes não relacionadas)
 ---
+
+## 2026-02-26 - US-109
+- Implementado `handleTaskSort(int|string $id, int $position, string $groupId)` em ambos componentes (features.blade.php e project-detail.blade.php)
+- Lógica baseada no kanban.blade.php `handleSort`: DB::transaction, markAsDone + DailyPlan attach, toast de sucesso
+- Validação de segurança: verifica `feature_id` da task contra `drillFeatureId` para garantir escopo
+- Quando task sai de Done: limpa `completed_at`
+- Dispatch `task-updated` e `unset($this->drillFeature)` para refresh reativo
+- Adicionados imports `DailyPlan` em features.blade.php e `DailyPlan` + `DB` em project-detail.blade.php
+- Files changed: `⚡features.blade.php`, `⚡project-detail.blade.php`
+- **Learnings for future iterations:**
+  - O kanban.blade.php usa `recalculateSortOrder()` global, mas no drill mode isso não é necessário pois o sort opera sobre collection em memória da feature
+  - project-detail.blade.php não tinha import de `DB` nem `DailyPlan` — ambos necessários para a transação
+  - A assinatura `wire:sort` do Livewire 4 é `(int|string $id, int $position, string $groupId)` onde groupId é o `wire:sort:group-id`
+  - 1208 testes passando (10 falhas pré-existentes não relacionadas)
+---

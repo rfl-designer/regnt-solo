@@ -384,6 +384,7 @@ new class extends Component
     <flux:tab.group>
         <flux:tabs wire:model="tab">
             <flux:tab name="board" icon="view-columns">Board</flux:tab>
+            <flux:tab name="features" icon="rectangle-stack">Features</flux:tab>
             <flux:tab name="docs" icon="document-text">Docs</flux:tab>
             <flux:tab name="metrics" icon="chart-bar-square">Métricas</flux:tab>
         </flux:tabs>
@@ -663,6 +664,142 @@ new class extends Component
                     @endforeach
                 </div>
             </div>
+        </flux:tab.panel>
+
+        {{-- Tab Panel: Features (Specs) --}}
+        <flux:tab.panel name="features">
+            @if ($tab === 'features')
+                <div class="flex flex-col gap-4">
+                    {{-- Header --}}
+                    <div class="flex items-center justify-between">
+                        <flux:badge size="sm" color="zinc">{{ $this->features->count() }} features</flux:badge>
+                        <flux:button
+                            size="sm"
+                            variant="primary"
+                            icon="plus"
+                            wire:click="$dispatch('open-feature-modal')"
+                        >
+                            Nova Feature
+                        </flux:button>
+                    </div>
+
+                    @if ($this->features->isEmpty())
+                        {{-- Empty State --}}
+                        <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 py-16">
+                            <flux:icon name="rectangle-stack" class="mb-3 size-12 text-zinc-600" />
+                            <flux:heading size="sm" class="text-zinc-400">Nenhuma feature neste projeto</flux:heading>
+                            <flux:text class="mt-1 text-sm text-zinc-500">Crie uma feature para começar a planejar.</flux:text>
+                            <flux:button
+                                size="sm"
+                                variant="primary"
+                                icon="plus"
+                                class="mt-4"
+                                wire:click="$dispatch('open-feature-modal')"
+                            >
+                                Nova Feature
+                            </flux:button>
+                        </div>
+                    @else
+                        {{-- Feature Spec Cards --}}
+                        <div class="space-y-6">
+                            @foreach ($this->features as $feature)
+                                @php
+                                    $tasksCount = $feature->tasksCount();
+                                    $completedCount = $feature->completedTasksCount();
+                                @endphp
+
+                                <div
+                                    wire:key="feature-spec-{{ $feature->id }}"
+                                    class="rounded-xl border border-zinc-700 bg-zinc-900/50"
+                                >
+                                    {{-- Feature Header --}}
+                                    <div class="flex items-start justify-between border-b border-zinc-700 p-4">
+                                        <div class="min-w-0 flex-1">
+                                            {{-- Title (clickable) --}}
+                                            <button
+                                                type="button"
+                                                wire:click="$dispatch('open-feature-modal', { featureId: {{ $feature->id }} })"
+                                                class="text-left text-lg font-semibold text-zinc-100 transition hover:text-white"
+                                            >
+                                                {{ $feature->title }}
+                                            </button>
+
+                                            {{-- Badges --}}
+                                            <div class="mt-2 flex flex-wrap items-center gap-2">
+                                                {{-- Status Badge --}}
+                                                <flux:badge size="sm" color="{{ $feature->status->color() }}" icon="{{ $feature->status->icon() }}">
+                                                    {{ $feature->status->label() }}
+                                                </flux:badge>
+
+                                                {{-- Progress --}}
+                                                @if ($tasksCount > 0)
+                                                    <flux:badge size="sm" color="zinc">
+                                                        {{ $completedCount }}/{{ $tasksCount }} tasks
+                                                    </flux:badge>
+                                                @endif
+
+                                                {{-- Priority --}}
+                                                @if ($feature->priority)
+                                                    <flux:badge size="sm" color="{{ $feature->priority->color() }}" icon="{{ $feature->priority->icon() }}">
+                                                        {{ $feature->priority->label() }}
+                                                    </flux:badge>
+                                                @endif
+
+                                                {{-- Due Date --}}
+                                                @if ($feature->due_date)
+                                                    @php
+                                                        $isOverdue = $feature->due_date->isPast();
+                                                    @endphp
+                                                    <flux:badge size="sm" color="{{ $isOverdue ? 'red' : 'zinc' }}" icon="{{ $isOverdue ? 'exclamation-triangle' : 'calendar' }}">
+                                                        {{ $feature->due_date->format('d/m/Y') }}
+                                                    </flux:badge>
+                                                @endif
+                                            </div>
+
+                                            {{-- Progress Bar --}}
+                                            @if ($tasksCount > 0)
+                                                <div class="mt-3 max-w-md">
+                                                    <div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-700">
+                                                        <div
+                                                            class="h-full rounded-full bg-{{ $feature->status->color() }}-500 transition-all duration-300"
+                                                            style="width: {{ $feature->progress }}%"
+                                                        ></div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        </div>
+
+                                        {{-- Edit Button --}}
+                                        <flux:button
+                                            size="sm"
+                                            variant="ghost"
+                                            icon="pencil-square"
+                                            wire:click="$dispatch('open-feature-modal', { featureId: {{ $feature->id }} })"
+                                            title="Editar feature"
+                                            class="shrink-0"
+                                        />
+                                    </div>
+
+                                    {{-- Spec Content --}}
+                                    @if ($feature->spec)
+                                        <div class="p-4">
+                                            <livewire:markdown-viewer
+                                                :content="$feature->spec"
+                                                :show-copy-buttons="false"
+                                                :key="'feature-spec-'.$feature->id"
+                                            />
+                                        </div>
+                                    @else
+                                        <div class="p-4 text-center text-sm text-zinc-500">
+                                            Nenhuma spec definida para esta feature.
+                                        </div>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            @endif
         </flux:tab.panel>
 
         {{-- Tab Panel: Docs --}}

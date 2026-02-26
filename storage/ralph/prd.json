@@ -26,10 +26,10 @@
                 "Implementar: Features com status 'Draft' (sem tasks) precisam aparecer no kanban do projeto. Atualmente o kanban tem 4 colunas, precisa de 5.\n\n- Adicionar FeatureStatus::Draft ao array kanbanStatuses\n- Cor da coluna Draft: zinc (#71717a)\n- Ícone: document\n- Label: 'Rascunho'\n- Draft deve ser a primeira coluna (à esquerda)\n\nNota: FeatureStatus é computado (não persistido), então filtrar features onde tasks()->count() === 0 para Draft."
             ],
             "priority": 2,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 41,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {

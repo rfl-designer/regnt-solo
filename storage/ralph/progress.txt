@@ -41,3 +41,13 @@
   - O método featuresByStatus() é um agrupamento simples usando filter sobre a collection já carregada
   - As métricas de features (feature_completion_percent, features_by_status) complementam as métricas existentes de tasks
 ---
+
+## 2026-02-26 - US-41
+- Validada como já implementada durante US-40
+- FeatureStatus::Draft existe com cor zinc (#71717a), ícone document, label Rascunho
+- Draft é a primeira coluna no kanbanStatuses
+- 46 testes ProjectDetail passando
+- Files changed: nenhum (já implementado)
+- **Learnings for future iterations:**
+  - Quando uma story é implementada como parte de outra, validar e marcar done rapidamente
+---

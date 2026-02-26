@@ -6,9 +6,12 @@ use App\Enums\TaskStatus;
 use App\Models\Document;
 use App\Models\Feature;
 use App\Models\Project;
+use App\Models\Task;
+use Carbon\Carbon;
 use Flux\Flux;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 new class extends Component
@@ -18,6 +21,9 @@ new class extends Component
     public string $tab = 'board';
 
     public bool $showArchiveModal = false;
+
+    #[Url(as: 'feature')]
+    public ?int $drillFeatureId = null;
 
     /** @var list<FeatureStatus> */
     public array $kanbanStatuses = [];
@@ -31,10 +37,21 @@ new class extends Component
         'done' => 10,
     ];
 
+    /** @var array<string, int> */
+    public array $drillLimits = [
+        'backlog' => 20,
+        'todo' => 20,
+        'doing' => 20,
+        'done' => 20,
+    ];
+
     public ?int $selectedDocumentId = null;
 
     /** @var array<string, bool> */
     public array $expanded = [];
+
+    /** @var list<TaskStatus> */
+    public array $drillTaskStatuses = [];
 
     public function mount(string $slug): void
     {
@@ -46,6 +63,13 @@ new class extends Component
             FeatureStatus::Todo,
             FeatureStatus::Doing,
             FeatureStatus::Done,
+        ];
+
+        $this->drillTaskStatuses = [
+            TaskStatus::Backlog,
+            TaskStatus::Todo,
+            TaskStatus::Doing,
+            TaskStatus::Done,
         ];
     }
 
@@ -254,6 +278,94 @@ new class extends Component
         Flux::toast(variant: 'success', heading: 'Projeto reativado', text: $project->name);
     }
 
+    #[Computed]
+    public function drillFeature(): ?Feature
+    {
+        if (! $this->drillFeatureId) {
+            return null;
+        }
+
+        return Feature::with(['tasks.project', 'tasks.timeEntries', 'project'])->find($this->drillFeatureId);
+    }
+
+    public function enterDrill(int $featureId): void
+    {
+        $this->drillFeatureId = $featureId;
+        $this->drillLimits = [
+            'backlog' => 20,
+            'todo' => 20,
+            'doing' => 20,
+            'done' => 20,
+        ];
+
+        unset($this->drillFeature);
+    }
+
+    public function exitDrill(): void
+    {
+        $this->drillFeatureId = null;
+
+        unset($this->drillFeature);
+    }
+
+    /**
+     * Get tasks for a drill-down column.
+     *
+     * @return \Illuminate\Support\Collection<int, Task>
+     */
+    public function getDrillColumnTasks(TaskStatus $status): \Illuminate\Support\Collection
+    {
+        $feature = $this->drillFeature;
+
+        if (! $feature) {
+            return collect();
+        }
+
+        $tasks = $feature->tasks
+            ->filter(fn (Task $t): bool => $t->status === $status);
+
+        if ($status === TaskStatus::Done) {
+            $tasks = $tasks->filter(fn (Task $t): bool => $t->completed_at?->between(
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ));
+        }
+
+        return $tasks
+            ->sortBy('sort_order')
+            ->take($this->drillLimits[$status->value])
+            ->values();
+    }
+
+    /**
+     * Get total task count for a drill-down column.
+     */
+    public function getDrillColumnTotal(TaskStatus $status): int
+    {
+        $feature = $this->drillFeature;
+
+        if (! $feature) {
+            return 0;
+        }
+
+        $tasks = $feature->tasks
+            ->filter(fn (Task $t): bool => $t->status === $status);
+
+        if ($status === TaskStatus::Done) {
+            $tasks = $tasks->filter(fn (Task $t): bool => $t->completed_at?->between(
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ));
+        }
+
+        return $tasks->count();
+    }
+
+    public function loadMoreDrill(string $status): void
+    {
+        $this->drillLimits[$status] += 20;
+    }
+
     #[On('feature-created')]
     #[On('feature-updated')]
     #[On('task-created')]
@@ -263,7 +375,7 @@ new class extends Component
     #[On('document-saved')]
     public function refreshProject(): void
     {
-        unset($this->project, $this->features, $this->featuresByStatus, $this->metrics, $this->projectDocuments, $this->selectedDocument);
+        unset($this->project, $this->features, $this->featuresByStatus, $this->metrics, $this->projectDocuments, $this->selectedDocument, $this->drillFeature);
     }
 }
 

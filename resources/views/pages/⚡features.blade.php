@@ -2,8 +2,11 @@
 
 use App\Enums\FeaturePriority;
 use App\Enums\FeatureStatus;
+use App\Enums\TaskStatus;
 use App\Models\Feature;
 use App\Models\Project;
+use App\Models\Task;
+use Carbon\Carbon;
 use Flux\Flux;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
@@ -31,9 +34,20 @@ new class extends Component
     #[Url(as: 'dir')]
     public string $sortDirection = 'asc';
 
+    #[Url(as: 'feature')]
+    public ?int $drillFeatureId = null;
+
     /** @var array<string, int> */
     public array $limits = [
         'draft' => 20,
+        'backlog' => 20,
+        'todo' => 20,
+        'doing' => 20,
+        'done' => 20,
+    ];
+
+    /** @var array<string, int> */
+    public array $drillLimits = [
         'backlog' => 20,
         'todo' => 20,
         'doing' => 20,
@@ -46,6 +60,9 @@ new class extends Component
     /** @var list<FeatureStatus> */
     public array $kanbanStatuses = [];
 
+    /** @var list<TaskStatus> */
+    public array $drillTaskStatuses = [];
+
     public function mount(): void
     {
         $this->kanbanStatuses = [
@@ -53,6 +70,13 @@ new class extends Component
             FeatureStatus::Todo,
             FeatureStatus::Doing,
             FeatureStatus::Done,
+        ];
+
+        $this->drillTaskStatuses = [
+            TaskStatus::Backlog,
+            TaskStatus::Todo,
+            TaskStatus::Doing,
+            TaskStatus::Done,
         ];
     }
 
@@ -193,6 +217,94 @@ new class extends Component
         return $this->expanded[(string) $featureId] ?? false;
     }
 
+    #[Computed]
+    public function drillFeature(): ?Feature
+    {
+        if (! $this->drillFeatureId) {
+            return null;
+        }
+
+        return Feature::with(['tasks.project', 'tasks.timeEntries', 'project'])->find($this->drillFeatureId);
+    }
+
+    public function enterDrill(int $featureId): void
+    {
+        $this->drillFeatureId = $featureId;
+        $this->drillLimits = [
+            'backlog' => 20,
+            'todo' => 20,
+            'doing' => 20,
+            'done' => 20,
+        ];
+
+        unset($this->drillFeature);
+    }
+
+    public function exitDrill(): void
+    {
+        $this->drillFeatureId = null;
+
+        unset($this->drillFeature);
+    }
+
+    /**
+     * Get tasks for a drill-down column.
+     *
+     * @return \Illuminate\Support\Collection<int, Task>
+     */
+    public function getDrillColumnTasks(TaskStatus $status): \Illuminate\Support\Collection
+    {
+        $feature = $this->drillFeature;
+
+        if (! $feature) {
+            return collect();
+        }
+
+        $tasks = $feature->tasks
+            ->filter(fn (Task $t): bool => $t->status === $status);
+
+        if ($status === TaskStatus::Done) {
+            $tasks = $tasks->filter(fn (Task $t): bool => $t->completed_at?->between(
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ));
+        }
+
+        return $tasks
+            ->sortBy('sort_order')
+            ->take($this->drillLimits[$status->value])
+            ->values();
+    }
+
+    /**
+     * Get total task count for a drill-down column.
+     */
+    public function getDrillColumnTotal(TaskStatus $status): int
+    {
+        $feature = $this->drillFeature;
+
+        if (! $feature) {
+            return 0;
+        }
+
+        $tasks = $feature->tasks
+            ->filter(fn (Task $t): bool => $t->status === $status);
+
+        if ($status === TaskStatus::Done) {
+            $tasks = $tasks->filter(fn (Task $t): bool => $t->completed_at?->between(
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ));
+        }
+
+        return $tasks->count();
+    }
+
+    public function loadMoreDrill(string $status): void
+    {
+        $this->drillLimits[$status] += 20;
+    }
+
     #[On('feature-updated')]
     #[On('feature-created')]
     #[On('task-updated')]
@@ -203,6 +315,7 @@ new class extends Component
         unset($this->features);
         unset($this->sortedFeatures);
         unset($this->projects);
+        unset($this->drillFeature);
     }
 
     public function startTimer(int $featureId): void

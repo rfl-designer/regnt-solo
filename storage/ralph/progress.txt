@@ -36,3 +36,17 @@
   - `$schema->boolean()` funciona para parâmetros MCP (confirmado em ToggleRecurringTaskTool, StartTimerTool)
   - Campo renomeado de `excerpt` para `content_preview` para refletir o novo comportamento de truncamento
 ---
+
+## 2026-02-26 - US-7
+- GetDocumentTool: adicionado `is_context` na response data
+- CreateDocumentTool: adicionado parâmetro opcional `is_context` (bool, default false) na validação, create e schema
+- UpdateDocumentTool: adicionado parâmetro opcional `is_context` (bool) na validação, updates e schema; mensagem de erro atualizada
+- Files changed:
+  - app/Mcp/Tools/GetDocumentTool.php
+  - app/Mcp/Tools/CreateDocumentTool.php
+  - app/Mcp/Tools/UpdateDocumentTool.php
+- **Learnings for future iterations:**
+  - Padrão de parâmetro opcional em MCP tools: `'nullable|boolean'` na validação + `isset()` no update + `?? default` no create
+  - Todas as 37 DocumentTools tests passaram sem necessidade de alteração — a US-7 é aditiva, não quebra testes existentes
+  - Schema boolean: `$schema->boolean()->description('...')` — sem `->required()` para campos opcionais
+---

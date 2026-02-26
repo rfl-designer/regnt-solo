@@ -40,10 +40,10 @@
                 "Implementar: Atualizar as MCP tools de documentos para suportar o campo is_context:\n\n**GetDocumentTool**:\n- Adicionar `'is_context' => $document->is_context` na response\n- ID já é retornado\n\n**CreateDocumentTool**:\n- Adicionar parâmetro opcional `is_context` (bool, default false)\n- Adicionar ao schema e validação\n- Incluir no create\n\n**UpdateDocumentTool**:\n- Adicionar parâmetro opcional `is_context` (bool)\n- Adicionar ao schema e validação\n- Incluir nos updates quando fornecido\n\nArquivos:\n- app/Mcp/Tools/GetDocumentTool.php\n- app/Mcp/Tools/CreateDocumentTool.php\n- app/Mcp/Tools/UpdateDocumentTool.php"
             ],
             "priority": 2,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 7,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {

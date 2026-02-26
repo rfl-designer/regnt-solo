@@ -25,7 +25,16 @@
             <h3 class="line-clamp-2 text-sm font-medium text-zinc-200">
                 {{ $feature->title }}
             </h3>
-            <span class="shrink-0 text-xs font-mono text-zinc-500">#F-{{ $feature->id }}</span>
+            <span
+                x-data="{ copied: false }"
+                x-on:click.stop="navigator.clipboard.writeText('#F-{{ $feature->id }}'); copied = true; setTimeout(() => copied = false, 1500)"
+                class="shrink-0 cursor-pointer text-xs font-mono transition-colors duration-200"
+                :class="copied ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'"
+                title="Copiar ID"
+            >
+                <span x-show="!copied">#F-{{ $feature->id }}</span>
+                <span x-show="copied" x-cloak>Copiado!</span>
+            </span>
         </div>
 
         {{-- Project Info --}}

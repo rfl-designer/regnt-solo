@@ -40,10 +40,10 @@
                 "Implementar: Quando drillFeatureId está ativo, renderizar um header contextual acima do kanban.\n\n- Background: `bg-zinc-800/80 border border-zinc-700 rounded-xl p-4 mb-4`\n- Conteúdo:\n  - Botão 'Voltar' à esquerda: `← Voltar para features` (wire:click=\"exitDrill\")\n  - Título da feature (h2, font-semibold)\n  - Status badge (FeatureStatus com cor)\n  - Progresso: 'X/Y tasks concluídas' + barra de progresso\n  - Projeto: emoji + nome (se existir)\n- Animação: x-transition ao aparecer/desaparecer\n\nArquivos: ⚡features.blade.php, ⚡project-detail.blade.php (seção template)"
             ],
             "priority": 2,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 107,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {

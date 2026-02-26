@@ -59,3 +59,20 @@
   - A seção expandível de tasks e o botão drill-down ficam dentro do mesmo `@if ($tasksCount > 0)` block
   - 1207 testes passando (10 falhas pré-existentes não relacionadas)
 ---
+
+## 2026-02-26 - US-107
+- Implementado header contextual do modo drill-down em ambos componentes (features.blade.php e project-detail.blade.php)
+- Header inclui: botão "Voltar para features" (exitDrill), título da feature, status badge, barra de progresso, contagem de tasks concluídas
+- No features.blade.php: header também mostra emoji + nome do projeto quando existir
+- No project-detail.blade.php: header sem seção de projeto (redundante pois já está no contexto do projeto)
+- Substituído o header simples com badge de contagem por header completo no project-detail
+- Animação x-transition com ease-out no aparecer (opacity + translate-y)
+- Estilo: `rounded-xl border border-zinc-700 bg-zinc-800/80 p-4 mb-4`
+- Files changed: `⚡features.blade.php`, `⚡project-detail.blade.php`
+- **Learnings for future iterations:**
+  - Feature model tem `progress` (attribute accessor), `tasksCount()` e `completedTasksCount()` — tudo disponível
+  - FeatureStatus enum tem `color()` e `label()` — reutilizáveis nos badges
+  - No project-detail, o header drill-down fica dentro do `<div class="flex flex-col gap-4">` do tab panel board
+  - `flux:separator vertical` é útil para separadores visuais inline
+  - 1208 testes passando (10 falhas pré-existentes não relacionadas)
+---

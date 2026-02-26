@@ -1,7 +1,7 @@
 ## Codebase Patterns
 
 - **Feature status é computado**: FeatureStatus no model Feature é um accessor (não persistido). Draft = sem tasks, Done = todas tasks done, Doing = alguma task doing, etc.
-- **Feature kanban padrão visual**: Cards com título, progress bar, badges (prioridade, tempo, due date), timer controls, tasks expandíveis. Mesmo padrão da página Work (⚡features.blade.php).
+- **Feature kanban padrão visual**: Cards extraídos para `<x-feature-card>` (componente Blade reutilizável). Props: `:feature`, `:expanded`, `:show-project`.
 - **getColumnFeatures pattern**: Filtrar features por computed status usando `->filter(fn (Feature $f) => $f->status === $status)->take($limit)`. Não usar query builder (status não é coluna).
 - **Testes de feature kanban**: Criar features com tasks específicas para forçar status desejado. Ex: feature sem tasks = Draft, feature com task backlog = Backlog.
 - **SFC project-detail**: Arquivo grande (~1000 linhas). PHP class + Blade template. Tabs: Board, Docs, Métricas.
@@ -50,4 +50,35 @@
 - Files changed: nenhum (já implementado)
 - **Learnings for future iterations:**
   - Quando uma story é implementada como parte de outra, validar e marcar done rapidamente
+---
+
+## 2026-02-26 - US-42
+- Nova aba "Features" na página project-detail (entre Board e Docs)
+- Tab com ícone rectangle-stack, condicionada a `$tab === 'features'` para evitar conflito com lazy loading
+- Cada feature renderizada como card/documento: título clicável, status badge, progresso (X/Y tasks), priority, due date, progress bar
+- Spec renderizada via `<livewire:markdown-viewer>` (read-only, sem botões de copiar)
+- Empty state com ícone, texto e CTA para criar feature
+- Botão de editar dispara open-feature-modal
+- Ordenação natural via `$this->features` (scope ordered: priority desc, sort_order asc)
+- Files changed: ⚡project-detail.blade.php
+- 46 testes passando
+- **Learnings for future iterations:**
+  - flux:tab.panel renderiza TODOS os painéis no HTML — usar `@if ($tab === 'name')` para condicionar conteúdo que pode conflitar com assertDontSee em testes
+  - `<livewire:markdown-viewer>` aceita :content e :show-copy-buttons como props
+  - A collection features já vem ordenada pelo scope ordered(), não precisa de sortBy extra no blade
+---
+
+## 2026-02-26 - US-43
+- Extraído card de feature para componente Blade reutilizável: `resources/views/components/feature-card.blade.php`
+- Props: `$feature` (Feature model), `$expanded` (bool), `$showProject` (bool, default true)
+- Refatorado `⚡features.blade.php` (Work page) para usar `<x-feature-card :show-project="true">`
+- Refatorado `⚡project-detail.blade.php` (Board tab) para usar `<x-feature-card :show-project="false">`
+- Removido `formatDuration()` do project-detail (não mais necessário, cálculo feito inline no componente)
+- 166 linhas adicionadas, 303 removidas — eliminação de duplicação significativa
+- Files changed: feature-card.blade.php (novo), ⚡features.blade.php, ⚡project-detail.blade.php
+- 46 testes ProjectDetail + 58 Work + 19 FeaturesKanban passando
+- **Learnings for future iterations:**
+  - Componentes Blade anônimos (`@props`) funcionam bem com wire: directives — bubble up para o parent Livewire
+  - `formatDuration` pode ser calculado inline no componente com `intdiv()` e `%` — não precisa de método no parent
+  - O padrão `<x-feature-card>` simplifica futuras mudanças visuais no card (muda uma vez, reflete em ambas páginas)
 ---

@@ -40,10 +40,10 @@
                 "Implementar: Nova aba na página de projeto com título 'Features'. Mostra as specs de todas as features do projeto como documentos legíveis.\n\n- Usar <flux:tab> para adicionar a aba (ao lado de Board/Docs/Metrics)\n- Cada feature renderizada como um card/documento:\n  - Título da feature + status badge + progresso (X/Y tasks)\n  - Spec completa renderizada em markdown (read-only)\n  - Prioridade e due date se existirem\n- Ordenar por: priority desc, sort_order asc\n- Clicar no título ou botão de editar dispara open-feature-modal\n- Empty state: 'Nenhuma feature neste projeto' + CTA para criar\n\nArquivo: resources/views/pages/⚡project-detail.blade.php"
             ],
             "priority": 2,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 42,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {
@@ -54,10 +54,10 @@
                 "Implementar: Atualmente o card de feature está inline na página ⚡features.blade.php. Para reutilizar no kanban de projeto, extrair para um componente Blade parcial ou Livewire component.\n\n- Criar componente: resources/views/components/feature-card.blade.php (Blade component, não Livewire)\n- Props: $feature, $expanded (bool), $showProject (bool — false no contexto de projeto)\n- Inclui: título, progresso, badges, timer controls, tasks expandíveis\n- Usar tanto na página Work quanto no kanban de projeto\n\nNota: componente Blade simples (não SFC Livewire) pois é apenas template."
             ],
             "priority": 2,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 43,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {

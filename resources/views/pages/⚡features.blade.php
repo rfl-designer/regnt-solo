@@ -185,7 +185,7 @@ new class extends Component
     {{-- Header --}}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center gap-3">
-            <flux:heading size="xl">Features</flux:heading>
+            <flux:heading size="xl">Work</flux:heading>
             <flux:badge size="sm" color="zinc">{{ $this->features->count() }}</flux:badge>
         </div>
 

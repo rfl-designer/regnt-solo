@@ -20,14 +20,14 @@ describe('Features Kanban Page', function () {
     test('features page requires authentication', function () {
         auth()->logout();
 
-        $this->get(route('features'))
+        $this->get(route('work'))
             ->assertRedirect(route('login'));
     });
 
     test('features page loads successfully', function () {
-        $this->get(route('features'))
+        $this->get(route('work'))
             ->assertOk()
-            ->assertSee('Features');
+            ->assertSee('Work');
     });
 
     test('displays features in correct columns by computed status', function () {
@@ -62,7 +62,7 @@ describe('Features Kanban Page', function () {
             'status' => TaskStatus::Done,
         ]);
 
-        $this->get(route('features'))
+        $this->get(route('work'))
             ->assertSee('Backlog Feature')
             ->assertSee('Todo Feature')
             ->assertSee('Doing Feature')
@@ -78,7 +78,7 @@ describe('Features Kanban Page', function () {
         Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
         Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Doing]);
 
-        $this->get(route('features'))
+        $this->get(route('work'))
             ->assertSee('Progress Feature')
             ->assertSee('2/4 tasks');
     });
@@ -99,7 +99,7 @@ describe('Features Kanban Page', function () {
         ]);
         Task::factory()->create(['feature_id' => $feature2->id, 'status' => TaskStatus::Todo]);
 
-        $this->get(route('features', ['filterProject' => $project1->id]))
+        $this->get(route('work', ['filterProject' => $project1->id]))
             ->assertSee('Feature Alpha')
             ->assertDontSee('Feature Beta');
     });
@@ -117,7 +117,7 @@ describe('Features Kanban Page', function () {
         ]);
         Task::factory()->create(['feature_id' => $lowFeature->id, 'status' => TaskStatus::Todo]);
 
-        $this->get(route('features', ['filterPriority' => 'high']))
+        $this->get(route('work', ['filterPriority' => 'high']))
             ->assertSee('High Priority Feature')
             ->assertDontSee('Low Priority Feature');
     });
@@ -134,13 +134,13 @@ describe('Features Kanban Page', function () {
         ]);
         Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
 
-        $this->get(route('features'))
+        $this->get(route('work'))
             ->assertSee('Feature with Project')
             ->assertSee('My Project');
     });
 
     test('shows empty state when no features', function () {
-        $this->get(route('features'))
+        $this->get(route('work'))
             ->assertSee('Nenhuma feature');
     });
 });
@@ -286,7 +286,7 @@ describe('Features Kanban Expandable Tasks', function () {
         $feature = Feature::factory()->create(['title' => 'Multi Task Feature']);
         Task::factory()->count(5)->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
 
-        $this->get(route('features'))
+        $this->get(route('work'))
             ->assertSee('5 tasks');
     });
 });

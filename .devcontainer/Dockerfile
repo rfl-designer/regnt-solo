@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libwebp-dev \
     sqlite3 \
     libsqlite3-dev \
+    openssh-client \
     nano \
     vim \
     sudo \
@@ -47,7 +48,8 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     gd \
     opcache \
     pcntl \
-    exif
+    exif \
+    sockets
 
 # Redis extension
 RUN pecl install redis && docker-php-ext-enable redis

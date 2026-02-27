@@ -5,10 +5,12 @@
     "workspaceFolder": "/workspace",
 
     "mounts": [
+        "source=${localEnv:HOME}/.claude.json,target=/home/dev/.claude.json,type=bind,consistency=cached",
         "source=${localEnv:HOME}/.claude,target=/home/dev/.claude,type=bind,consistency=cached",
         "source=composer-cache-${devcontainerId},target=/home/dev/.composer,type=volume",
         "source=npm-cache-${devcontainerId},target=/home/dev/.npm,type=volume",
         "source=bash-history-${devcontainerId},target=/commandhistory,type=volume",
+        "source=${localEnv:HOME}/.ssh,target=/home/dev/.ssh,type=bind,readonly",
     ],
 
     "containerEnv": {

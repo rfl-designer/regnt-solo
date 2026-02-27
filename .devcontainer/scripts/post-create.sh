@@ -4,6 +4,30 @@ set -e
 echo "🚀 Configurando ambiente Laravel + Flux UI..."
 
 # ============================================================
+# Shell: configurar PATH para Claude CLI
+# ============================================================
+if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' ~/.zshrc 2>/dev/null; then
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+    echo "✅ PATH do Claude adicionado ao .zshrc"
+fi
+
+# ============================================================
+# Claude Plugins: criar symlink para caminhos do host macOS
+# ============================================================
+# Plugins registram installPath com caminho absoluto do host.
+# Dentro do container, ~/.claude é montado em /home/dev/.claude,
+# mas os caminhos no installed_plugins.json apontam para /Users/<user>/.claude.
+# O symlink resolve esse mismatch.
+if [ -f "$HOME/.claude/plugins/installed_plugins.json" ]; then
+    HOST_CLAUDE_DIR=$(grep -oP '"installPath":\s*"\K[^"]+' "$HOME/.claude/plugins/installed_plugins.json" | head -1 | sed 's|/.claude/.*|/.claude|')
+    if [ -n "$HOST_CLAUDE_DIR" ] && [ "$HOST_CLAUDE_DIR" != "$HOME/.claude" ] && [ ! -e "$HOST_CLAUDE_DIR" ]; then
+        sudo mkdir -p "$(dirname "$HOST_CLAUDE_DIR")"
+        sudo ln -sf "$HOME/.claude" "$HOST_CLAUDE_DIR"
+        echo "✅ Symlink criado: $HOST_CLAUDE_DIR -> $HOME/.claude (plugins compatíveis)"
+    fi
+fi
+
+# ============================================================
 # Composer: instalar dependências
 # ============================================================
 if [ -f "composer.json" ]; then

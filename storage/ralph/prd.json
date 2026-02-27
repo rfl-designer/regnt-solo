@@ -54,10 +54,10 @@
                 "Implementar: Adicionar toggle e indicador visual de 'Contexto' nas interfaces de documentos.\n\n**Document Edit (⚡document-edit.blade.php)**:\n- Checkbox/toggle `<flux:checkbox>` ou `<flux:switch>` para is_context\n- Label: 'Documento de Contexto'\n- Descrição: 'Disponível para AI assistants via MCP'\n- Posição: próximo ao toggle de 'Fixado' (is_pinned)\n\n**Document View (⚡document-view.blade.php)**:\n- Badge 'Contexto' (cor violet ou indigo) ao lado do tipo, quando is_context=true\n- Ícone: `cpu-chip` ou `sparkles`\n\n**Project Detail — Docs tab**:\n- Badge 'Contexto' no card do documento na listagem\n- Ícone discreto no card\n\nArquivos:\n- resources/views/pages/⚡document-edit.blade.php\n- resources/views/pages/⚡document-view.blade.php\n- resources/views/pages/⚡project-detail.blade.php (seção docs tab)"
             ],
             "priority": 2,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 8,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {

@@ -1,52 +1,23 @@
 ## Codebase Patterns
 
-- **Document model**: `app/Models/Document.php` — SFC pattern with fillable, casts(), scopes
-- **DocumentFactory**: `database/factories/DocumentFactory.php` — states: prd(), spec(), decision(), reference(), pinned(), context(), forProject()
-- **MCP Tools de documento**: `app/Mcp/Tools/` — ListDocumentsTool, GetDocumentTool, CreateDocumentTool, UpdateDocumentTool
-- **Testes pré-existentes com falhas**: AiInsightsTest (5), AiIntegrationTest (1), AnalyticsPageTest (3), DocumentIntegrationTest (1) — não relacionados às mudanças de documentos
+- **Flux badges pattern**: `<flux:badge size="sm" color="violet" icon="cpu-chip">Contexto</flux:badge>` — seguir padrão de badges existentes (is_pinned usa amber/star)
+- **Checkbox com descrição**: `<flux:checkbox wire:model="prop" label="Label" description="Descrição" />` — Flux suporta `description` diretamente
+- **Document edit save pattern**: Dados salvos via array `$data` no método `save()` — adicionar campos novos ao array
+- **Document edit mount pattern**: Propriedades carregadas no `mount()` do SFC a partir do model
+- **Project-detail docs tab**: 4 locais para badges de documento: desktop list, desktop preview header, mobile list, mobile preview modal header
+- **Testes pré-existentes falhando**: AiInsightsTest (5), AiIntegrationTest (1), AnalyticsPageTest (3), DocumentIntegrationTest (1 - task modal) — NÃO são causados pelas mudanças de documentos
 
 ---
 
-## 2026-02-26 - US-5
-- Migration `add_is_context_to_documents_table`: coluna `is_context` boolean default false, com índice
-- Model Document: adicionado `is_context` ao $fillable, cast boolean, scope `context()`
-- Factory DocumentFactory: adicionado state `context()`
-- Files changed:
-  - database/migrations/2026_02_26_212531_add_is_context_to_documents_table.php (new)
-  - app/Models/Document.php
-  - database/factories/DocumentFactory.php
+## 2026-02-27 - US-8
+- Toggle de contexto e badge 'Contexto' na UI de documentos
+- Arquivos modificados:
+  - `resources/views/pages/⚡document-edit.blade.php` — checkbox is_context, mount loading, save data
+  - `resources/views/pages/⚡document-view.blade.php` — badge violet Contexto
+  - `resources/views/pages/⚡project-detail.blade.php` — badge Contexto em 4 locais (desktop list, desktop preview, mobile list, mobile modal)
 - **Learnings for future iterations:**
-  - O banco local está vazio (sem tasks) — as tasks do SoloBoard estão na instância remota
-  - 10 testes pré-existentes falhando (AI, Analytics, DocumentIntegration) — não relacionados
-  - Padrão de scope no Document: `scopeXxx(Builder $query): void`
-  - Factory states seguem padrão: `->state(fn (array $attributes) => [...])`
----
-
-## 2026-02-26 - US-6
-- ListDocumentsTool atualizado: filtro padrão `is_context=true`, parâmetro `include_all`
-- Conteúdo truncado: primeiros 255 + últimos 255 chars quando > 510
-- Campo `is_context` incluído no mapeamento, `excerpt` substituído por `content_preview`
-- 3 testes existentes adaptados para usar `->context()` factory state
-- Files changed:
-  - app/Mcp/Tools/ListDocumentsTool.php
-  - tests/Feature/Mcp/DocumentToolsTest.php
-- **Learnings for future iterations:**
-  - Ao mudar filtro padrão de query (ex: `context()`), testes existentes quebram — precisam ser adaptados
-  - `Str::length()` / `Str::substr()` são preferíveis a `strlen()` / `substr()` para suporte Unicode
-  - `$schema->boolean()` funciona para parâmetros MCP (confirmado em ToggleRecurringTaskTool, StartTimerTool)
-  - Campo renomeado de `excerpt` para `content_preview` para refletir o novo comportamento de truncamento
----
-
-## 2026-02-26 - US-7
-- GetDocumentTool: adicionado `is_context` na response data
-- CreateDocumentTool: adicionado parâmetro opcional `is_context` (bool, default false) na validação, create e schema
-- UpdateDocumentTool: adicionado parâmetro opcional `is_context` (bool) na validação, updates e schema; mensagem de erro atualizada
-- Files changed:
-  - app/Mcp/Tools/GetDocumentTool.php
-  - app/Mcp/Tools/CreateDocumentTool.php
-  - app/Mcp/Tools/UpdateDocumentTool.php
-- **Learnings for future iterations:**
-  - Padrão de parâmetro opcional em MCP tools: `'nullable|boolean'` na validação + `isset()` no update + `?? default` no create
-  - Todas as 37 DocumentTools tests passaram sem necessidade de alteração — a US-7 é aditiva, não quebra testes existentes
-  - Schema boolean: `$schema->boolean()->description('...')` — sem `->required()` para campos opcionais
+  - O `isContext` property já existia no SFC de edit (adicionado em iteração anterior) mas faltava carregar no mount e incluir no save
+  - O padrão de badge Contexto usa cor `violet` e ícone `cpu-chip`
+  - O project-detail tem 4 locais independentes para badges de documento — fácil esquecer algum
+  - Testes de documento (DocumentEditTest, DocumentTest, DocumentListTest, DocumentExportPdfTest) passam todos — 48 testes
 ---

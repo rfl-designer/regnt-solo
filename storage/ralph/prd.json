@@ -68,10 +68,10 @@
                 "Implementar: Mostrar o ID do documento em formato `#D-{id}` nas interfaces.\n\n**Document View (⚡document-view.blade.php)**:\n- ID no header ao lado do título: `#D-{id}` em `text-sm font-mono text-zinc-500`\n- Copy-to-clipboard ao clicar (Alpine.js, mesmo padrão do feature ID)\n\n**Document Edit (⚡document-edit.blade.php)**:\n- ID no header quando editando (não ao criar)\n\n**Project Detail — Docs tab**:\n- ID discreto no card do documento: `text-xs font-mono text-zinc-500`\n\n**Document List/Cards em geral**:\n- ID visível para facilitar referência via MCP\n\nArquivos:\n- resources/views/pages/⚡document-view.blade.php\n- resources/views/pages/⚡document-edit.blade.php\n- resources/views/pages/⚡project-detail.blade.php"
             ],
             "priority": 3,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 9,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         },
         {

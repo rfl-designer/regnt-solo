@@ -4,7 +4,8 @@
 - **Checkbox com descrição**: `<flux:checkbox wire:model="prop" label="Label" description="Descrição" />` — Flux suporta `description` diretamente
 - **Document edit save pattern**: Dados salvos via array `$data` no método `save()` — adicionar campos novos ao array
 - **Document edit mount pattern**: Propriedades carregadas no `mount()` do SFC a partir do model
-- **Project-detail docs tab**: 4 locais para badges de documento: desktop list, desktop preview header, mobile list, mobile preview modal header
+- **Project-detail docs tab**: 4 locais para badges/IDs de documento: desktop list, desktop preview header, mobile list, mobile preview modal header
+- **Copy-to-clipboard pattern (Alpine.js)**: `x-data="{ copied: false }" x-on:click="navigator.clipboard.writeText('...'); copied = true; setTimeout(() => copied = false, 1500)"` com `:class="copied ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'"` — usado em feature-modal, feature-card, e agora document-view/edit
 - **Testes pré-existentes falhando**: AiInsightsTest (5), AiIntegrationTest (1), AnalyticsPageTest (3), DocumentIntegrationTest (1 - task modal) — NÃO são causados pelas mudanças de documentos
 
 ---
@@ -20,4 +21,17 @@
   - O padrão de badge Contexto usa cor `violet` e ícone `cpu-chip`
   - O project-detail tem 4 locais independentes para badges de documento — fácil esquecer algum
   - Testes de documento (DocumentEditTest, DocumentTest, DocumentListTest, DocumentExportPdfTest) passam todos — 48 testes
+---
+
+## 2026-02-27 - US-9
+- Exibir ID #D-{id} na UI de documentos
+- Arquivos modificados:
+  - `resources/views/pages/⚡document-view.blade.php` — ID clicável com copy-to-clipboard no header (padrão Alpine.js igual ao feature-modal)
+  - `resources/views/pages/⚡document-edit.blade.php` — ID no header quando editando (condicional `@if ($this->isEditing)`)
+  - `resources/views/pages/⚡project-detail.blade.php` — ID discreto `text-xs font-mono text-zinc-500` em 4 locais (desktop list, desktop preview header, mobile list, mobile modal header)
+- **Learnings for future iterations:**
+  - O padrão de copy-to-clipboard Alpine.js é consistente no codebase: `x-data="{ copied: false }"` + `navigator.clipboard.writeText()` + `setTimeout` 1.5s
+  - IDs em listagens (project-detail) usam `text-xs font-mono` para serem discretos, enquanto em view/edit usam `text-sm font-mono` para serem mais visíveis
+  - No document-edit o ID usa `$documentId` (propriedade PHP do SFC), no document-view usa `$this->document->id` (computed property)
+  - 48 testes de documentos passam. Único teste falhando (DocumentIntegrationTest task modal) é pré-existente
 ---

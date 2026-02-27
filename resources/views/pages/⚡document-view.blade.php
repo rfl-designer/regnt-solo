@@ -132,6 +132,9 @@ new class extends Component
                     @if ($this->document->is_pinned)
                         <flux:badge size="sm" color="amber" icon="star">Fixado</flux:badge>
                     @endif
+                    @if ($this->document->is_context)
+                        <flux:badge size="sm" color="violet" icon="cpu-chip">Contexto</flux:badge>
+                    @endif
                 </div>
             </div>
         </div>

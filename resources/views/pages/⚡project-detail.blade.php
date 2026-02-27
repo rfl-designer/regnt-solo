@@ -1063,6 +1063,9 @@ new class extends Component
                                                 <flux:badge size="sm" :color="$document->type->color()">
                                                     {{ $document->type->label() }}
                                                 </flux:badge>
+                                                @if ($document->is_context)
+                                                    <flux:badge size="sm" color="violet" icon="cpu-chip">Contexto</flux:badge>
+                                                @endif
                                                 <span class="text-xs text-zinc-500">{{ $document->updated_at->diffForHumans() }}</span>
                                             </div>
                                         </div>
@@ -1089,6 +1092,9 @@ new class extends Component
                                                     </flux:badge>
                                                     @if ($this->selectedDocument->is_pinned)
                                                         <flux:badge size="sm" color="amber" icon="star">Fixado</flux:badge>
+                                                    @endif
+                                                    @if ($this->selectedDocument->is_context)
+                                                        <flux:badge size="sm" color="violet" icon="cpu-chip">Contexto</flux:badge>
                                                     @endif
                                                 </div>
                                             </div>
@@ -1157,6 +1163,9 @@ new class extends Component
                                         <flux:badge size="sm" :color="$document->type->color()">
                                             {{ $document->type->label() }}
                                         </flux:badge>
+                                        @if ($document->is_context)
+                                            <flux:badge size="sm" color="violet" icon="cpu-chip">Contexto</flux:badge>
+                                        @endif
                                     </div>
                                     <flux:text class="mt-1 line-clamp-2 text-xs text-zinc-500">
                                         {{ $document->excerpt(100) }}
@@ -1201,6 +1210,9 @@ new class extends Component
                                                 </flux:badge>
                                                 @if ($this->selectedDocument->is_pinned)
                                                     <flux:badge size="sm" color="amber" icon="star">Fixado</flux:badge>
+                                                @endif
+                                                @if ($this->selectedDocument->is_context)
+                                                    <flux:badge size="sm" color="violet" icon="cpu-chip">Contexto</flux:badge>
                                                 @endif
                                             </div>
                                         </div>

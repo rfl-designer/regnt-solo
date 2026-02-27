@@ -1,90 +1,62 @@
 {
-    "project": "Melhorias em Documentos — Contexto, ID e list-documents",
-    "branchName": "ralph/melhorias-em-documentos-contexto-id-e-list-documents",
-    "description": "## User Story\nComo desenvolvedor solo, quero marcar documentos como \"contexto\", ver seus IDs, e que a tool list-documents seja otimizada para retornar apenas documentos de contexto com conteúdo resumido.\n\n## Contexto\nA tool list-documents atualmente retorna o conteúdo completo de todos os documentos, o que é pesado. Além disso, nem todos os documentos são relevantes como contexto para AI — preciso poder marcar quais são.\n\n## Critérios de Aceitação\n- [ ] Novo campo booleano `is_context` na tabela documents (default false)\n- [ ] Toggle visual na UI de documentos para marcar/desmarcar como contexto\n- [ ] Badge \"Contexto\" nos documentos marcados\n- [ ] Tool list-documents retorna apenas documentos com `is_context = true`\n- [ ] Tool list-documents retorna apenas os primeiros 255 e últimos 255 caracteres do conteúdo (não o documento inteiro)\n- [ ] ID do documento visível na UI (formato \"#D-{id}\")\n- [ ] ID do documento retornado na tool list-documents e get-document\n\n## Notas Técnicas\n- Migration: adicionar coluna `is_context` boolean default false à tabela documents\n- Atualizar ListDocumentsTool para filtrar `where('is_context', true)`\n- Truncar conteúdo: `Str::limit($content, 255) . ' [...] ' . Str::substr($content, -255)`\n- Atualizar UI de documentos para mostrar ID e toggle de contexto",
+    "project": "Toggle View/Edit na Spec do Feature Modal",
+    "branchName": "ralph/toggle-viewedit-na-spec-do-feature-modal",
+    "description": "## User Story\nComo desenvolvedor solo, quero alternar entre visualização e edição da spec no modal de feature, assim como já funciona no modal de task para descrição.\n\n## Contexto\nNo modal de task, o campo de descrição alterna entre modo visualização (markdown renderizado) e modo edição (flux:editor). O modal de feature precisa do mesmo comportamento para a spec.\n\n## Critérios de Aceitação\n- [ ] Spec no feature modal tem dois modos: visualização e edição\n- [ ] Modo visualização: markdown renderizado (read-only), visual limpo\n- [ ] Modo edição: `<flux:editor>` com toolbar markdown\n- [ ] Botão de toggle (ícone pencil/eye) para alternar entre modos\n- [ ] Default: visualização se spec existe, edição se spec está vazia\n- [ ] Auto-save ao sair do modo edição (blur ou toggle)\n- [ ] Features com status Done: spec em read-only (sem toggle para edição)\n\n## Notas Técnicas\n- Componente: feature-modal (resources/views/components ou livewire)\n- Seguir mesmo padrão do task modal para consistência\n- Usar `<flux:editor>` para edição e renderização markdown para visualização",
     "maxIterations": 10,
     "userStories": [
         {
-            "id": "US-5",
-            "title": "Migration: adicionar coluna is_context à tabela documents",
-            "description": "Criar migration para adicionar campo `is_context` boolean com default false à tabela documents.\n\n- `$table->boolean('is_context')->default(false)->after('is_pinned')`\n- `$table->index('is_context')`\n- Atualizar model Document: adicionar `is_context` ao $fillable e cast `'is_context' => 'boolean'`\n- Adicionar scope `scopeContext(Builder $query)`: `$query->where('is_context', true)`\n\nArquivos:\n- Migration nova via `php artisan make:migration`\n- app/Models/Document.php ($fillable, casts, scope)",
+            "id": "US-1",
+            "title": "Adicionar property editingSpec e lógica de toggle ao feature modal",
+            "description": "Adicionar a property booleana editingSpec ao componente feature-modal para controlar o modo de exibição da spec. Nova property: public bool editingSpec = false. No método open(): setar editingSpec = empty(spec) — edição se spec vazia, visualização se tem conteúdo. Feature com status Done: forçar editingSpec = false (read-only). Padrão de referência: editingPrompt no task-modal (linhas 44, 151, 366-382). Arquivo: resources/views/components/⚡feature-modal.blade.php (seção PHP class)",
             "acceptanceCriteria": [
-                "Implementar: Criar migration para adicionar campo `is_context` boolean com default false à tabela documents.\n\n- `$table->boolean('is_context')->default(false)->after('is_pinned')`\n- `$table->index('is_context')`\n- Atualizar model Document: adicionar `is_context` ao $fillable e cast `'is_context' => 'boolean'`\n- Adicionar scope `scopeContext(Builder $query)`: `$query->where('is_context', true)`\n\nArquivos:\n- Migration nova via `php artisan make:migration`\n- app/Models/Document.php ($fillable, casts, scope)"
-            ],
-            "priority": 1,
-            "passes": true,
-            "metadata": {
-                "soloboard_task_id": 5,
-                "soloboard_status": "done"
-            }
-        },
-        {
-            "id": "US-6",
-            "title": "Atualizar ListDocumentsTool: filtrar por is_context e truncar conteúdo",
-            "description": "Modificar a MCP tool list-documents para:\n\n1. **Filtrar por contexto**: adicionar `->where('is_context', true)` ao query por padrão\n2. **Novo parâmetro opcional** `include_all` (bool, default false): quando true, retorna todos os documentos (não filtra por is_context)\n3. **Truncar conteúdo**: ao invés do excerpt de 200 chars, retornar os primeiros 255 e últimos 255 caracteres:\n   ```php\n   $content = $doc->content;\n   if (strlen($content) > 510) {\n       $preview = Str::limit($content, 255, '') . \"\\n[...]\\n\" . Str::substr($content, -255);\n   } else {\n       $preview = $content;\n   }\n   ```\n4. **Incluir ID**: adicionar `'id' => $doc->id` no mapeamento (já existe)\n5. **Incluir is_context**: adicionar `'is_context' => $doc->is_context` no mapeamento\n6. Atualizar description da tool para refletir comportamento\n\nArquivo: app/Mcp/Tools/ListDocumentsTool.php",
-            "acceptanceCriteria": [
-                "Implementar: Modificar a MCP tool list-documents para:\n\n1. **Filtrar por contexto**: adicionar `->where('is_context', true)` ao query por padrão\n2. **Novo parâmetro opcional** `include_all` (bool, default false): quando true, retorna todos os documentos (não filtra por is_context)\n3. **Truncar conteúdo**: ao invés do excerpt de 200 chars, retornar os primeiros 255 e últimos 255 caracteres:\n   ```php\n   $content = $doc->content;\n   if (strlen($content) > 510) {\n       $preview = Str::limit($content, 255, '') . \"\\n[...]\\n\" . Str::substr($content, -255);\n   } else {\n       $preview = $content;\n   }\n   ```\n4. **Incluir ID**: adicionar `'id' => $doc->id` no mapeamento (já existe)\n5. **Incluir is_context**: adicionar `'is_context' => $doc->is_context` no mapeamento\n6. Atualizar description da tool para refletir comportamento\n\nArquivo: app/Mcp/Tools/ListDocumentsTool.php"
-            ],
-            "priority": 1,
-            "passes": true,
-            "metadata": {
-                "soloboard_task_id": 6,
-                "soloboard_status": "done"
-            }
-        },
-        {
-            "id": "US-7",
-            "title": "Atualizar GetDocumentTool e demais tools com campo is_context",
-            "description": "Atualizar as MCP tools de documentos para suportar o campo is_context:\n\n**GetDocumentTool**:\n- Adicionar `'is_context' => $document->is_context` na response\n- ID já é retornado\n\n**CreateDocumentTool**:\n- Adicionar parâmetro opcional `is_context` (bool, default false)\n- Adicionar ao schema e validação\n- Incluir no create\n\n**UpdateDocumentTool**:\n- Adicionar parâmetro opcional `is_context` (bool)\n- Adicionar ao schema e validação\n- Incluir nos updates quando fornecido\n\nArquivos:\n- app/Mcp/Tools/GetDocumentTool.php\n- app/Mcp/Tools/CreateDocumentTool.php\n- app/Mcp/Tools/UpdateDocumentTool.php",
-            "acceptanceCriteria": [
-                "Implementar: Atualizar as MCP tools de documentos para suportar o campo is_context:\n\n**GetDocumentTool**:\n- Adicionar `'is_context' => $document->is_context` na response\n- ID já é retornado\n\n**CreateDocumentTool**:\n- Adicionar parâmetro opcional `is_context` (bool, default false)\n- Adicionar ao schema e validação\n- Incluir no create\n\n**UpdateDocumentTool**:\n- Adicionar parâmetro opcional `is_context` (bool)\n- Adicionar ao schema e validação\n- Incluir nos updates quando fornecido\n\nArquivos:\n- app/Mcp/Tools/GetDocumentTool.php\n- app/Mcp/Tools/CreateDocumentTool.php\n- app/Mcp/Tools/UpdateDocumentTool.php"
+                "Implementar: Adicionar a property booleana editingSpec ao componente feature-modal para controlar o modo de exibição da spec. Nova property: public bool editingSpec = false. No método open(): setar editingSpec = empty(spec) — edição se spec vazia, visualização se tem conteúdo. Feature com status Done: forçar editingSpec = false (read-only). Padrão de referência: editingPrompt no task-modal (linhas 44, 151, 366-382). Arquivo: resources/views/components/⚡feature-modal.blade.php (seção PHP class)"
             ],
             "priority": 2,
             "passes": true,
             "metadata": {
-                "soloboard_task_id": 7,
+                "soloboard_task_id": 1,
                 "soloboard_status": "done"
             }
         },
         {
-            "id": "US-8",
-            "title": "Toggle de contexto e badge na UI de documentos",
-            "description": "Adicionar toggle e indicador visual de 'Contexto' nas interfaces de documentos.\n\n**Document Edit (⚡document-edit.blade.php)**:\n- Checkbox/toggle `<flux:checkbox>` ou `<flux:switch>` para is_context\n- Label: 'Documento de Contexto'\n- Descrição: 'Disponível para AI assistants via MCP'\n- Posição: próximo ao toggle de 'Fixado' (is_pinned)\n\n**Document View (⚡document-view.blade.php)**:\n- Badge 'Contexto' (cor violet ou indigo) ao lado do tipo, quando is_context=true\n- Ícone: `cpu-chip` ou `sparkles`\n\n**Project Detail — Docs tab**:\n- Badge 'Contexto' no card do documento na listagem\n- Ícone discreto no card\n\nArquivos:\n- resources/views/pages/⚡document-edit.blade.php\n- resources/views/pages/⚡document-view.blade.php\n- resources/views/pages/⚡project-detail.blade.php (seção docs tab)",
+            "id": "US-2",
+            "title": "Implementar toggle view/edit no template da spec",
+            "description": "Substituir o flux:editor fixo da spec por um toggle entre visualização e edição, seguindo o padrão do task modal. Quando editingSpec=true e feature não é Done: mostrar flux:editor com wire:model=\"spec\". Quando editingSpec=false: renderizar markdown via Str::markdown() em prose prose-sm prose-invert. Botão toggle: ícone eye (visualizando) ou pencil (editando), variant ghost, size xs. Spec vazia sem edição: empty state com dica. Substituir linhas 248-255 do feature-modal. Arquivo: resources/views/components/⚡feature-modal.blade.php (seção template)",
             "acceptanceCriteria": [
-                "Implementar: Adicionar toggle e indicador visual de 'Contexto' nas interfaces de documentos.\n\n**Document Edit (⚡document-edit.blade.php)**:\n- Checkbox/toggle `<flux:checkbox>` ou `<flux:switch>` para is_context\n- Label: 'Documento de Contexto'\n- Descrição: 'Disponível para AI assistants via MCP'\n- Posição: próximo ao toggle de 'Fixado' (is_pinned)\n\n**Document View (⚡document-view.blade.php)**:\n- Badge 'Contexto' (cor violet ou indigo) ao lado do tipo, quando is_context=true\n- Ícone: `cpu-chip` ou `sparkles`\n\n**Project Detail — Docs tab**:\n- Badge 'Contexto' no card do documento na listagem\n- Ícone discreto no card\n\nArquivos:\n- resources/views/pages/⚡document-edit.blade.php\n- resources/views/pages/⚡document-view.blade.php\n- resources/views/pages/⚡project-detail.blade.php (seção docs tab)"
+                "Implementar: Substituir o flux:editor fixo da spec por um toggle entre visualização e edição, seguindo o padrão do task modal. Quando editingSpec=true e feature não é Done: mostrar flux:editor com wire:model=\"spec\". Quando editingSpec=false: renderizar markdown via Str::markdown() em prose prose-sm prose-invert. Botão toggle: ícone eye (visualizando) ou pencil (editando), variant ghost, size xs. Spec vazia sem edição: empty state com dica. Substituir linhas 248-255 do feature-modal. Arquivo: resources/views/components/⚡feature-modal.blade.php (seção template)"
             ],
             "priority": 2,
             "passes": true,
             "metadata": {
-                "soloboard_task_id": 8,
+                "soloboard_task_id": 2,
                 "soloboard_status": "done"
             }
         },
         {
-            "id": "US-9",
-            "title": "Exibir ID #D-{id} na UI de documentos",
-            "description": "Mostrar o ID do documento em formato `#D-{id}` nas interfaces.\n\n**Document View (⚡document-view.blade.php)**:\n- ID no header ao lado do título: `#D-{id}` em `text-sm font-mono text-zinc-500`\n- Copy-to-clipboard ao clicar (Alpine.js, mesmo padrão do feature ID)\n\n**Document Edit (⚡document-edit.blade.php)**:\n- ID no header quando editando (não ao criar)\n\n**Project Detail — Docs tab**:\n- ID discreto no card do documento: `text-xs font-mono text-zinc-500`\n\n**Document List/Cards em geral**:\n- ID visível para facilitar referência via MCP\n\nArquivos:\n- resources/views/pages/⚡document-view.blade.php\n- resources/views/pages/⚡document-edit.blade.php\n- resources/views/pages/⚡project-detail.blade.php",
+            "id": "US-3",
+            "title": "Auto-save ao sair do modo edição da spec",
+            "description": "Quando o usuário alterna de edição para visualização (clica no ícone eye), auto-salvar a spec se a feature já existe. Criar método toggleSpec() que: (1) se editingSpec=true e featureId existe, chama save(); (2) inverte editingSpec. No template: wire:click=\"toggleSpec\" ao invés de toggle direto. Seguir o padrão do task modal para consistência. Arquivo: resources/views/components/⚡feature-modal.blade.php",
             "acceptanceCriteria": [
-                "Implementar: Mostrar o ID do documento em formato `#D-{id}` nas interfaces.\n\n**Document View (⚡document-view.blade.php)**:\n- ID no header ao lado do título: `#D-{id}` em `text-sm font-mono text-zinc-500`\n- Copy-to-clipboard ao clicar (Alpine.js, mesmo padrão do feature ID)\n\n**Document Edit (⚡document-edit.blade.php)**:\n- ID no header quando editando (não ao criar)\n\n**Project Detail — Docs tab**:\n- ID discreto no card do documento: `text-xs font-mono text-zinc-500`\n\n**Document List/Cards em geral**:\n- ID visível para facilitar referência via MCP\n\nArquivos:\n- resources/views/pages/⚡document-view.blade.php\n- resources/views/pages/⚡document-edit.blade.php\n- resources/views/pages/⚡project-detail.blade.php"
+                "Implementar: Quando o usuário alterna de edição para visualização (clica no ícone eye), auto-salvar a spec se a feature já existe. Criar método toggleSpec() que: (1) se editingSpec=true e featureId existe, chama save(); (2) inverte editingSpec. No template: wire:click=\"toggleSpec\" ao invés de toggle direto. Seguir o padrão do task modal para consistência. Arquivo: resources/views/components/⚡feature-modal.blade.php"
             ],
             "priority": 3,
             "passes": true,
             "metadata": {
-                "soloboard_task_id": 9,
+                "soloboard_task_id": 3,
                 "soloboard_status": "done"
             }
         },
         {
-            "id": "US-10",
-            "title": "Testes das melhorias em documentos",
-            "description": "Testes Pest Feature para:\n\n**Migration/Model**:\n- Campo is_context existe e tem default false\n- Scope context() filtra corretamente\n- Document pode ser criado com is_context=true\n\n**MCP Tools**:\n- list-documents retorna apenas documentos com is_context=true por padrão\n- list-documents com include_all=true retorna todos\n- list-documents retorna conteúdo truncado (primeiros 255 + últimos 255)\n- list-documents retorna conteúdo completo quando <= 510 chars\n- get-document retorna is_context no response\n- create-document aceita is_context\n- update-document aceita is_context\n\n**UI**:\n- Toggle de contexto renderiza na página de edição\n- Badge 'Contexto' aparece na visualização quando is_context=true\n- ID #D-{id} renderiza na visualização\n\nArquivo: tests/Feature/DocumentContextTest.php",
+            "id": "US-4",
+            "title": "Testes do toggle view/edit na spec do feature modal",
+            "description": "Testes Pest Feature: (1) modal renderiza spec em visualização por padrão quando spec existe, (2) renderiza em edição quando spec vazia, (3) toggle alterna entre modos, (4) modo visualização renderiza markdown, (5) modo edição mostra flux:editor, (6) feature Done mostra read-only sem botão toggle, (7) auto-save ao alternar para visualização, (8) spec vazia mostra empty state. Arquivo: tests/Feature/FeatureModalSpecToggleTest.php",
             "acceptanceCriteria": [
-                "Implementar: Testes Pest Feature para:\n\n**Migration/Model**:\n- Campo is_context existe e tem default false\n- Scope context() filtra corretamente\n- Document pode ser criado com is_context=true\n\n**MCP Tools**:\n- list-documents retorna apenas documentos com is_context=true por padrão\n- list-documents com include_all=true retorna todos\n- list-documents retorna conteúdo truncado (primeiros 255 + últimos 255)\n- list-documents retorna conteúdo completo quando <= 510 chars\n- get-document retorna is_context no response\n- create-document aceita is_context\n- update-document aceita is_context\n\n**UI**:\n- Toggle de contexto renderiza na página de edição\n- Badge 'Contexto' aparece na visualização quando is_context=true\n- ID #D-{id} renderiza na visualização\n\nArquivo: tests/Feature/DocumentContextTest.php"
+                "Implementar: Testes Pest Feature: (1) modal renderiza spec em visualização por padrão quando spec existe, (2) renderiza em edição quando spec vazia, (3) toggle alterna entre modos, (4) modo visualização renderiza markdown, (5) modo edição mostra flux:editor, (6) feature Done mostra read-only sem botão toggle, (7) auto-save ao alternar para visualização, (8) spec vazia mostra empty state. Arquivo: tests/Feature/FeatureModalSpecToggleTest.php"
             ],
             "priority": 3,
             "passes": true,
             "metadata": {
-                "soloboard_task_id": 10,
+                "soloboard_task_id": 4,
                 "soloboard_status": "done"
             }
         }

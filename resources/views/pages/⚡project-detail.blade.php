@@ -1055,6 +1055,7 @@ new class extends Component
                                         <div class="min-w-0 flex-1">
                                             <div class="flex items-center gap-2">
                                                 <span class="text-sm font-medium text-zinc-200">{{ $document->title }}</span>
+                                                <span class="text-xs font-mono text-zinc-500">#D-{{ $document->id }}</span>
                                                 @if ($document->is_pinned)
                                                     <flux:icon name="star" variant="micro" class="size-3 text-amber-400" />
                                                 @endif
@@ -1085,7 +1086,10 @@ new class extends Component
                                                 <flux:icon :name="$this->selectedDocument->type->icon()" class="size-5 text-{{ $this->selectedDocument->type->color() }}-400" />
                                             </div>
                                             <div>
-                                                <flux:heading size="lg">{{ $this->selectedDocument->title }}</flux:heading>
+                                                <div class="flex items-center gap-2">
+                                                    <flux:heading size="lg">{{ $this->selectedDocument->title }}</flux:heading>
+                                                    <span class="text-xs font-mono text-zinc-500">#D-{{ $this->selectedDocument->id }}</span>
+                                                </div>
                                                 <div class="flex items-center gap-2">
                                                     <flux:badge size="sm" :color="$this->selectedDocument->type->color()">
                                                         {{ $this->selectedDocument->type->label() }}
@@ -1155,6 +1159,7 @@ new class extends Component
                                 <div class="min-w-0 flex-1">
                                     <div class="flex items-center gap-2">
                                         <span class="text-sm font-medium text-zinc-200">{{ $document->title }}</span>
+                                        <span class="text-xs font-mono text-zinc-500">#D-{{ $document->id }}</span>
                                         @if ($document->is_pinned)
                                             <flux:icon name="star" variant="micro" class="size-3 text-amber-400" />
                                         @endif
@@ -1203,7 +1208,10 @@ new class extends Component
                                             <flux:icon :name="$this->selectedDocument->type->icon()" class="size-5 text-{{ $this->selectedDocument->type->color() }}-400" />
                                         </div>
                                         <div>
-                                            <flux:heading size="lg">{{ $this->selectedDocument->title }}</flux:heading>
+                                            <div class="flex items-center gap-2">
+                                                <flux:heading size="lg">{{ $this->selectedDocument->title }}</flux:heading>
+                                                <span class="text-xs font-mono text-zinc-500">#D-{{ $this->selectedDocument->id }}</span>
+                                            </div>
                                             <div class="flex items-center gap-2">
                                                 <flux:badge size="sm" :color="$this->selectedDocument->type->color()">
                                                     {{ $this->selectedDocument->type->label() }}

@@ -117,7 +117,19 @@ new class extends Component
             </div>
 
             <div>
-                <flux:heading size="xl">{{ $this->document->title }}</flux:heading>
+                <div class="flex items-center gap-3">
+                    <flux:heading size="xl">{{ $this->document->title }}</flux:heading>
+                    <span
+                        x-data="{ copied: false }"
+                        x-on:click="navigator.clipboard.writeText('#D-{{ $this->document->id }}'); copied = true; setTimeout(() => copied = false, 1500)"
+                        class="cursor-pointer text-sm font-mono transition-colors duration-200"
+                        :class="copied ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'"
+                        title="Copiar ID"
+                    >
+                        <span x-show="!copied">#D-{{ $this->document->id }}</span>
+                        <span x-show="copied" x-cloak>Copiado!</span>
+                    </span>
+                </div>
                 <div class="mt-1 flex items-center gap-2">
                     <flux:badge size="sm" :color="$this->document->type->color()">
                         {{ $this->document->type->label() }}

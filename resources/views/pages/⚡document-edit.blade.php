@@ -135,7 +135,21 @@ new class extends Component
 
     {{-- Header --}}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <flux:heading size="xl">{{ $this->isEditing ? 'Editar Documento' : 'Novo Documento' }}</flux:heading>
+        <div class="flex items-center gap-3">
+            <flux:heading size="xl">{{ $this->isEditing ? 'Editar Documento' : 'Novo Documento' }}</flux:heading>
+            @if ($this->isEditing)
+                <span
+                    x-data="{ copied: false }"
+                    x-on:click="navigator.clipboard.writeText('#D-{{ $documentId }}'); copied = true; setTimeout(() => copied = false, 1500)"
+                    class="cursor-pointer text-sm font-mono transition-colors duration-200"
+                    :class="copied ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'"
+                    title="Copiar ID"
+                >
+                    <span x-show="!copied">#D-{{ $documentId }}</span>
+                    <span x-show="copied" x-cloak>Copiado!</span>
+                </span>
+            @endif
+        </div>
 
         <div class="flex items-center gap-2">
             @if ($this->isEditing)

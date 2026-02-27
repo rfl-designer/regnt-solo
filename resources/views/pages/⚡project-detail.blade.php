@@ -1,9 +1,11 @@
 <?php
 
+use App\Enums\FeatureStatus;
 use App\Enums\ProjectStatus;
 use App\Enums\TaskStatus;
 use App\Models\DailyPlan;
 use App\Models\Document;
+use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Task;
 use Carbon\Carbon;
@@ -11,34 +13,61 @@ use Flux\Flux;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 new class extends Component
 {
     public string $slug = '';
 
-    public string $tab = 'tasks';
+    public string $tab = 'board';
 
     public bool $showArchiveModal = false;
 
-    /** @var list<TaskStatus> */
+    #[Url(as: 'feature')]
+    public ?int $drillFeatureId = null;
+
+    /** @var list<FeatureStatus> */
     public array $kanbanStatuses = [];
 
     /** @var array<string, int> */
     public array $limits = [
+        'draft' => 10,
         'backlog' => 10,
         'todo' => 10,
         'doing' => 10,
         'done' => 10,
     ];
 
+    /** @var array<string, int> */
+    public array $drillLimits = [
+        'backlog' => 20,
+        'todo' => 20,
+        'doing' => 20,
+        'done' => 20,
+    ];
+
     public ?int $selectedDocumentId = null;
+
+    /** @var array<string, bool> */
+    public array $expanded = [];
+
+    /** @var list<TaskStatus> */
+    public array $drillTaskStatuses = [];
 
     public function mount(string $slug): void
     {
         $this->slug = $slug;
 
         $this->kanbanStatuses = [
+            FeatureStatus::Draft,
+            FeatureStatus::Backlog,
+            FeatureStatus::Todo,
+            FeatureStatus::Doing,
+            FeatureStatus::Done,
+        ];
+
+        $this->drillTaskStatuses = [
             TaskStatus::Backlog,
             TaskStatus::Todo,
             TaskStatus::Doing,
@@ -53,6 +82,21 @@ new class extends Component
             ->where('slug', $this->slug)
             ->with(['tasks.timeEntries', 'tasks.commits', 'documents'])
             ->firstOrFail();
+    }
+
+    /**
+     * Get all features for this project with eager loading.
+     *
+     * @return \Illuminate\Support\Collection<int, Feature>
+     */
+    #[Computed]
+    public function features(): \Illuminate\Support\Collection
+    {
+        return Feature::query()
+            ->forProject($this->project->id)
+            ->with(['tasks', 'timeEntries'])
+            ->ordered()
+            ->get();
     }
 
     /**
@@ -85,110 +129,44 @@ new class extends Component
     }
 
     /**
-     * @return array<string, \Illuminate\Support\Collection<int, \App\Models\Task>>
+     * Group features by their computed status.
+     *
+     * @return array<string, \Illuminate\Support\Collection<int, Feature>>
      */
     #[Computed]
-    public function tasksByStatus(): array
+    public function featuresByStatus(): array
     {
         $grouped = [];
 
-        foreach (TaskStatus::cases() as $status) {
-            $grouped[$status->value] = $this->project->tasks
-                ->where('status', $status)
-                ->sortBy([
-                    ['sort_order', 'asc'],
-                    ['created_at', 'desc'],
-                ]);
+        foreach (FeatureStatus::cases() as $status) {
+            $grouped[$status->value] = $this->features
+                ->filter(fn (Feature $f): bool => $f->status === $status)
+                ->values();
         }
 
         return $grouped;
     }
 
     /**
-     * Get tasks for a specific column with pagination.
+     * Get features for a specific column by computed status.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, Task>
+     * @return \Illuminate\Support\Collection<int, Feature>
      */
-    public function getColumnTasks(TaskStatus $status): \Illuminate\Database\Eloquent\Collection
+    public function getColumnFeatures(FeatureStatus $status): \Illuminate\Support\Collection
     {
-        $query = Task::query()
-            ->with('project', 'timeEntries')
-            ->withCount('commits')
-            ->where('project_id', $this->project->id)
-            ->where('status', $status);
-
-        if ($status === TaskStatus::Done) {
-            $query->whereBetween('completed_at', [
-                Carbon::now()->startOfWeek(),
-                Carbon::now()->endOfWeek(),
-            ]);
-        }
-
-        return $query->orderBy('sort_order')
-            ->orderBy('created_at', 'desc')
-            ->limit($this->limits[$status->value])
-            ->get();
+        return $this->features
+            ->filter(fn (Feature $f): bool => $f->status === $status)
+            ->take($this->limits[$status->value]);
     }
 
     /**
      * Get total count for a column.
      */
-    public function getColumnTotal(TaskStatus $status): int
+    public function getColumnTotal(FeatureStatus $status): int
     {
-        $query = Task::query()
-            ->where('project_id', $this->project->id)
-            ->where('status', $status);
-
-        if ($status === TaskStatus::Done) {
-            $query->whereBetween('completed_at', [
-                Carbon::now()->startOfWeek(),
-                Carbon::now()->endOfWeek(),
-            ]);
-        }
-
-        return $query->count();
-    }
-
-    /**
-     * Get total estimated minutes for a column.
-     */
-    public function getColumnEstimate(TaskStatus $status): int
-    {
-        $query = Task::query()
-            ->where('project_id', $this->project->id)
-            ->where('status', $status);
-
-        if ($status === TaskStatus::Done) {
-            $query->whereBetween('completed_at', [
-                Carbon::now()->startOfWeek(),
-                Carbon::now()->endOfWeek(),
-            ]);
-        }
-
-        return (int) $query->sum('estimated_minutes');
-    }
-
-    /**
-     * Format minutes as human-readable duration (e.g., "2h 30m" or "45m").
-     */
-    public function formatDuration(int $minutes): string
-    {
-        if ($minutes === 0) {
-            return '';
-        }
-
-        $hours = intdiv($minutes, 60);
-        $mins = $minutes % 60;
-
-        if ($hours > 0 && $mins > 0) {
-            return "{$hours}h {$mins}m";
-        }
-
-        if ($hours > 0) {
-            return "{$hours}h";
-        }
-
-        return "{$mins}m";
+        return $this->features
+            ->filter(fn (Feature $f): bool => $f->status === $status)
+            ->count();
     }
 
     public function loadMore(string $status): void
@@ -196,53 +174,35 @@ new class extends Component
         $this->limits[$status] += 10;
     }
 
-    public function handleSort(int|string $id, int $position, string $groupId): void
+    public function toggleExpanded(int $featureId): void
     {
-        $task = Task::findOrFail((int) $id);
-        $newStatus = TaskStatus::from($groupId);
-
-        DB::transaction(function () use ($task, $newStatus, $position): void {
-            if ($newStatus === TaskStatus::Done && $task->status !== TaskStatus::Done) {
-                $dailyPlan = DailyPlan::getOrCreateForDate(Carbon::today());
-
-                if (! $dailyPlan->tasks()->where('task_id', $task->id)->exists()) {
-                    $maxOrder = $dailyPlan->tasks()->max('daily_plan_task.sort_order') ?? -1;
-                    $dailyPlan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
-                }
-
-                $task->markAsDone();
-
-                Flux::toast(variant: 'success', heading: 'Task concluída', text: $task->title);
-            } else {
-                $task->update([
-                    'status' => $newStatus,
-                    'sort_order' => $position,
-                ]);
-            }
-
-            $this->recalculateSortOrder($newStatus);
-        });
+        $key = (string) $featureId;
+        $this->expanded[$key] = ! ($this->expanded[$key] ?? false);
     }
 
-    private function recalculateSortOrder(TaskStatus $status): void
+    public function isExpanded(int $featureId): bool
     {
-        $query = Task::query()
-            ->where('project_id', $this->project->id)
-            ->where('status', $status);
+        return $this->expanded[(string) $featureId] ?? false;
+    }
 
-        if ($status === TaskStatus::Done) {
-            $query->whereBetween('completed_at', [
-                Carbon::now()->startOfWeek(),
-                Carbon::now()->endOfWeek(),
-            ]);
-        }
+    public function startTimer(int $featureId): void
+    {
+        $feature = Feature::findOrFail($featureId);
+        $feature->startTimer();
 
-        $tasks = $query->orderBy('sort_order')->orderBy('created_at', 'desc')->get();
+        Flux::toast(variant: 'success', heading: 'Timer iniciado', text: $feature->title);
+        $this->dispatch('timer-updated');
 
-        foreach ($tasks as $index => $task) {
-            if ($task->sort_order !== $index) {
-                $task->update(['sort_order' => $index]);
-            }
+        unset($this->features);
+    }
+
+    public function stopTimer(int $featureId): void
+    {
+        $feature = Feature::findOrFail($featureId);
+        $runningEntry = $feature->runningEntry();
+
+        if ($runningEntry) {
+            $this->dispatch('open-timer-notes', entryId: $runningEntry->id);
         }
     }
 
@@ -270,6 +230,16 @@ new class extends Component
         $totalCommits = $tasks->sum(fn ($task) => $task->commits->count());
         $totalFilesChanged = $tasks->sum(fn ($task) => $task->commits->sum('files_changed'));
 
+        $featureCount = $this->features->count();
+        $doneFeatures = $this->features->filter(fn (Feature $f): bool => $f->status === FeatureStatus::Done)->count();
+
+        $featuresByStatus = [];
+        foreach (FeatureStatus::cases() as $featureStatus) {
+            $featuresByStatus[$featureStatus->value] = $this->features
+                ->filter(fn (Feature $f): bool => $f->status === $featureStatus)
+                ->count();
+        }
+
         return [
             'total' => $total,
             'by_status' => $byStatus,
@@ -277,6 +247,10 @@ new class extends Component
             'completion_percent' => $total > 0 ? round(($doneCount / $total) * 100, 1) : 0,
             'total_commits' => $totalCommits,
             'total_files_changed' => $totalFilesChanged,
+            'feature_count' => $featureCount,
+            'done_features' => $doneFeatures,
+            'feature_completion_percent' => $featureCount > 0 ? round(($doneFeatures / $featureCount) * 100, 1) : 0,
+            'features_by_status' => $featuresByStatus,
         ];
     }
 
@@ -287,7 +261,7 @@ new class extends Component
 
         $this->showArchiveModal = false;
 
-        unset($this->project, $this->tasksByStatus, $this->metrics);
+        unset($this->project, $this->features, $this->metrics);
 
         $this->dispatch('project-updated');
 
@@ -299,20 +273,152 @@ new class extends Component
         $project = $this->project;
         $project->update(['status' => ProjectStatus::Active]);
 
-        unset($this->project, $this->tasksByStatus, $this->metrics);
+        unset($this->project, $this->features, $this->metrics);
 
         $this->dispatch('project-updated');
 
         Flux::toast(variant: 'success', heading: 'Projeto reativado', text: $project->name);
     }
 
+    #[Computed]
+    public function drillFeature(): ?Feature
+    {
+        if (! $this->drillFeatureId) {
+            return null;
+        }
+
+        return Feature::with(['tasks.project', 'tasks.timeEntries', 'project'])->find($this->drillFeatureId);
+    }
+
+    public function enterDrill(int $featureId): void
+    {
+        $this->drillFeatureId = $featureId;
+        $this->drillLimits = [
+            'backlog' => 20,
+            'todo' => 20,
+            'doing' => 20,
+            'done' => 20,
+        ];
+
+        unset($this->drillFeature);
+    }
+
+    public function exitDrill(): void
+    {
+        $this->drillFeatureId = null;
+
+        unset($this->drillFeature);
+    }
+
+    /**
+     * Get tasks for a drill-down column.
+     *
+     * @return \Illuminate\Support\Collection<int, Task>
+     */
+    public function getDrillColumnTasks(TaskStatus $status): \Illuminate\Support\Collection
+    {
+        $feature = $this->drillFeature;
+
+        if (! $feature) {
+            return collect();
+        }
+
+        $tasks = $feature->tasks
+            ->filter(fn (Task $t): bool => $t->status === $status);
+
+        if ($status === TaskStatus::Done) {
+            $tasks = $tasks->filter(fn (Task $t): bool => $t->completed_at?->between(
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ));
+        }
+
+        return $tasks
+            ->sortBy('sort_order')
+            ->take($this->drillLimits[$status->value])
+            ->values();
+    }
+
+    /**
+     * Get total task count for a drill-down column.
+     */
+    public function getDrillColumnTotal(TaskStatus $status): int
+    {
+        $feature = $this->drillFeature;
+
+        if (! $feature) {
+            return 0;
+        }
+
+        $tasks = $feature->tasks
+            ->filter(fn (Task $t): bool => $t->status === $status);
+
+        if ($status === TaskStatus::Done) {
+            $tasks = $tasks->filter(fn (Task $t): bool => $t->completed_at?->between(
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ));
+        }
+
+        return $tasks->count();
+    }
+
+    public function loadMoreDrill(string $status): void
+    {
+        $this->drillLimits[$status] += 20;
+    }
+
+    public function handleTaskSort(int|string $id, int $position, string $groupId): void
+    {
+        $task = Task::findOrFail((int) $id);
+        $newStatus = TaskStatus::from($groupId);
+
+        if (! $this->drillFeatureId || $task->feature_id !== $this->drillFeatureId) {
+            return;
+        }
+
+        DB::transaction(function () use ($task, $newStatus, $position): void {
+            if ($newStatus === TaskStatus::Done && $task->status !== TaskStatus::Done) {
+                $dailyPlan = DailyPlan::getOrCreateForDate(Carbon::today());
+
+                if (! $dailyPlan->tasks()->where('task_id', $task->id)->exists()) {
+                    $maxOrder = $dailyPlan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+                    $dailyPlan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
+                }
+
+                $task->markAsDone();
+
+                Flux::toast(variant: 'success', heading: 'Task concluída', text: $task->title);
+            } else {
+                if ($task->status === TaskStatus::Done && $newStatus !== TaskStatus::Done) {
+                    $task->update([
+                        'status' => $newStatus,
+                        'sort_order' => $position,
+                        'completed_at' => null,
+                    ]);
+                } else {
+                    $task->update([
+                        'status' => $newStatus,
+                        'sort_order' => $position,
+                    ]);
+                }
+            }
+        });
+
+        unset($this->drillFeature);
+        $this->dispatch('task-updated');
+    }
+
+    #[On('feature-created')]
+    #[On('feature-updated')]
     #[On('task-created')]
     #[On('task-updated')]
+    #[On('timer-updated')]
     #[On('project-updated')]
     #[On('document-saved')]
     public function refreshProject(): void
     {
-        unset($this->project, $this->tasksByStatus, $this->metrics, $this->projectDocuments, $this->selectedDocument);
+        unset($this->project, $this->features, $this->featuresByStatus, $this->metrics, $this->projectDocuments, $this->selectedDocument, $this->drillFeature);
     }
 }
 
@@ -409,47 +515,259 @@ new class extends Component
     {{-- Tabs --}}
     <flux:tab.group>
         <flux:tabs wire:model="tab">
-            <flux:tab name="tasks" icon="clipboard-document-list">Tasks</flux:tab>
+            <flux:tab name="board" icon="view-columns">Board</flux:tab>
+            <flux:tab name="features" icon="rectangle-stack">Features</flux:tab>
             <flux:tab name="docs" icon="document-text">Docs</flux:tab>
             <flux:tab name="metrics" icon="chart-bar-square">Métricas</flux:tab>
         </flux:tabs>
 
-        {{-- Tab Panel: Tasks (Kanban) --}}
-        <flux:tab.panel name="tasks">
+        {{-- Tab Panel: Board (Feature Kanban) --}}
+        <flux:tab.panel name="board">
             <div class="flex flex-col gap-4">
-                {{-- Header with New Task button and Color Legend --}}
+                @if ($drillFeatureId && $this->drillFeature)
+                {{-- Drill-down Header --}}
+                @php
+                    $df = $this->drillFeature;
+                    $dfTasksCount = $df->tasksCount();
+                    $dfCompletedCount = $df->completedTasksCount();
+                @endphp
+                <div
+                    x-transition:enter="transition ease-out duration-200"
+                    x-transition:enter-start="opacity-0 -translate-y-2"
+                    x-transition:enter-end="opacity-100 translate-y-0"
+                    class="rounded-xl border border-zinc-700 bg-zinc-800/80 p-4"
+                >
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="flex items-center gap-3">
+                            <flux:button
+                                wire:click="exitDrill"
+                                variant="ghost"
+                                size="sm"
+                                icon="arrow-left"
+                            >
+                                Voltar para features
+                            </flux:button>
+
+                            <flux:separator vertical class="mx-1 h-6" />
+
+                            <div class="flex items-center gap-2">
+                                @if ($df->project)
+                                    <span class="text-sm">{{ $df->project->emoji }}</span>
+                                @endif
+                                <flux:heading size="lg">{{ $df->title }}</flux:heading>
+                            </div>
+
+                            <flux:badge size="sm" color="{{ $df->status->color() }}">
+                                {{ $df->status->label() }}
+                            </flux:badge>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <div class="h-1.5 w-24 overflow-hidden rounded-full bg-zinc-700">
+                                <div
+                                    class="h-full rounded-full bg-{{ $df->status->color() }}-500 transition-all duration-300"
+                                    style="width: {{ $df->progress }}%"
+                                ></div>
+                            </div>
+                            <span class="text-xs text-zinc-400">{{ $dfCompletedCount }}/{{ $dfTasksCount }} concluídas</span>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Drill-down: Task Kanban --}}
+                <div
+                    x-data="{
+                        drillDoneCollapsed: localStorage.getItem('project-drill-done-collapsed') === 'true',
+                        toggleDrillDoneColumn() {
+                            this.drillDoneCollapsed = !this.drillDoneCollapsed;
+                            localStorage.setItem('project-drill-done-collapsed', this.drillDoneCollapsed);
+                        }
+                    }"
+                    class="-mx-4 flex flex-1 gap-3 overflow-x-auto px-4 pb-4 sm:mx-0 sm:gap-4 sm:px-0"
+                >
+                    @foreach ($drillTaskStatuses as $status)
+                        @php
+                            $tasks = $this->getDrillColumnTasks($status);
+                            $total = $this->getDrillColumnTotal($status);
+                            $limit = $drillLimits[$status->value];
+                            $hasMore = $total > $limit;
+                            $isDone = $status === TaskStatus::Done;
+                        @endphp
+
+                        <div
+                            @if ($isDone)
+                                x-bind:class="drillDoneCollapsed ? 'w-14' : 'w-72 sm:w-80'"
+                            @endif
+                            class="{{ $isDone ? '' : 'w-72 sm:w-80' }} flex shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50 transition-all duration-300 ease-in-out"
+                        >
+                            {{-- Column Header --}}
+                            @if ($isDone)
+                                <div
+                                    @click="toggleDrillDoneColumn()"
+                                    x-bind:class="drillDoneCollapsed ? 'flex-col items-center py-4 cursor-pointer hover:bg-zinc-800/50' : 'flex-row items-center justify-between'"
+                                    class="flex border-b border-zinc-700 px-4 py-3 transition-all duration-200"
+                                >
+                                    <template x-if="!drillDoneCollapsed">
+                                        <div class="flex w-full items-center justify-between">
+                                            <div class="flex items-center gap-2">
+                                                <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
+                                                <flux:heading size="sm">{{ $status->label() }}</flux:heading>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                                                <button
+                                                    type="button"
+                                                    @click.stop="toggleDrillDoneColumn()"
+                                                    class="rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
+                                                    title="Colapsar coluna"
+                                                >
+                                                    <flux:icon name="chevron-left" class="size-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <template x-if="drillDoneCollapsed">
+                                        <div class="flex flex-col items-center gap-2">
+                                            <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
+                                            <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                                            <flux:icon name="chevron-right" class="size-4 text-zinc-500" />
+                                        </div>
+                                    </template>
+                                </div>
+                            @else
+                                <div class="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
+                                    <div class="flex items-center gap-2">
+                                        <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
+                                        <flux:heading size="sm">{{ $status->label() }}</flux:heading>
+                                    </div>
+                                    <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                                </div>
+                            @endif
+
+                            {{-- Tasks List --}}
+                            <div
+                                @if ($isDone) x-show="!drillDoneCollapsed" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif
+                                class="flex-1 overflow-y-auto p-2"
+                            >
+                                <ul
+                                    wire:sort="handleTaskSort"
+                                    wire:sort:group="drill-tasks"
+                                    wire:sort:group-id="{{ $status->value }}"
+                                    class="kanban-dropzone flex min-h-[2rem] flex-col gap-2 rounded-lg transition-colors duration-200"
+                                >
+                                    @forelse ($tasks as $task)
+                                        <li wire:key="drill-task-{{ $task->id }}" wire:sort:item="{{ $task->id }}" class="kanban-card">
+                                            <div
+                                                class="group cursor-pointer rounded-lg border border-zinc-700 bg-zinc-800 p-3 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
+                                                wire:click="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
+                                            >
+                                                {{-- Card Top: Handle + Title --}}
+                                                <div class="flex items-start gap-2">
+                                                    <div wire:sort:handle class="mt-0.5 shrink-0 cursor-grab text-zinc-600 transition-colors hover:text-zinc-300 active:cursor-grabbing">
+                                                        <flux:icon name="grip-vertical" class="size-4" />
+                                                    </div>
+                                                    <span class="line-clamp-2 flex-1 text-sm font-medium text-zinc-200">{{ $task->title }}</span>
+                                                </div>
+
+                                                {{-- Badges Row --}}
+                                                <div class="mt-2 flex flex-wrap items-center gap-1.5" wire:sort:ignore>
+                                                    @if ($task->priority)
+                                                        <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
+                                                            {{ $task->priority->label() }}
+                                                        </flux:badge>
+                                                    @endif
+
+                                                    @if ($task->estimated_minutes)
+                                                        <flux:badge size="sm" color="zinc" icon="clock">
+                                                            {{ $task->estimated_minutes }}m
+                                                        </flux:badge>
+                                                    @endif
+
+                                                    @if ($task->isOverdue())
+                                                        <flux:badge size="sm" color="red" icon="exclamation-triangle">
+                                                            {{ $task->due_date->diffForHumans() }}
+                                                        </flux:badge>
+                                                    @endif
+
+                                                    @if ($task->isRunning())
+                                                        <flux:badge size="sm" color="emerald" class="animate-pulse">
+                                                            <div class="mr-1 size-2 rounded-full bg-emerald-400"></div>
+                                                            Timer
+                                                        </flux:badge>
+                                                    @endif
+
+                                                    @if ($task->isSessionTask())
+                                                        <flux:badge size="sm" color="violet" class="gap-1">
+                                                            🤖 Sessão
+                                                        </flux:badge>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </li>
+                                    @empty
+                                        <li class="py-8 text-center text-sm text-zinc-600">
+                                            Nenhuma task
+                                        </li>
+                                    @endforelse
+                                </ul>
+
+                                {{-- Load More Button --}}
+                                @if ($hasMore)
+                                    <div class="mt-2 px-1">
+                                        <flux:button
+                                            wire:click="loadMoreDrill('{{ $status->value }}')"
+                                            wire:loading.attr="disabled"
+                                            wire:target="loadMoreDrill('{{ $status->value }}')"
+                                            variant="ghost"
+                                            size="sm"
+                                            class="w-full"
+                                        >
+                                            <span wire:loading.remove wire:target="loadMoreDrill('{{ $status->value }}')">
+                                                Carregar mais ({{ $total - $limit }} restantes)
+                                            </span>
+                                            <span wire:loading wire:target="loadMoreDrill('{{ $status->value }}')">
+                                                Carregando...
+                                            </span>
+                                        </flux:button>
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+
+                @else
+                {{-- Normal: Feature Kanban Board --}}
                 <div class="flex items-center justify-between">
-                    <x-color-legend />
+                    <flux:badge size="sm" color="zinc">{{ $this->features->count() }} features</flux:badge>
                     <flux:button
                         size="sm"
                         variant="primary"
                         icon="plus"
-                        wire:click="$dispatch('open-task-quick-add')"
+                        wire:click="$dispatch('open-feature-modal')"
                     >
-                        Nova Task
+                        Nova Feature
                     </flux:button>
                 </div>
 
-                {{-- Kanban Board --}}
                 <div
                     x-data="{
-                        doneCollapsed: localStorage.getItem('project-kanban-done-collapsed') === 'true',
+                        doneCollapsed: localStorage.getItem('project-feature-done-collapsed') === 'true',
                         toggleDoneColumn() {
                             this.doneCollapsed = !this.doneCollapsed;
-                            localStorage.setItem('project-kanban-done-collapsed', this.doneCollapsed);
+                            localStorage.setItem('project-feature-done-collapsed', this.doneCollapsed);
                         }
                     }"
                     class="-mx-4 flex flex-1 gap-3 overflow-x-auto px-4 pb-4 sm:mx-0 sm:gap-4 sm:px-0"
                 >
                     @foreach ($kanbanStatuses as $status)
                         @php
-                            $tasks = $this->getColumnTasks($status);
+                            $features = $this->getColumnFeatures($status);
                             $total = $this->getColumnTotal($status);
-                            $estimate = $this->getColumnEstimate($status);
-                            $estimateFormatted = $this->formatDuration($estimate);
                             $limit = $limits[$status->value];
                             $hasMore = $total > $limit;
-                            $isDone = $status === \App\Enums\TaskStatus::Done;
+                            $isDone = $status === FeatureStatus::Done;
                         @endphp
 
                         <div
@@ -474,18 +792,7 @@ new class extends Component
                                                 <flux:heading size="sm">{{ $status->label() }}</flux:heading>
                                             </div>
                                             <div class="flex items-center gap-2">
-                                                @if ($estimateFormatted)
-                                                    <flux:badge size="sm" color="zinc" icon="clock">{{ $estimateFormatted }}</flux:badge>
-                                                @endif
                                                 <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
-                                                <button
-                                                    type="button"
-                                                    @click.stop="$wire.$dispatch('open-quick-add-with-status', { status: '{{ $status->value }}' })"
-                                                    class="rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
-                                                    title="Nova task em {{ $status->label() }}"
-                                                >
-                                                    <flux:icon name="plus" class="size-4" />
-                                                </button>
                                                 <button
                                                     type="button"
                                                     @click.stop="toggleDoneColumn()"
@@ -515,104 +822,39 @@ new class extends Component
                                         <flux:heading size="sm">{{ $status->label() }}</flux:heading>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        @if ($estimateFormatted)
-                                            <flux:badge size="sm" color="zinc" icon="clock">{{ $estimateFormatted }}</flux:badge>
-                                        @endif
                                         <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
                                         <flux:button
-                                            wire:click="$dispatch('open-quick-add-with-status', { status: '{{ $status->value }}' })"
+                                            wire:click="$dispatch('open-feature-modal')"
                                             variant="ghost"
                                             size="sm"
                                             icon="plus"
                                             class="ml-1 !p-1"
-                                            title="Nova task em {{ $status->label() }}"
+                                            title="Nova feature"
                                         />
                                     </div>
                                 </div>
                             @endif
 
-                            {{-- Tasks List --}}
+                            {{-- Features List --}}
                             <div
                                 @if ($isDone) x-show="!doneCollapsed" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif
-                                class="flex-1 overflow-y-auto p-2"
+                                class="flex-1 space-y-3 overflow-y-auto p-3"
                             >
-                                <ul
-                                    wire:sort="handleSort"
-                                    wire:sort:group="project-tasks"
-                                    wire:sort:group-id="{{ $status->value }}"
-                                    class="kanban-dropzone flex min-h-[2rem] flex-col gap-2 rounded-lg transition-colors duration-200"
-                                >
-                                    @forelse ($tasks as $task)
-                                        <li wire:key="task-{{ $task->id }}" wire:sort:item="{{ $task->id }}" class="kanban-card">
-                                            <div
-                                                class="group cursor-pointer rounded-lg border border-zinc-700 bg-zinc-800 p-3 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
-                                                wire:click="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
-                                            >
-                                                {{-- Card Top: Handle + Title --}}
-                                                <div class="flex items-start gap-2">
-                                                    <div wire:sort:handle class="mt-0.5 shrink-0 cursor-grab text-zinc-600 transition-colors hover:text-zinc-300 active:cursor-grabbing">
-                                                        <flux:icon name="grip-vertical" class="size-4" />
-                                                    </div>
-                                                    <span class="line-clamp-2 flex-1 text-sm font-medium text-zinc-200">{{ $task->title }}</span>
-                                                </div>
-
-                                                {{-- Badges Row --}}
-                                                <div class="mt-2 flex flex-wrap items-center gap-1.5" wire:sort:ignore>
-                                                    {{-- Priority Badge --}}
-                                                    @if ($task->priority)
-                                                        <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
-                                                            {{ $task->priority->label() }}
-                                                        </flux:badge>
-                                                    @endif
-
-                                                    {{-- Estimate Badge --}}
-                                                    @if ($task->estimated_minutes)
-                                                        <flux:badge size="sm" color="zinc" icon="clock">
-                                                            {{ $task->estimated_minutes }}m
-                                                        </flux:badge>
-                                                    @endif
-
-                                                    {{-- Overdue Badge --}}
-                                                    @if ($task->isOverdue())
-                                                        <flux:badge size="sm" color="red" icon="exclamation-triangle">
-                                                            {{ $task->due_date->diffForHumans() }}
-                                                        </flux:badge>
-                                                    @endif
-
-                                                    {{-- Running Timer --}}
-                                                    @if ($task->isRunning())
-                                                        <flux:badge size="sm" color="emerald" class="animate-pulse">
-                                                            <div class="mr-1 size-2 rounded-full bg-emerald-400"></div>
-                                                            Timer
-                                                        </flux:badge>
-                                                    @endif
-
-                                                    {{-- Commits Badge --}}
-                                                    @if ($task->commits_count > 0)
-                                                        <flux:badge size="sm" color="zinc" icon="code-bracket">
-                                                            {{ $task->commits_count }} {{ $task->commits_count === 1 ? 'commit' : 'commits' }}
-                                                        </flux:badge>
-                                                    @endif
-
-                                                    {{-- Session Badge --}}
-                                                    @if ($task->isSessionTask())
-                                                        <flux:badge size="sm" color="violet" class="gap-1">
-                                                            🤖 Sessão
-                                                        </flux:badge>
-                                                    @endif
-                                                </div>
-                                            </div>
-                                        </li>
-                                    @empty
-                                        <li class="py-8 text-center text-sm text-zinc-600">
-                                            Nenhuma task
-                                        </li>
-                                    @endforelse
-                                </ul>
+                                @forelse ($features as $feature)
+                                    <x-feature-card
+                                        :feature="$feature"
+                                        :expanded="$this->isExpanded($feature->id)"
+                                        :show-project="false"
+                                    />
+                                @empty
+                                    <div class="py-8 text-center text-sm text-zinc-600">
+                                        Nenhuma feature
+                                    </div>
+                                @endforelse
 
                                 {{-- Load More Button --}}
                                 @if ($hasMore)
-                                    <div class="mt-2 px-1">
+                                    <div class="mt-2">
                                         <flux:button
                                             wire:click="loadMore('{{ $status->value }}')"
                                             wire:loading.attr="disabled"
@@ -634,7 +876,144 @@ new class extends Component
                         </div>
                     @endforeach
                 </div>
+                @endif
             </div>
+        </flux:tab.panel>
+
+        {{-- Tab Panel: Features (Specs) --}}
+        <flux:tab.panel name="features">
+            @if ($tab === 'features')
+                <div class="flex flex-col gap-4">
+                    {{-- Header --}}
+                    <div class="flex items-center justify-between">
+                        <flux:badge size="sm" color="zinc">{{ $this->features->count() }} features</flux:badge>
+                        <flux:button
+                            size="sm"
+                            variant="primary"
+                            icon="plus"
+                            wire:click="$dispatch('open-feature-modal')"
+                        >
+                            Nova Feature
+                        </flux:button>
+                    </div>
+
+                    @if ($this->features->isEmpty())
+                        {{-- Empty State --}}
+                        <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 py-16">
+                            <flux:icon name="rectangle-stack" class="mb-3 size-12 text-zinc-600" />
+                            <flux:heading size="sm" class="text-zinc-400">Nenhuma feature neste projeto</flux:heading>
+                            <flux:text class="mt-1 text-sm text-zinc-500">Crie uma feature para começar a planejar.</flux:text>
+                            <flux:button
+                                size="sm"
+                                variant="primary"
+                                icon="plus"
+                                class="mt-4"
+                                wire:click="$dispatch('open-feature-modal')"
+                            >
+                                Nova Feature
+                            </flux:button>
+                        </div>
+                    @else
+                        {{-- Feature Spec Cards --}}
+                        <div class="space-y-6">
+                            @foreach ($this->features as $feature)
+                                @php
+                                    $tasksCount = $feature->tasksCount();
+                                    $completedCount = $feature->completedTasksCount();
+                                @endphp
+
+                                <div
+                                    wire:key="feature-spec-{{ $feature->id }}"
+                                    class="rounded-xl border border-zinc-700 bg-zinc-900/50"
+                                >
+                                    {{-- Feature Header --}}
+                                    <div class="flex items-start justify-between border-b border-zinc-700 p-4">
+                                        <div class="min-w-0 flex-1">
+                                            {{-- Title (clickable) --}}
+                                            <button
+                                                type="button"
+                                                wire:click="$dispatch('open-feature-modal', { featureId: {{ $feature->id }} })"
+                                                class="text-left text-lg font-semibold text-zinc-100 transition hover:text-white"
+                                            >
+                                                {{ $feature->title }}
+                                            </button>
+
+                                            {{-- Badges --}}
+                                            <div class="mt-2 flex flex-wrap items-center gap-2">
+                                                {{-- Status Badge --}}
+                                                <flux:badge size="sm" color="{{ $feature->status->color() }}" icon="{{ $feature->status->icon() }}">
+                                                    {{ $feature->status->label() }}
+                                                </flux:badge>
+
+                                                {{-- Progress --}}
+                                                @if ($tasksCount > 0)
+                                                    <flux:badge size="sm" color="zinc">
+                                                        {{ $completedCount }}/{{ $tasksCount }} tasks
+                                                    </flux:badge>
+                                                @endif
+
+                                                {{-- Priority --}}
+                                                @if ($feature->priority)
+                                                    <flux:badge size="sm" color="{{ $feature->priority->color() }}" icon="{{ $feature->priority->icon() }}">
+                                                        {{ $feature->priority->label() }}
+                                                    </flux:badge>
+                                                @endif
+
+                                                {{-- Due Date --}}
+                                                @if ($feature->due_date)
+                                                    @php
+                                                        $isOverdue = $feature->due_date->isPast();
+                                                    @endphp
+                                                    <flux:badge size="sm" color="{{ $isOverdue ? 'red' : 'zinc' }}" icon="{{ $isOverdue ? 'exclamation-triangle' : 'calendar' }}">
+                                                        {{ $feature->due_date->format('d/m/Y') }}
+                                                    </flux:badge>
+                                                @endif
+                                            </div>
+
+                                            {{-- Progress Bar --}}
+                                            @if ($tasksCount > 0)
+                                                <div class="mt-3 max-w-md">
+                                                    <div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-700">
+                                                        <div
+                                                            class="h-full rounded-full bg-{{ $feature->status->color() }}-500 transition-all duration-300"
+                                                            style="width: {{ $feature->progress }}%"
+                                                        ></div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        </div>
+
+                                        {{-- Edit Button --}}
+                                        <flux:button
+                                            size="sm"
+                                            variant="ghost"
+                                            icon="pencil-square"
+                                            wire:click="$dispatch('open-feature-modal', { featureId: {{ $feature->id }} })"
+                                            title="Editar feature"
+                                            class="shrink-0"
+                                        />
+                                    </div>
+
+                                    {{-- Spec Content --}}
+                                    @if ($feature->spec)
+                                        <div class="p-4">
+                                            <livewire:markdown-viewer
+                                                :content="$feature->spec"
+                                                :show-copy-buttons="false"
+                                                :key="'feature-spec-'.$feature->id"
+                                            />
+                                        </div>
+                                    @else
+                                        <div class="p-4 text-center text-sm text-zinc-500">
+                                            Nenhuma spec definida para esta feature.
+                                        </div>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            @endif
         </flux:tab.panel>
 
         {{-- Tab Panel: Docs --}}
@@ -676,6 +1055,7 @@ new class extends Component
                                         <div class="min-w-0 flex-1">
                                             <div class="flex items-center gap-2">
                                                 <span class="text-sm font-medium text-zinc-200">{{ $document->title }}</span>
+                                                <span class="text-xs font-mono text-zinc-500">#D-{{ $document->id }}</span>
                                                 @if ($document->is_pinned)
                                                     <flux:icon name="star" variant="micro" class="size-3 text-amber-400" />
                                                 @endif
@@ -684,6 +1064,9 @@ new class extends Component
                                                 <flux:badge size="sm" :color="$document->type->color()">
                                                     {{ $document->type->label() }}
                                                 </flux:badge>
+                                                @if ($document->is_context)
+                                                    <flux:badge size="sm" color="violet" icon="cpu-chip">Contexto</flux:badge>
+                                                @endif
                                                 <span class="text-xs text-zinc-500">{{ $document->updated_at->diffForHumans() }}</span>
                                             </div>
                                         </div>
@@ -703,13 +1086,19 @@ new class extends Component
                                                 <flux:icon :name="$this->selectedDocument->type->icon()" class="size-5 text-{{ $this->selectedDocument->type->color() }}-400" />
                                             </div>
                                             <div>
-                                                <flux:heading size="lg">{{ $this->selectedDocument->title }}</flux:heading>
+                                                <div class="flex items-center gap-2">
+                                                    <flux:heading size="lg">{{ $this->selectedDocument->title }}</flux:heading>
+                                                    <span class="text-xs font-mono text-zinc-500">#D-{{ $this->selectedDocument->id }}</span>
+                                                </div>
                                                 <div class="flex items-center gap-2">
                                                     <flux:badge size="sm" :color="$this->selectedDocument->type->color()">
                                                         {{ $this->selectedDocument->type->label() }}
                                                     </flux:badge>
                                                     @if ($this->selectedDocument->is_pinned)
                                                         <flux:badge size="sm" color="amber" icon="star">Fixado</flux:badge>
+                                                    @endif
+                                                    @if ($this->selectedDocument->is_context)
+                                                        <flux:badge size="sm" color="violet" icon="cpu-chip">Contexto</flux:badge>
                                                     @endif
                                                 </div>
                                             </div>
@@ -770,6 +1159,7 @@ new class extends Component
                                 <div class="min-w-0 flex-1">
                                     <div class="flex items-center gap-2">
                                         <span class="text-sm font-medium text-zinc-200">{{ $document->title }}</span>
+                                        <span class="text-xs font-mono text-zinc-500">#D-{{ $document->id }}</span>
                                         @if ($document->is_pinned)
                                             <flux:icon name="star" variant="micro" class="size-3 text-amber-400" />
                                         @endif
@@ -778,6 +1168,9 @@ new class extends Component
                                         <flux:badge size="sm" :color="$document->type->color()">
                                             {{ $document->type->label() }}
                                         </flux:badge>
+                                        @if ($document->is_context)
+                                            <flux:badge size="sm" color="violet" icon="cpu-chip">Contexto</flux:badge>
+                                        @endif
                                     </div>
                                     <flux:text class="mt-1 line-clamp-2 text-xs text-zinc-500">
                                         {{ $document->excerpt(100) }}
@@ -815,13 +1208,19 @@ new class extends Component
                                             <flux:icon :name="$this->selectedDocument->type->icon()" class="size-5 text-{{ $this->selectedDocument->type->color() }}-400" />
                                         </div>
                                         <div>
-                                            <flux:heading size="lg">{{ $this->selectedDocument->title }}</flux:heading>
+                                            <div class="flex items-center gap-2">
+                                                <flux:heading size="lg">{{ $this->selectedDocument->title }}</flux:heading>
+                                                <span class="text-xs font-mono text-zinc-500">#D-{{ $this->selectedDocument->id }}</span>
+                                            </div>
                                             <div class="flex items-center gap-2">
                                                 <flux:badge size="sm" :color="$this->selectedDocument->type->color()">
                                                     {{ $this->selectedDocument->type->label() }}
                                                 </flux:badge>
                                                 @if ($this->selectedDocument->is_pinned)
                                                     <flux:badge size="sm" color="amber" icon="star">Fixado</flux:badge>
+                                                @endif
+                                                @if ($this->selectedDocument->is_context)
+                                                    <flux:badge size="sm" color="violet" icon="cpu-chip">Contexto</flux:badge>
                                                 @endif
                                             </div>
                                         </div>
@@ -928,6 +1327,53 @@ new class extends Component
                     </div>
                     <flux:heading size="xl">{{ $metrics['total_files_changed'] }}</flux:heading>
                 </flux:card>
+
+                {{-- Total de Features --}}
+                <flux:card class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <flux:icon name="squares-2x2" class="size-5 text-indigo-400" />
+                        <flux:text class="text-sm text-zinc-400">Features</flux:text>
+                    </div>
+                    <flux:heading size="xl">{{ $metrics['feature_count'] }}</flux:heading>
+                </flux:card>
+
+                {{-- Conclusão de Features --}}
+                <flux:card class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <flux:icon name="flag" class="size-5 text-emerald-400" />
+                        <flux:text class="text-sm text-zinc-400">Features Concluídas</flux:text>
+                    </div>
+                    <flux:heading size="xl">{{ $metrics['done_features'] }}/{{ $metrics['feature_count'] }}</flux:heading>
+                    @if ($metrics['feature_count'] > 0)
+                        <div class="h-2 w-full overflow-hidden rounded-full bg-zinc-700">
+                            <div
+                                class="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                                style="width: {{ $metrics['feature_completion_percent'] }}%"
+                            ></div>
+                        </div>
+                    @endif
+                </flux:card>
+            </div>
+
+            {{-- Features por Status --}}
+            <div class="mt-6">
+                <flux:heading size="sm" class="mb-3">Features por Status</flux:heading>
+
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    @foreach (FeatureStatus::cases() as $featureStatus)
+                        @php
+                            $fCount = $metrics['features_by_status'][$featureStatus->value] ?? 0;
+                        @endphp
+
+                        <div class="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900/50 px-4 py-3">
+                            <flux:icon :name="$featureStatus->icon()" class="size-5 text-{{ $featureStatus->color() }}-400" />
+                            <div class="flex flex-1 items-center justify-between">
+                                <span class="text-sm text-zinc-300">{{ $featureStatus->label() }}</span>
+                                <flux:badge size="sm" color="{{ $featureStatus->color() }}">{{ $fCount }}</flux:badge>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
             </div>
 
             {{-- Tasks por Status --}}

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\FeaturePriority;
+use App\Enums\FeatureStatus;
 use App\Enums\TaskStatus;
 use App\Models\Feature;
 use App\Models\Project;
@@ -9,6 +10,7 @@ use Flux\Flux;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Validate;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 new class extends Component
@@ -28,6 +30,8 @@ new class extends Component
     public ?string $dueDate = null;
 
     public bool $showDeleteConfirm = false;
+
+    public bool $editingSpec = false;
 
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Project>
@@ -63,11 +67,26 @@ new class extends Component
                 $this->projectId = $feature->project_id;
                 $this->priority = $feature->priority?->value ?? 'medium';
                 $this->dueDate = $feature->due_date?->format('Y-m-d');
+
+                $this->editingSpec = $feature->status === FeatureStatus::Done
+                    ? false
+                    : empty($this->spec);
             }
+        } else {
+            $this->editingSpec = true;
         }
 
         unset($this->feature);
         Flux::modal('feature-modal')->show();
+    }
+
+    public function toggleSpec(): void
+    {
+        if ($this->editingSpec && $this->featureId) {
+            $this->save();
+        }
+
+        $this->editingSpec = ! $this->editingSpec;
     }
 
     public function save(): void
@@ -189,9 +208,23 @@ new class extends Component
 
 <flux:modal name="feature-modal" class="w-full max-w-3xl space-y-6" variant="flyout">
     <div>
-        <flux:heading size="lg">
-            {{ $featureId ? 'Editar Feature' : 'Nova Feature' }}
-        </flux:heading>
+        <div class="flex items-center gap-2">
+            <flux:heading size="lg">
+                {{ $featureId ? 'Editar Feature' : 'Nova Feature' }}
+            </flux:heading>
+            @if ($featureId)
+                <span
+                    x-data="{ copied: false }"
+                    x-on:click="navigator.clipboard.writeText('#F-{{ $featureId }}'); copied = true; setTimeout(() => copied = false, 1500)"
+                    class="cursor-pointer text-sm font-mono transition-colors duration-200"
+                    :class="copied ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'"
+                    title="Copiar ID"
+                >
+                    <span x-show="!copied">#F-{{ $featureId }}</span>
+                    <span x-show="copied" x-cloak>Copiado!</span>
+                </span>
+            @endif
+        </div>
         <flux:text class="mt-1">
             {{ $featureId ? 'Atualize os detalhes da feature.' : 'Crie uma nova feature para agrupar tasks relacionadas.' }}
         </flux:text>
@@ -230,15 +263,41 @@ new class extends Component
             />
         </div>
 
-        {{-- Spec (Markdown Editor) --}}
-        <div>
-            <flux:label>Especificação</flux:label>
-            <flux:editor
-                wire:model="spec"
-                placeholder="Descreva a feature em detalhes..."
-                class="mt-1"
-            />
-        </div>
+        {{-- Spec (View/Edit Toggle) --}}
+        <flux:field>
+            <div class="flex items-center justify-between">
+                <flux:label>Especificação</flux:label>
+                @if (! ($this->feature && $this->feature->status === FeatureStatus::Done))
+                    <flux:button
+                        wire:click="toggleSpec"
+                        variant="ghost"
+                        size="xs"
+                        :icon="$editingSpec ? 'eye' : 'pencil'"
+                    />
+                @endif
+            </div>
+
+            @if ($editingSpec && ! ($this->feature && $this->feature->status === FeatureStatus::Done))
+                {{-- Modo Edição --}}
+                <flux:editor
+                    wire:model="spec"
+                    placeholder="Descreva a feature em detalhes..."
+                />
+            @else
+                {{-- Modo Visualização --}}
+                @if ($spec)
+                    <div class="max-h-60 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
+                        <div class="prose prose-sm prose-invert max-w-none prose-headings:text-zinc-200 prose-p:text-zinc-300 prose-a:text-blue-400 prose-strong:text-zinc-200 prose-code:text-pink-400 prose-pre:bg-zinc-900 prose-li:text-zinc-300">
+                            {!! Str::markdown($spec) !!}
+                        </div>
+                    </div>
+                @else
+                    <div class="flex items-center justify-center rounded-lg border border-dashed border-zinc-700 bg-zinc-800/30 p-6 text-zinc-500">
+                        <span class="text-sm">Clique no ícone de editar para adicionar uma especificação</span>
+                    </div>
+                @endif
+            @endif
+        </flux:field>
 
         {{-- Feature Details (when editing) --}}
         @if ($this->feature)

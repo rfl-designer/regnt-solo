@@ -1,52 +1,23 @@
 ## Codebase Patterns
 
-- **Kanban filters**: Cada filtro é uma property com `#[Url]`, aplicada em `buildColumnQuery()` com AND logic. Template usa `<flux:select>` e `<flux:button>` na barra de filtros (linhas ~226-256).
-- **Livewire test pattern**: `beforeEach` com `$this->actingAs(User::factory()->create())`, `Livewire::test('pages::nome')`, `set()` para filtros, `assertSee/assertDontSee` para verificar conteúdo. Para verificar ordem, usar `assertSeeInOrder()` — NÃO usar `viewData('__instance')` que não funciona no Livewire 4.
-- **Flux sortable columns**: `<flux:table.column sortable :sorted="$sortBy === 'col'" :direction="$sortDirection" wire:click="sort('col')">Label</flux:table.column>`
-- **Task factory states**: `->todo()`, `->backlog()`, `->doing()`, `->done()`, `->overdue()`, `->urgent()`, `->withDueDate()`, `->withEstimate()`.
-- **Database**: PostgreSQL — usar `ilike` para case-insensitive search, não `like`.
-- **Features computed status**: Feature.status é um Attribute computado (não coluna DB). Para filtrar por status, aplicar `->filter()` após `->get()`, não no query builder.
+- **Feature modal SFC**: `resources/views/components/⚡feature-modal.blade.php` — Single-File Component Livewire
+- **Feature status é computado**: `Feature::status` é um Attribute accessor baseado no status das tasks (todas Done = Feature Done)
+- **Toggle view/edit pattern**: usar property bool + método toggleXxx() que auto-salva antes de inverter. Referência: `editingPrompt` no task-modal, `editingSpec` no feature-modal
+- **Livewire test pattern**: `Livewire::test('feature-modal')->call('open', $feature->id)->assertSet('editingSpec', false)`
+- **Markdown rendering**: `{!! Str::markdown($var) !!}` dentro de `prose prose-sm prose-invert` container
 
 ---
 
-## 2026-02-25 19:06 - US-166
-- Implementado filtro de due date no Kanban com 5 opções: Todas, Hoje, Esta semana, 7 dias, 30 dias
-- Adicionado property `$filterDueDate` com `#[Url(as: 'due')]`
-- Lógica de filtro em `buildColumnQuery()` usando `match` expression
-- `<flux:select>` no template entre filtro de prioridade e botão overdue
-- Files changed: `resources/views/pages/⚡kanban.blade.php`, `tests/Feature/KanbanDueDateFilterTest.php`
+## 2026-02-27 - US-1, US-2, US-3, US-4
+- Implementado toggle view/edit na spec do feature modal (todas as 4 user stories em um commit coeso)
+- **US-1**: Property `editingSpec`, lógica no `open()` (edit se vazio, view se tem conteúdo, forçado false se Done)
+- **US-2**: Template com `flux:editor` (edição) e `Str::markdown()` (visualização), botão toggle pencil/eye
+- **US-3**: Método `toggleSpec()` com auto-save antes de inverter para modo visualização
+- **US-4**: 8 testes Pest — todos passando (16 assertions)
+- Files changed: `resources/views/components/⚡feature-modal.blade.php`, `tests/Feature/FeatureModalSpecToggleTest.php`
 - **Learnings for future iterations:**
-  - O padrão de filtro no Kanban é: property -> buildColumnQuery() -> template select/button
-  - `match` expression com `default => null` evita match exaustivo sem quebrar
-  - Testes usam factory states combinados: `Task::factory()->todo()->create(['due_date' => ...])`
-  - Todos os 102 testes de Kanban continuam passando após a mudança
----
-
-## 2026-02-25 - US-167
-- Implementado busca por texto no Inbox com `ilike` (case-insensitive, PostgreSQL)
-- Adicionado campo `<flux:input>` com `wire:model.live.debounce.300ms` e ícone de busca
-- Colunas sortable: Task (title), Prioridade (priority), Criada (created_at) usando `<flux:table.column sortable>`
-- Properties `$search`, `$sortBy`, `$sortDirection` com `#[Url]` para persistência na URL
-- Método `sort()` alterna direção se mesma coluna, ou seta novo sortBy com asc
-- Files changed: `resources/views/pages/⚡inbox.blade.php`, `tests/Feature/InboxSearchSortTest.php`
-- **Learnings for future iterations:**
-  - `viewData('__instance')` NÃO funciona no Livewire 4 para acessar computed properties em testes — usar `assertSeeInOrder()` para verificar ordenação
-  - Padrão de sort no Flux: `<flux:table.column sortable :sorted="$sortBy === 'col'" :direction="$sortDirection" wire:click="sort('col')">`
-  - `ilike` é essencial para busca case-insensitive no PostgreSQL
-  - Todos os 65 testes de Inbox continuam passando após as mudanças
----
-
-## 2026-02-25 - US-168
-- Implementado filtro de overdue na página Features com botão toggle
-- Adicionado property `$filterOverdue` (bool) com `#[Url(as: 'overdue')]`
-- Filtro aplica `->filter()` após `->get()` porque `Feature.status` é computed (não coluna DB)
-- Lógica: `due_date < today() && status !== Done` — exclui features concluídas
-- Botão toggle com variant condicional e contagem de features filtradas
-- AND logic com filtros de projeto e prioridade existentes
-- Files changed: `resources/views/pages/⚡features.blade.php`, `tests/Feature/FeaturesOverdueFilterTest.php`
-- **Learnings for future iterations:**
-  - Feature.status é um Attribute computado — não pode ser filtrado via query builder
-  - Padrão overdue no Kanban usa `<flux:button>` com `$toggle()` e variant condicional
-  - FeatureFactory tem `->withDueDate()` state, mas para testes é mais claro passar `due_date` direto
-  - Todos os 19 testes de FeaturesKanban + 8 novos passando
+  - FeatureStatus não estava importado no feature-modal (só TaskStatus) — precisou adicionar import
+  - Feature status é computado (accessor), não um campo DB — para testar Done, criar task com status Done
+  - FeatureFactory tem state `->withSpec()` que gera spec realista
+  - Pattern de toggle consistente: property bool + método que salva + inverte + template condicional
 ---

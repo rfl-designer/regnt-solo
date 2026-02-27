@@ -20,15 +20,8 @@
 
                 {{-- Planejamento --}}
                 <flux:sidebar.group heading="Planejamento" class="grid">
-                    <flux:sidebar.item icon="inbox" :href="route('inbox')" :current="request()->routeIs('inbox')" wire:navigate>
-                        Caixa de Entrada
-                        <livewire:inbox-badge />
-                    </flux:sidebar.item>
-                    <flux:sidebar.item icon="view-columns" :href="route('kanban')" :current="request()->routeIs('kanban')" wire:navigate>
-                        Kanban
-                    </flux:sidebar.item>
-                    <flux:sidebar.item icon="squares-2x2" :href="route('features')" :current="request()->routeIs('features')" wire:navigate>
-                        Features
+                    <flux:sidebar.item icon="briefcase" :href="route('work')" :current="request()->routeIs('work')" wire:navigate>
+                        Work
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="calendar-days" :href="route('daily')" :current="request()->routeIs('daily')" wire:navigate>
                         Hoje

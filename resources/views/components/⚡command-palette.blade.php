@@ -353,7 +353,7 @@ new class extends Component
                         <div class="mt-3 flex flex-wrap justify-center gap-2">
                             <flux:badge size="sm" color="zinc">N</flux:badge> <span class="text-xs">Nova task</span>
                             <flux:badge size="sm" color="zinc">B</flux:badge> <span class="text-xs">Kanban</span>
-                            <flux:badge size="sm" color="zinc">F</flux:badge> <span class="text-xs">Features</span>
+                            <flux:badge size="sm" color="zinc">F</flux:badge> <span class="text-xs">Work</span>
                             <flux:badge size="sm" color="zinc">D</flux:badge> <span class="text-xs">Daily</span>
                             <flux:badge size="sm" color="zinc">I</flux:badge> <span class="text-xs">Inbox</span>
                             <flux:badge size="sm" color="zinc">T</flux:badge> <span class="text-xs">Timer</span>

@@ -24,6 +24,8 @@ new class extends Component
 
     public bool $isPinned = false;
 
+    public bool $isContext = false;
+
     public bool $showPreview = false;
 
     public ?string $lastSavedAt = null;
@@ -39,6 +41,7 @@ new class extends Component
             $this->type = $document->type->value;
             $this->projectId = $document->project_id ? (string) $document->project_id : null;
             $this->isPinned = $document->is_pinned;
+            $this->isContext = $document->is_context;
             $this->lastSavedAt = $document->updated_at->format('d/m/Y H:i');
         } else {
             // Pre-select project from query parameter (e.g., from Project Detail page)
@@ -88,6 +91,7 @@ new class extends Component
             'type' => $this->type,
             'project_id' => $this->projectId ? (int) $this->projectId : null,
             'is_pinned' => $this->isPinned,
+            'is_context' => $this->isContext,
         ];
 
         if (! $isCreating) {
@@ -131,7 +135,21 @@ new class extends Component
 
     {{-- Header --}}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <flux:heading size="xl">{{ $this->isEditing ? 'Editar Documento' : 'Novo Documento' }}</flux:heading>
+        <div class="flex items-center gap-3">
+            <flux:heading size="xl">{{ $this->isEditing ? 'Editar Documento' : 'Novo Documento' }}</flux:heading>
+            @if ($this->isEditing)
+                <span
+                    x-data="{ copied: false }"
+                    x-on:click="navigator.clipboard.writeText('#D-{{ $documentId }}'); copied = true; setTimeout(() => copied = false, 1500)"
+                    class="cursor-pointer text-sm font-mono transition-colors duration-200"
+                    :class="copied ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'"
+                    title="Copiar ID"
+                >
+                    <span x-show="!copied">#D-{{ $documentId }}</span>
+                    <span x-show="copied" x-cloak>Copiado!</span>
+                </span>
+            @endif
+        </div>
 
         <div class="flex items-center gap-2">
             @if ($this->isEditing)
@@ -188,8 +206,11 @@ new class extends Component
             </flux:select>
         </div>
 
-        {{-- Pinned checkbox --}}
-        <flux:checkbox wire:model="isPinned" label="Fixar documento (aparece primeiro na lista)" />
+        {{-- Pinned & Context checkboxes --}}
+        <div class="flex flex-col gap-3">
+            <flux:checkbox wire:model="isPinned" label="Fixar documento (aparece primeiro na lista)" />
+            <flux:checkbox wire:model="isContext" label="Documento de Contexto" description="Disponivel para AI assistants via MCP" />
+        </div>
 
         {{-- Editor / Preview Toggle --}}
         <div class="space-y-3">

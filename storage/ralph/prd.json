@@ -82,10 +82,10 @@
                 "Implementar: Testes Pest Feature para:\n\n**Migration/Model**:\n- Campo is_context existe e tem default false\n- Scope context() filtra corretamente\n- Document pode ser criado com is_context=true\n\n**MCP Tools**:\n- list-documents retorna apenas documentos com is_context=true por padrão\n- list-documents com include_all=true retorna todos\n- list-documents retorna conteúdo truncado (primeiros 255 + últimos 255)\n- list-documents retorna conteúdo completo quando <= 510 chars\n- get-document retorna is_context no response\n- create-document aceita is_context\n- update-document aceita is_context\n\n**UI**:\n- Toggle de contexto renderiza na página de edição\n- Badge 'Contexto' aparece na visualização quando is_context=true\n- ID #D-{id} renderiza na visualização\n\nArquivo: tests/Feature/DocumentContextTest.php"
             ],
             "priority": 3,
-            "passes": false,
+            "passes": true,
             "metadata": {
                 "soloboard_task_id": 10,
-                "soloboard_status": "todo"
+                "soloboard_status": "done"
             }
         }
     ]

@@ -6,6 +6,8 @@
 - **Document edit mount pattern**: Propriedades carregadas no `mount()` do SFC a partir do model
 - **Project-detail docs tab**: 4 locais para badges/IDs de documento: desktop list, desktop preview header, mobile list, mobile preview modal header
 - **Copy-to-clipboard pattern (Alpine.js)**: `x-data="{ copied: false }" x-on:click="navigator.clipboard.writeText('...'); copied = true; setTimeout(() => copied = false, 1500)"` com `:class="copied ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'"` — usado em feature-modal, feature-card, e agora document-view/edit
+- **MCP Tool testing pattern**: `SoloBoardServer::tool(ToolClass::class, ['param' => 'value'])` → `$response->assertOk()`, `assertSee()`, `assertDontSee()`, `assertHasErrors()`
+- **Factory default gotcha**: `DocumentFactory` não define `is_context` no default — atributo fica `null` até refresh do DB (que aplica o default `false`)
 - **Testes pré-existentes falhando**: AiInsightsTest (5), AiIntegrationTest (1), AnalyticsPageTest (3), DocumentIntegrationTest (1 - task modal) — NÃO são causados pelas mudanças de documentos
 
 ---
@@ -34,4 +36,18 @@
   - IDs em listagens (project-detail) usam `text-xs font-mono` para serem discretos, enquanto em view/edit usam `text-sm font-mono` para serem mais visíveis
   - No document-edit o ID usa `$documentId` (propriedade PHP do SFC), no document-view usa `$this->document->id` (computed property)
   - 48 testes de documentos passam. Único teste falhando (DocumentIntegrationTest task modal) é pré-existente
+---
+
+## 2026-02-27 - US-10
+- Testes Pest Feature para todas as melhorias em documentos (is_context, MCP tools, UI)
+- Arquivo criado: `tests/Feature/DocumentContextTest.php` — 22 testes
+- **Categorias de teste:**
+  - Migration/Model (4): is_context default false, create com true, scope context(), cast boolean
+  - MCP Tools (9): list-documents filtra contexto, include_all, truncamento conteúdo, is_context em get/create/update
+  - UI (5): checkbox contexto em edit, badge em view, ID #D-{id} em view e edit
+- **Learnings for future iterations:**
+  - Factory `Document::factory()` NÃO inclui `is_context` no definition default — ao testar default, precisa `$document->refresh()` para pegar valor do DB
+  - Padrão `SoloBoardServer::tool(ToolClass::class, [])` + `assertOk()`, `assertSee()`, `assertDontSee()` para testar MCP tools
+  - Padrão de truncamento: `Str::repeat('A', 300) . 'MIDDLE' . Str::repeat('Z', 300)` gera conteúdo >510 chars para testar a lógica de primeiros 255 + últimos 255
+  - Total de 22 testes novos, todos passando
 ---

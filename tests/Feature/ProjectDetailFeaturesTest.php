@@ -112,15 +112,31 @@ test('draft column count reflects features without tasks', function () {
 test('features tab shows feature specs rendered as documents', function () {
     $project = Project::factory()->create();
 
-    Feature::factory()->create([
+    $feature = Feature::factory()->create([
         'project_id' => $project->id,
         'title' => 'Feature com Spec',
-        'spec' => '## User Story\nComo dev quero algo.',
+        'spec' => '## User Story\nTexto exclusivo da spec renderizada.',
     ]);
 
     Livewire::test('pages::project-detail', ['slug' => $project->slug])
         ->set('tab', 'features')
-        ->assertSee('Feature com Spec');
+        ->call('selectFeature', $feature->id)
+        ->assertSet('selectedFeatureId', $feature->id)
+        ->assertSee('Feature com Spec')
+        ->assertSeeHtml("feature-preview-{$feature->id}");
+});
+
+test('features tab shows selection prompt before selecting a feature', function () {
+    $project = Project::factory()->create();
+
+    Feature::factory()->create([
+        'project_id' => $project->id,
+        'title' => 'Feature sem selecao',
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->set('tab', 'features')
+        ->assertSee('Selecione uma feature');
 });
 
 test('features tab shows status badge for each feature', function () {
@@ -185,7 +201,7 @@ test('features tab shows due date when feature has due date', function () {
 test('features tab shows no spec message when spec is empty', function () {
     $project = Project::factory()->create();
 
-    Feature::factory()->create([
+    $feature = Feature::factory()->create([
         'project_id' => $project->id,
         'title' => 'Feature Sem Spec',
         'spec' => null,
@@ -193,37 +209,42 @@ test('features tab shows no spec message when spec is empty', function () {
 
     Livewire::test('pages::project-detail', ['slug' => $project->slug])
         ->set('tab', 'features')
+        ->call('selectFeature', $feature->id)
         ->assertSee('Nenhuma spec definida para esta feature.');
 });
 
 // ========================================
-// Click feature dispatches open-feature-modal
+// Feature selection and edit actions
 // ========================================
 
-test('features tab has edit button that dispatches open-feature-modal', function () {
+test('features tab list items trigger selectFeature action', function () {
+    $project = Project::factory()->create();
+
+    $feature = Feature::factory()->create([
+        'project_id' => $project->id,
+        'title' => 'Feature Selecionavel',
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->set('tab', 'features')
+        ->assertSeeHtml("wire:click=\"selectFeature({$feature->id})\"")
+        ->call('selectFeature', $feature->id)
+        ->assertSet('selectedFeatureId', $feature->id);
+});
+
+test('features tab preview renders spec content for selected feature', function () {
     $project = Project::factory()->create();
 
     $feature = Feature::factory()->create([
         'project_id' => $project->id,
         'title' => 'Feature Editavel',
+        'spec' => '## Spec\nConteudo da preview.',
     ]);
 
     Livewire::test('pages::project-detail', ['slug' => $project->slug])
         ->set('tab', 'features')
-        ->assertSeeHtml('open-feature-modal');
-});
-
-test('features tab title is clickable and dispatches open-feature-modal with feature id', function () {
-    $project = Project::factory()->create();
-
-    $feature = Feature::factory()->create([
-        'project_id' => $project->id,
-        'title' => 'Feature Clicavel',
-    ]);
-
-    Livewire::test('pages::project-detail', ['slug' => $project->slug])
-        ->set('tab', 'features')
-        ->assertSeeHtml("open-feature-modal', { featureId: {$feature->id} }");
+        ->call('selectFeature', $feature->id)
+        ->assertSeeHtml("feature-preview-{$feature->id}");
 });
 
 // ========================================
@@ -247,6 +268,20 @@ test('features tab only shows features from current project', function () {
         ->set('tab', 'features')
         ->assertSee('Feature Deste Projeto')
         ->assertDontSee('Feature Outro Projeto');
+});
+
+test('selectFeature ignores features from other projects', function () {
+    $project = Project::factory()->create();
+    $otherProject = Project::factory()->create();
+
+    $otherFeature = Feature::factory()->create([
+        'project_id' => $otherProject->id,
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->set('tab', 'features')
+        ->call('selectFeature', $otherFeature->id)
+        ->assertSet('selectedFeatureId', null);
 });
 
 test('board kanban only shows features from current project', function () {

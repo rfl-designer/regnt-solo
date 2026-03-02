@@ -6,11 +6,11 @@ use App\Enums\TaskStatus;
 use App\Models\Feature;
 use App\Models\Project;
 use App\Models\TimeEntry;
+use App\Support\Markdown;
 use Flux\Flux;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Validate;
-use Illuminate\Support\Str;
 use Livewire\Component;
 
 new class extends Component
@@ -288,7 +288,7 @@ new class extends Component
                 @if ($spec)
                     <div class="max-h-60 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-800/50 p-3">
                         <div class="prose prose-sm prose-invert max-w-none prose-headings:text-zinc-200 prose-p:text-zinc-300 prose-a:text-blue-400 prose-strong:text-zinc-200 prose-code:text-pink-400 prose-pre:bg-zinc-900 prose-li:text-zinc-300">
-                            {!! Str::markdown($spec) !!}
+                            {!! Markdown::render($spec) !!}
                         </div>
                     </div>
                 @else

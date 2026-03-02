@@ -80,3 +80,19 @@ test('markdown render handles links', function () {
     expect($html)->toContain('href="https://laravel.com"')
         ->and($html)->toContain('Laravel');
 });
+
+test('markdown render supports html content saved by rich text editor', function () {
+    $html = Markdown::render('<p>Essa é uma spec</p><p>#SPEC</p>');
+
+    expect($html)->toContain('<p>Essa é uma spec</p>')
+        ->and($html)->toContain('<p>#SPEC</p>');
+});
+
+test('markdown render strips unsafe attributes from rich text html', function () {
+    $html = Markdown::render('<p onclick="alert(1)">Oi</p><a href="https://example.com" target="_blank">Link</a>');
+
+    expect($html)->toContain('<p>Oi</p>')
+        ->and($html)->toContain('<a>Link</a>')
+        ->and($html)->not->toContain('onclick')
+        ->and($html)->not->toContain('target=');
+});

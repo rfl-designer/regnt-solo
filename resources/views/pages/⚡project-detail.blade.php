@@ -49,6 +49,8 @@ new class extends Component
 
     public ?int $selectedDocumentId = null;
 
+    public ?int $selectedFeatureId = null;
+
     /** @var array<string, bool> */
     public array $expanded = [];
 
@@ -126,6 +128,25 @@ new class extends Component
     public function selectDocument(int $documentId): void
     {
         $this->selectedDocumentId = $documentId;
+    }
+
+    #[Computed]
+    public function selectedFeature(): ?Feature
+    {
+        if (! $this->selectedFeatureId) {
+            return null;
+        }
+
+        return $this->features->firstWhere('id', $this->selectedFeatureId);
+    }
+
+    public function selectFeature(int $featureId): void
+    {
+        if (! $this->features->contains('id', $featureId)) {
+            return;
+        }
+
+        $this->selectedFeatureId = $featureId;
     }
 
     /**
@@ -418,7 +439,7 @@ new class extends Component
     #[On('document-saved')]
     public function refreshProject(): void
     {
-        unset($this->project, $this->features, $this->featuresByStatus, $this->metrics, $this->projectDocuments, $this->selectedDocument, $this->drillFeature);
+        unset($this->project, $this->features, $this->featuresByStatus, $this->metrics, $this->projectDocuments, $this->selectedDocument, $this->selectedFeature, $this->drillFeature);
     }
 }
 
@@ -882,138 +903,191 @@ new class extends Component
 
         {{-- Tab Panel: Features (Specs) --}}
         <flux:tab.panel name="features">
-            @if ($tab === 'features')
-                <div class="flex flex-col gap-4">
-                    {{-- Header --}}
-                    <div class="flex items-center justify-between">
-                        <flux:badge size="sm" color="zinc">{{ $this->features->count() }} features</flux:badge>
+            <div class="flex flex-col gap-4">
+                {{-- Header --}}
+                <div class="flex items-center justify-between">
+                    <flux:badge size="sm" color="zinc">{{ $this->features->count() }} features</flux:badge>
+                    <flux:button
+                        size="sm"
+                        variant="primary"
+                        icon="plus"
+                        wire:click="$dispatch('open-feature-modal')"
+                    >
+                        Nova Feature
+                    </flux:button>
+                </div>
+
+                @if ($this->features->isEmpty())
+                    <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 py-16">
+                        <flux:icon name="rectangle-stack" class="mb-3 size-12 text-zinc-600" />
+                        <flux:heading size="sm" class="text-zinc-400">Nenhuma feature neste projeto</flux:heading>
+                        <flux:text class="mt-1 text-sm text-zinc-500">Crie uma feature para começar a planejar.</flux:text>
                         <flux:button
                             size="sm"
                             variant="primary"
                             icon="plus"
+                            class="mt-4"
                             wire:click="$dispatch('open-feature-modal')"
                         >
                             Nova Feature
                         </flux:button>
                     </div>
-
-                    @if ($this->features->isEmpty())
-                        {{-- Empty State --}}
-                        <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 py-16">
-                            <flux:icon name="rectangle-stack" class="mb-3 size-12 text-zinc-600" />
-                            <flux:heading size="sm" class="text-zinc-400">Nenhuma feature neste projeto</flux:heading>
-                            <flux:text class="mt-1 text-sm text-zinc-500">Crie uma feature para começar a planejar.</flux:text>
-                            <flux:button
-                                size="sm"
-                                variant="primary"
-                                icon="plus"
-                                class="mt-4"
-                                wire:click="$dispatch('open-feature-modal')"
-                            >
-                                Nova Feature
-                            </flux:button>
-                        </div>
-                    @else
-                        {{-- Feature Spec Cards --}}
-                        <div class="space-y-6">
+                @else
+                    {{-- Desktop: Split View (lg+) --}}
+                    <div class="hidden lg:flex lg:gap-4" style="min-height: 500px;">
+                        {{-- Left Panel: Feature List --}}
+                        <div class="flex w-1/3 flex-col gap-2 overflow-y-auto border-r border-zinc-700 pr-4">
                             @foreach ($this->features as $feature)
                                 @php
                                     $tasksCount = $feature->tasksCount();
                                     $completedCount = $feature->completedTasksCount();
+                                    $isOverdue = $feature->due_date?->isPast() ?? false;
                                 @endphp
 
                                 <div
-                                    wire:key="feature-spec-{{ $feature->id }}"
-                                    class="rounded-xl border border-zinc-700 bg-zinc-900/50"
+                                    wire:key="feature-list-{{ $feature->id }}"
+                                    wire:click="selectFeature({{ $feature->id }})"
+                                    class="cursor-pointer rounded-lg border p-3 transition {{ $selectedFeatureId === $feature->id ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-500' }}"
                                 >
-                                    {{-- Feature Header --}}
-                                    <div class="flex items-start justify-between border-b border-zinc-700 p-4">
-                                        <div class="min-w-0 flex-1">
-                                            {{-- Title (clickable) --}}
-                                            <button
-                                                type="button"
-                                                wire:click="$dispatch('open-feature-modal', { featureId: {{ $feature->id }} })"
-                                                class="text-left text-lg font-semibold text-zinc-100 transition hover:text-white"
-                                            >
-                                                {{ $feature->title }}
-                                            </button>
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-{{ $feature->status->color() }}-500/10">
+                                            <flux:icon :name="$feature->status->icon()" class="size-4 text-{{ $feature->status->color() }}-400" />
+                                        </div>
 
-                                            {{-- Badges --}}
-                                            <div class="mt-2 flex flex-wrap items-center gap-2">
-                                                {{-- Status Badge --}}
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-sm font-medium text-zinc-200">{{ $feature->title }}</span>
+                                                <span class="text-xs font-mono text-zinc-500">#F-{{ $feature->id }}</span>
+                                            </div>
+
+                                            <div class="mt-1 flex flex-wrap items-center gap-2">
                                                 <flux:badge size="sm" color="{{ $feature->status->color() }}" icon="{{ $feature->status->icon() }}">
                                                     {{ $feature->status->label() }}
                                                 </flux:badge>
 
-                                                {{-- Progress --}}
                                                 @if ($tasksCount > 0)
                                                     <flux:badge size="sm" color="zinc">
                                                         {{ $completedCount }}/{{ $tasksCount }} tasks
                                                     </flux:badge>
                                                 @endif
 
-                                                {{-- Priority --}}
                                                 @if ($feature->priority)
                                                     <flux:badge size="sm" color="{{ $feature->priority->color() }}" icon="{{ $feature->priority->icon() }}">
                                                         {{ $feature->priority->label() }}
                                                     </flux:badge>
                                                 @endif
 
-                                                {{-- Due Date --}}
                                                 @if ($feature->due_date)
-                                                    @php
-                                                        $isOverdue = $feature->due_date->isPast();
-                                                    @endphp
                                                     <flux:badge size="sm" color="{{ $isOverdue ? 'red' : 'zinc' }}" icon="{{ $isOverdue ? 'exclamation-triangle' : 'calendar' }}">
                                                         {{ $feature->due_date->format('d/m/Y') }}
                                                     </flux:badge>
                                                 @endif
                                             </div>
-
-                                            {{-- Progress Bar --}}
-                                            @if ($tasksCount > 0)
-                                                <div class="mt-3 max-w-md">
-                                                    <div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-700">
-                                                        <div
-                                                            class="h-full rounded-full bg-{{ $feature->status->color() }}-500 transition-all duration-300"
-                                                            style="width: {{ $feature->progress }}%"
-                                                        ></div>
-                                                    </div>
-                                                </div>
-                                            @endif
                                         </div>
-
-                                        {{-- Edit Button --}}
-                                        <flux:button
-                                            size="sm"
-                                            variant="ghost"
-                                            icon="pencil-square"
-                                            wire:click="$dispatch('open-feature-modal', { featureId: {{ $feature->id }} })"
-                                            title="Editar feature"
-                                            class="shrink-0"
-                                        />
                                     </div>
-
-                                    {{-- Spec Content --}}
-                                    @if ($feature->spec)
-                                        <div class="p-4">
-                                            <livewire:markdown-viewer
-                                                :content="$feature->spec"
-                                                :show-copy-buttons="false"
-                                                :key="'feature-spec-'.$feature->id"
-                                            />
-                                        </div>
-                                    @else
-                                        <div class="p-4 text-center text-sm text-zinc-500">
-                                            Nenhuma spec definida para esta feature.
-                                        </div>
-                                    @endif
                                 </div>
                             @endforeach
                         </div>
-                    @endif
-                </div>
-            @endif
+
+                        {{-- Right Panel: Spec Preview --}}
+                        <div class="w-2/3 overflow-y-auto">
+                            @if ($this->selectedFeature)
+                                @if ($this->selectedFeature->spec)
+                                    <div class="rounded-lg border border-zinc-700 bg-zinc-900/30 p-4">
+                                        <livewire:markdown-viewer
+                                            :content="$this->selectedFeature->spec"
+                                            :show-copy-buttons="false"
+                                            :key="'feature-preview-'.$this->selectedFeature->id"
+                                        />
+                                    </div>
+                                @else
+                                    <div class="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 py-16">
+                                        <flux:icon name="document-magnifying-glass" class="mb-3 size-12 text-zinc-600" />
+                                        <flux:heading size="sm" class="text-zinc-400">Nenhuma spec definida para esta feature.</flux:heading>
+                                    </div>
+                                @endif
+                            @else
+                                <div class="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 py-16">
+                                    <flux:icon name="document-magnifying-glass" class="mb-3 size-12 text-zinc-600" />
+                                    <flux:heading size="sm" class="text-zinc-400">Selecione uma feature</flux:heading>
+                                    <flux:text class="mt-1 text-sm text-zinc-500">Clique em uma feature na lista para visualizar o preview da spec.</flux:text>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+
+                    {{-- Mobile/Tablet: List with Modal Preview --}}
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:hidden">
+                        @foreach ($this->features as $feature)
+                            @php
+                                $tasksCount = $feature->tasksCount();
+                                $completedCount = $feature->completedTasksCount();
+                                $isOverdue = $feature->due_date?->isPast() ?? false;
+                                $specPreview = trim(\Illuminate\Support\Str::limit(strip_tags($feature->spec ?? ''), 120));
+                            @endphp
+
+                            <div
+                                wire:key="feature-mobile-{{ $feature->id }}"
+                                wire:click="selectFeature({{ $feature->id }})"
+                                x-on:click="$flux.modal('feature-spec-preview-modal').show()"
+                                class="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-700 bg-zinc-900/50 p-3 transition hover:border-zinc-500"
+                            >
+                                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-{{ $feature->status->color() }}-500/10">
+                                    <flux:icon :name="$feature->status->icon()" class="size-4 text-{{ $feature->status->color() }}-400" />
+                                </div>
+
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium text-zinc-200">{{ $feature->title }}</span>
+                                        <span class="text-xs font-mono text-zinc-500">#F-{{ $feature->id }}</span>
+                                    </div>
+
+                                    <div class="mt-1 flex flex-wrap items-center gap-2">
+                                        <flux:badge size="sm" color="{{ $feature->status->color() }}" icon="{{ $feature->status->icon() }}">
+                                            {{ $feature->status->label() }}
+                                        </flux:badge>
+
+                                        @if ($tasksCount > 0)
+                                            <flux:badge size="sm" color="zinc">
+                                                {{ $completedCount }}/{{ $tasksCount }} tasks
+                                            </flux:badge>
+                                        @endif
+
+                                        @if ($feature->due_date)
+                                            <flux:badge size="sm" color="{{ $isOverdue ? 'red' : 'zinc' }}" icon="{{ $isOverdue ? 'exclamation-triangle' : 'calendar' }}">
+                                                {{ $feature->due_date->format('d/m/Y') }}
+                                            </flux:badge>
+                                        @endif
+                                    </div>
+
+                                    <flux:text class="mt-1 line-clamp-2 text-xs text-zinc-500">
+                                        {{ $specPreview !== '' ? $specPreview : 'Sem spec definida.' }}
+                                    </flux:text>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+
+                    {{-- Mobile Preview Modal (flyout) --}}
+                    <flux:modal name="feature-spec-preview-modal" variant="flyout" class="w-full max-w-2xl">
+                        @if ($this->selectedFeature)
+                            @if ($this->selectedFeature->spec)
+                                <div class="overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-900/30 p-4">
+                                    <livewire:markdown-viewer
+                                        :content="$this->selectedFeature->spec"
+                                        :show-copy-buttons="false"
+                                        :key="'feature-preview-mobile-'.$this->selectedFeature->id"
+                                    />
+                                </div>
+                            @else
+                                <div class="py-8 text-center text-sm text-zinc-500">
+                                    Nenhuma spec definida para esta feature.
+                                </div>
+                            @endif
+                        @endif
+                    </flux:modal>
+                @endif
+            </div>
         </flux:tab.panel>
 
         {{-- Tab Panel: Docs --}}

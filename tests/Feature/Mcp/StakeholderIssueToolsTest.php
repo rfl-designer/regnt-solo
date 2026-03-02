@@ -1,0 +1,137 @@
+<?php
+
+use App\Enums\StakeholderIssueStatus;
+use App\Mcp\Prompts\StakeholderIssuePlanningPrompt;
+use App\Mcp\Servers\SoloBoardServer;
+use App\Mcp\Tools\ListStakeholderIssuesTool;
+use App\Mcp\Tools\PromoteStakeholderIssueToFeatureTool;
+use App\Models\Feature;
+use App\Models\Project;
+use App\Models\Stakeholder;
+use App\Models\StakeholderIssue;
+
+test('list-stakeholder-issues returns issues and supports filters', function () {
+    $projectA = Project::factory()->create();
+    $projectB = Project::factory()->create();
+
+    $stakeholderA = Stakeholder::factory()->create(['project_id' => $projectA->id]);
+    $stakeholderB = Stakeholder::factory()->create(['project_id' => $projectB->id]);
+
+    StakeholderIssue::factory()->toFeature()->create([
+        'project_id' => $projectA->id,
+        'stakeholder_id' => $stakeholderA->id,
+        'comment' => 'Request CSV export in dashboard.',
+    ]);
+
+    StakeholderIssue::factory()->create([
+        'project_id' => $projectA->id,
+        'stakeholder_id' => $stakeholderA->id,
+        'comment' => 'Adjust header text.',
+        'status' => StakeholderIssueStatus::Unread,
+    ]);
+
+    StakeholderIssue::factory()->toFeature()->create([
+        'project_id' => $projectB->id,
+        'stakeholder_id' => $stakeholderB->id,
+        'comment' => 'Add more search filters.',
+    ]);
+
+    $response = SoloBoardServer::tool(ListStakeholderIssuesTool::class, [
+        'project_slug' => $projectA->slug,
+        'status' => StakeholderIssueStatus::ToFeature->value,
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('Request CSV export in dashboard.');
+    $response->assertDontSee('Adjust header text.');
+    $response->assertDontSee('Add more search filters.');
+});
+
+test('promote-stakeholder-issue creates feature and links issue', function () {
+    $project = Project::factory()->create();
+    $stakeholder = Stakeholder::factory()->create(['project_id' => $project->id]);
+
+    $issue = StakeholderIssue::factory()->toFeature()->create([
+        'project_id' => $project->id,
+        'stakeholder_id' => $stakeholder->id,
+        'comment' => 'Need a weekly stakeholder report by period.',
+    ]);
+
+    $response = SoloBoardServer::tool(PromoteStakeholderIssueToFeatureTool::class, [
+        'issue_id' => $issue->id,
+        'title' => 'Stakeholder report by period',
+        'priority' => 'high',
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('"created_feature": true');
+    $response->assertSee('Stakeholder report by period');
+
+    $issue->refresh();
+
+    expect($issue->feature_id)->not->toBeNull();
+    expect($issue->status)->toBe(StakeholderIssueStatus::Feature);
+    expect($issue->converted_at)->not->toBeNull();
+
+    $this->assertDatabaseHas('features', [
+        'id' => $issue->feature_id,
+        'project_id' => $project->id,
+        'title' => 'Stakeholder report by period',
+        'priority' => 'high',
+    ]);
+});
+
+test('promote-stakeholder-issue is idempotent when issue already has feature', function () {
+    $project = Project::factory()->create();
+    $stakeholder = Stakeholder::factory()->create(['project_id' => $project->id]);
+    $feature = Feature::factory()->create([
+        'project_id' => $project->id,
+        'title' => 'Feature already created',
+    ]);
+
+    $issue = StakeholderIssue::factory()->featured()->create([
+        'project_id' => $project->id,
+        'stakeholder_id' => $stakeholder->id,
+        'feature_id' => $feature->id,
+    ]);
+
+    $existingFeaturesCount = Feature::query()->count();
+
+    $response = SoloBoardServer::tool(PromoteStakeholderIssueToFeatureTool::class, [
+        'issue_id' => $issue->id,
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('"created_feature": false');
+    $response->assertSee('Feature already created');
+
+    expect(Feature::query()->count())->toBe($existingFeaturesCount);
+    expect($issue->fresh()->feature_id)->toBe($feature->id);
+});
+
+test('stakeholder issue planning prompt returns issue context', function () {
+    $project = Project::factory()->create();
+    $stakeholder = Stakeholder::factory()->create(['project_id' => $project->id]);
+
+    $issue = StakeholderIssue::factory()->toFeature()->create([
+        'project_id' => $project->id,
+        'stakeholder_id' => $stakeholder->id,
+        'comment' => 'Gostaria de acompanhar métricas semanais por canal.',
+    ]);
+
+    $response = SoloBoardServer::prompt(StakeholderIssuePlanningPrompt::class, [
+        'issue_id' => (string) $issue->id,
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('Stakeholder Issue');
+    $response->assertSee('Gostaria de acompanhar métricas semanais por canal.');
+    $response->assertSee($project->name);
+    $response->assertSee('promote-stakeholder-issue');
+});
+
+test('stakeholder issue planning prompt fails for non-existent issue', function () {
+    SoloBoardServer::prompt(StakeholderIssuePlanningPrompt::class, [
+        'issue_id' => '99999',
+    ]);
+})->throws(\Illuminate\Database\Eloquent\ModelNotFoundException::class);

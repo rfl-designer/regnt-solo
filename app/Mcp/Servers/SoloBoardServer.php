@@ -24,7 +24,7 @@ class SoloBoardServer extends Server
     /**
      * The MCP server's instructions for the LLM.
      */
-    protected string $instructions = 'SoloBoard is a personal productivity app for solo developers. It manages tasks, features, projects, time tracking, and daily planning. Use the available tools to create, read, update, and delete tasks and features; start and stop timers; manage daily plans; and list projects. Tasks have statuses (inbox, backlog, todo, doing, done) and priorities (urgent, high, medium, low). Features group related tasks and have computed status based on their tasks (draft, backlog, todo, doing, done). Projects have slugs for identification. Timers are time entries linked to tasks or features — only one timer can run at a time. Documents are markdown pages (PRDs, specs, decisions, notes) that belong to projects. Use list-features, get-feature, create-feature, update-feature, delete-feature, add-task-to-feature to manage features. Use get-project-context for full project overview.';
+    protected string $instructions = 'SoloBoard is a personal productivity app for solo developers. It manages tasks, features, projects, stakeholder issues, time tracking, and daily planning. Use the available tools to create, read, update, and delete tasks and features; start and stop timers; manage daily plans; list projects; and convert stakeholder issues into features. Tasks have statuses (inbox, backlog, todo, doing, done) and priorities (urgent, high, medium, low). Features group related tasks and have computed status based on their tasks (draft, backlog, todo, doing, done). Stakeholder issues track external feedback with statuses (unread, to_feature, feature, archived). Projects have slugs for identification. Timers are time entries linked to tasks or features — only one timer can run at a time. Documents are markdown pages (PRDs, specs, decisions, notes) that belong to projects. Use list-features, get-feature, create-feature, update-feature, delete-feature, add-task-to-feature to manage features. Use list-stakeholder-issues and promote-stakeholder-issue for feedback triage. Use get-project-context for full project overview.';
 
     /**
      * The tools registered with this MCP server.
@@ -64,6 +64,8 @@ class SoloBoardServer extends Server
         \App\Mcp\Tools\DeleteFeatureTool::class,
         \App\Mcp\Tools\AddTaskToFeatureTool::class,
         \App\Mcp\Tools\RalphExportTool::class,
+        \App\Mcp\Tools\ListStakeholderIssuesTool::class,
+        \App\Mcp\Tools\PromoteStakeholderIssueToFeatureTool::class,
     ];
 
     /**
@@ -85,5 +87,6 @@ class SoloBoardServer extends Server
         \App\Mcp\Prompts\SessionPlanningPrompt::class,
         \App\Mcp\Prompts\DevelopmentWorkflowPrompt::class,
         \App\Mcp\Prompts\FeaturePlanningPrompt::class,
+        \App\Mcp\Prompts\StakeholderIssuePlanningPrompt::class,
     ];
 }

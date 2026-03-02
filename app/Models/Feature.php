@@ -83,6 +83,14 @@ class Feature extends Model
     }
 
     /**
+     * Get the stakeholder issues linked to this feature.
+     */
+    public function stakeholderIssues(): HasMany
+    {
+        return $this->hasMany(StakeholderIssue::class);
+    }
+
+    /**
      * Get the computed status based on tasks.
      */
     protected function status(): Attribute

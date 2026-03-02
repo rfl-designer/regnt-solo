@@ -75,6 +75,14 @@ class Project extends Model
     }
 
     /**
+     * Get stakeholder issues linked to this project.
+     */
+    public function stakeholderIssues(): HasMany
+    {
+        return $this->hasMany(StakeholderIssue::class);
+    }
+
+    /**
      * Scope to only backlog projects.
      */
     public function scopeBacklog(Builder $query): void

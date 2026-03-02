@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class Stakeholder extends Model
@@ -57,6 +58,14 @@ class Stakeholder extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * Get the issues opened by this stakeholder.
+     */
+    public function stakeholderIssues(): HasMany
+    {
+        return $this->hasMany(StakeholderIssue::class);
     }
 
     /**

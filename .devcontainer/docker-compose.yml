@@ -7,8 +7,8 @@ services:
     volumes:
       - ..:/workspace:cached
     ports:
-      - "8001:8000"
-      - "5174:5173"
+      - "8002:8000"
+      - "5175:5173"
     depends_on:
       postgres:
         condition: service_healthy

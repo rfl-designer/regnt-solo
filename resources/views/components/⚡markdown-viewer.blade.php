@@ -93,5 +93,6 @@ new class extends Component
         "
     >
         {!! \App\Support\Markdown::render($content) !!}
+
     </div>
 </div>

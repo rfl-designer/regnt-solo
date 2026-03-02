@@ -20,6 +20,7 @@
         "COMPOSER_AUTH": "${localEnv:COMPOSER_AUTH}",
         "FLUX_LICENSE_KEY": "${localEnv:FLUX_LICENSE_KEY}",
         "FLUX_EMAIL": "${localEnv:FLUX_EMAIL}",
+        "SOLOBOARD_MCP_KEY": "${localEnv:SOLOBOARD_MCP_KEY}",
     },
 
     "appPort": [8000, 5173],

@@ -12,19 +12,48 @@ if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' ~/.zshrc 2>/dev/null; then
 fi
 
 # ============================================================
-# Claude Plugins: criar symlink para caminhos do host macOS
+# Claude Plugins: criar symlinks para caminhos do host macOS
 # ============================================================
-# Plugins registram installPath com caminho absoluto do host.
-# Dentro do container, ~/.claude é montado em /home/dev/.claude,
-# mas os caminhos no installed_plugins.json apontam para /Users/<user>/.claude.
-# O symlink resolve esse mismatch.
+# Plugins registram installPath com caminho absoluto do host (ex: /Users/xxx/.claude).
+# Dentro do container, ~/.claude é montado em /home/dev/.claude.
+# Criamos symlinks para que os caminhos absolutos do host resolvam corretamente.
 if [ -f "$HOME/.claude/plugins/installed_plugins.json" ]; then
-    HOST_CLAUDE_DIR=$(grep -oP '"installPath":\s*"\K[^"]+' "$HOME/.claude/plugins/installed_plugins.json" | head -1 | sed 's|/.claude/.*|/.claude|')
-    if [ -n "$HOST_CLAUDE_DIR" ] && [ "$HOST_CLAUDE_DIR" != "$HOME/.claude" ] && [ ! -e "$HOST_CLAUDE_DIR" ]; then
-        sudo mkdir -p "$(dirname "$HOST_CLAUDE_DIR")"
-        sudo ln -sf "$HOME/.claude" "$HOST_CLAUDE_DIR"
-        echo "✅ Symlink criado: $HOST_CLAUDE_DIR -> $HOME/.claude (plugins compatíveis)"
-    fi
+    # Extrair todos os caminhos únicos de usuário do host
+    HOST_PATHS=$(grep -oE '"/Users/[^/]+/\.claude' "$HOME/.claude/plugins/installed_plugins.json" | tr -d '"' | sort -u)
+
+    for HOST_CLAUDE_DIR in $HOST_PATHS; do
+        if [ -n "$HOST_CLAUDE_DIR" ] && [ "$HOST_CLAUDE_DIR" != "$HOME/.claude" ]; then
+            # Criar diretório pai se não existir
+            sudo mkdir -p "$(dirname "$HOST_CLAUDE_DIR")"
+            # Remover symlink antigo se existir
+            sudo rm -f "$HOST_CLAUDE_DIR" 2>/dev/null || true
+            # Criar novo symlink
+            sudo ln -sf "$HOME/.claude" "$HOST_CLAUDE_DIR"
+            echo "✅ Symlink: $HOST_CLAUDE_DIR -> $HOME/.claude"
+        fi
+    done
+fi
+
+# Também criar symlink para ~/.claude.json (configuração principal)
+if [ -f "$HOME/.claude.json" ]; then
+    HOST_PATHS=$(grep -oE '"/Users/[^/]+' "$HOME/.claude/plugins/installed_plugins.json" 2>/dev/null | tr -d '"' | sort -u)
+
+    for HOST_HOME in $HOST_PATHS; do
+        if [ -n "$HOST_HOME" ] && [ "$HOST_HOME" != "$HOME" ] && [ ! -e "$HOST_HOME/.claude.json" ]; then
+            sudo ln -sf "$HOME/.claude.json" "$HOST_HOME/.claude.json" 2>/dev/null || true
+            echo "✅ Symlink: $HOST_HOME/.claude.json -> $HOME/.claude.json"
+        fi
+    done
+fi
+
+# ============================================================
+# Claude MCP: configurar servidores MCP para o container
+# ============================================================
+# Usa .mcp.json específico do devcontainer (sem Herd que é macOS-only)
+# Substitui variáveis de ambiente no arquivo
+if [ -f ".devcontainer/.mcp.json" ]; then
+    envsubst < .devcontainer/.mcp.json > .mcp.json
+    echo "✅ Configuração MCP do devcontainer aplicada"
 fi
 
 # ============================================================

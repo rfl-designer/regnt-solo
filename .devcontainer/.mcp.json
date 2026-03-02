@@ -8,7 +8,7 @@
             "type": "http",
             "url": "https://regnt.sophostech.com.br/mcp",
             "headers": {
-                "Authorization": "Bearer "
+                "Authorization": "Bearer ${SOLOBOARD_MCP_KEY}"
             }
         }
     }

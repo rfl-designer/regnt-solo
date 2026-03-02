@@ -1,12 +1,15 @@
 <?php
 
 use App\Enums\FeatureStatus;
+use App\Enums\StakeholderIssueStatus;
 use App\Enums\TaskStatus;
 use App\Models\Document;
 use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Stakeholder;
+use App\Models\StakeholderIssue;
 use Carbon\Carbon;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -52,6 +55,13 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
 
     public string $mobileTaskStatus = 'doing';
 
+    /** @var list<StakeholderIssueStatus> */
+    public array $issueStatuses = [];
+
+    public string $newIssueComment = '';
+
+    public string $newIssueStatus = 'unread';
+
     public function mount(string $token): void
     {
         $this->token = $token;
@@ -78,6 +88,9 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
             TaskStatus::Doing,
             TaskStatus::Done,
         ];
+
+        $this->issueStatuses = StakeholderIssueStatus::cases();
+        $this->newIssueStatus = StakeholderIssueStatus::Unread->value;
     }
 
     #[Computed]
@@ -96,6 +109,19 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
             ->where('id', $this->stakeholder->project_id)
             ->with(['tasks.timeEntries', 'tasks.commits', 'documents'])
             ->firstOrFail();
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, StakeholderIssue>
+     */
+    #[Computed]
+    public function stakeholderIssues(): \Illuminate\Support\Collection
+    {
+        return StakeholderIssue::query()
+            ->where('stakeholder_id', $this->stakeholder->id)
+            ->with('feature')
+            ->latest('created_at')
+            ->get();
     }
 
     /**
@@ -276,6 +302,53 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
         $this->drillLimits[$status] += 10;
     }
 
+    public function addIssue(): void
+    {
+        $validated = $this->validate([
+            'newIssueComment' => ['required', 'string', 'min:5', 'max:4000'],
+            'newIssueStatus' => ['required', 'string', Rule::enum(StakeholderIssueStatus::class)],
+        ], [
+            'newIssueComment.required' => 'Escreva um comentário para abrir a issue.',
+            'newIssueComment.min' => 'A issue precisa ter pelo menos 5 caracteres.',
+            'newIssueStatus.required' => 'Selecione um status para a issue.',
+            'newIssueStatus.Illuminate\Validation\Rules\Enum' => 'Status de issue inválido.',
+        ]);
+
+        StakeholderIssue::query()->create([
+            'stakeholder_id' => $this->stakeholder->id,
+            'project_id' => $this->project->id,
+            'comment' => $validated['newIssueComment'],
+            'status' => StakeholderIssueStatus::from($validated['newIssueStatus']),
+        ]);
+
+        $this->newIssueComment = '';
+        $this->newIssueStatus = StakeholderIssueStatus::Unread->value;
+    }
+
+    public function updateIssueStatus(int $issueId, string $status): void
+    {
+        $validated = validator([
+            'status' => $status,
+        ], [
+            'status' => ['required', 'string', Rule::enum(StakeholderIssueStatus::class)],
+        ], [
+            'status.Illuminate\Validation\Rules\Enum' => 'Status de issue inválido.',
+        ])->validate();
+
+        $issue = StakeholderIssue::query()
+            ->where('id', $issueId)
+            ->where('stakeholder_id', $this->stakeholder->id)
+            ->first();
+
+        if (! $issue) {
+            return;
+        }
+
+        $issue->update([
+            'status' => StakeholderIssueStatus::from($validated['status']),
+        ]);
+    }
+
     /**
      * @return array{total: int, by_status: array<string, int>, total_hours: float, completion_percent: float, total_commits: int, total_files_changed: int, feature_count: int, done_features: int, feature_completion_percent: float, features_by_status: array<string, int>}
      */
@@ -334,13 +407,14 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                 <flux:icon name="eye" class="size-4 text-violet-400" />
                 <span class="text-sm text-violet-300">Visualização de Stakeholder</span>
             </div>
-            <flux:badge size="sm" color="violet" icon="lock-closed">
-                Somente leitura
+            <flux:badge size="sm" color="violet" icon="chat-bubble-left-right">
+                Leitura + feedback
             </flux:badge>
         </div>
     </div>
 
-    <div class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-6">
+    <div class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-6 xl:flex-row xl:items-start">
+        <div class="flex min-w-0 flex-1 flex-col gap-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-4">
                 <span class="text-4xl">{{ $this->project->emoji }}</span>
@@ -1215,6 +1289,84 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                 </div>
             </flux:tab.panel>
         </flux:tab.group>
+        </div>
+
+        <aside class="w-full xl:sticky xl:top-6 xl:w-96 xl:self-start">
+            <flux:card class="space-y-4">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <flux:heading size="sm">Issues de Feedback</flux:heading>
+                        <flux:text class="text-xs text-zinc-500">
+                            Comentários laterais que podem virar feature.
+                        </flux:text>
+                    </div>
+
+                    <flux:badge size="sm" color="zinc">{{ $this->stakeholderIssues->count() }}</flux:badge>
+                </div>
+
+                <form wire:submit="addIssue" class="space-y-3 rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
+                    <flux:textarea
+                        wire:model="newIssueComment"
+                        label="Novo comentário / issue"
+                        rows="4"
+                        resize="vertical"
+                        placeholder="Descreva o problema, ideia ou melhoria..."
+                    />
+                    <flux:error name="newIssueComment" />
+
+                    <flux:select wire:model="newIssueStatus" label="Status inicial">
+                        @foreach ($issueStatuses as $status)
+                            <flux:select.option :value="$status->value">
+                                {{ $status->label() }}
+                            </flux:select.option>
+                        @endforeach
+                    </flux:select>
+                    <flux:error name="newIssueStatus" />
+
+                    <flux:button type="submit" variant="primary" class="w-full" icon="plus">
+                        Adicionar issue
+                    </flux:button>
+                </form>
+
+                <div class="max-h-[34rem] space-y-2 overflow-y-auto pr-1">
+                    @forelse ($this->stakeholderIssues as $issue)
+                        <div wire:key="stakeholder-issue-{{ $issue->id }}" class="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3">
+                            <div class="mb-2 flex items-center justify-between gap-2">
+                                <flux:badge size="sm" color="{{ $issue->status->color() }}" icon="{{ $issue->status->icon() }}">
+                                    {{ $issue->status->label() }}
+                                </flux:badge>
+                                <span class="text-xs text-zinc-500">{{ $issue->created_at->diffForHumans() }}</span>
+                            </div>
+
+                            <flux:text class="text-sm text-zinc-200">{{ $issue->comment }}</flux:text>
+
+                            @if ($issue->feature)
+                                <div class="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-200">
+                                    Feature vinculada: #F-{{ $issue->feature->id }} {{ $issue->feature->title }}
+                                </div>
+                            @endif
+
+                            <div class="mt-3 flex flex-wrap gap-1.5">
+                                @foreach ($issueStatuses as $status)
+                                    <flux:button
+                                        type="button"
+                                        wire:click="updateIssueStatus({{ $issue->id }}, '{{ $status->value }}')"
+                                        size="sm"
+                                        variant="{{ $issue->status === $status ? 'primary' : 'ghost' }}"
+                                    >
+                                        {{ $status->label() }}
+                                    </flux:button>
+                                @endforeach
+                            </div>
+                        </div>
+                    @empty
+                        <div class="rounded-lg border border-dashed border-zinc-700 py-8 text-center text-sm text-zinc-500">
+                            Nenhuma issue enviada ainda.
+                        </div>
+                    @endforelse
+                </div>
+            </flux:card>
+        </aside>
     </div>
 
     <div class="border-t border-zinc-800 px-6 py-4">

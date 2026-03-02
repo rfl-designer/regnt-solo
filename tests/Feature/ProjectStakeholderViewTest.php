@@ -1,9 +1,12 @@
 <?php
 
+use App\Enums\StakeholderIssueStatus;
 use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Stakeholder;
+use App\Models\StakeholderIssue;
 use App\Models\Task;
+use Livewire\Livewire;
 
 beforeEach(function () {
     $this->project = Project::factory()->create(['name' => 'Projeto Beta']);
@@ -57,7 +60,44 @@ it('renders stakeholder view with project detail tabs and feature board', functi
         ->assertSee('Docs')
         ->assertSee('Métricas')
         ->assertSee('Portal de Stakeholders')
+        ->assertSee('Issues de Feedback')
         ->assertSee('Ver tasks');
+});
+
+it('allows stakeholder to add an issue comment from the sidebar', function () {
+    Livewire::test('pages::project-stakeholder-view', ['token' => $this->stakeholder->access_token])
+        ->set('newIssueComment', 'Precisamos de um relatório com filtros por período e cliente.')
+        ->set('newIssueStatus', StakeholderIssueStatus::ToFeature->value)
+        ->call('addIssue');
+
+    $issue = StakeholderIssue::query()->first();
+
+    expect($issue)->not->toBeNull();
+    expect($issue->project_id)->toBe($this->project->id);
+    expect($issue->stakeholder_id)->toBe($this->stakeholder->id);
+    expect($issue->status)->toBe(StakeholderIssueStatus::ToFeature);
+});
+
+it('updates only the current stakeholder issue status', function () {
+    $ownIssue = StakeholderIssue::factory()->create([
+        'project_id' => $this->project->id,
+        'stakeholder_id' => $this->stakeholder->id,
+        'status' => StakeholderIssueStatus::Unread,
+    ]);
+
+    $otherStakeholder = Stakeholder::factory()->create();
+    $otherIssue = StakeholderIssue::factory()->create([
+        'project_id' => $otherStakeholder->project_id,
+        'stakeholder_id' => $otherStakeholder->id,
+        'status' => StakeholderIssueStatus::Unread,
+    ]);
+
+    Livewire::test('pages::project-stakeholder-view', ['token' => $this->stakeholder->access_token])
+        ->call('updateIssueStatus', $ownIssue->id, StakeholderIssueStatus::Archived->value)
+        ->call('updateIssueStatus', $otherIssue->id, StakeholderIssueStatus::Archived->value);
+
+    expect($ownIssue->fresh()->status)->toBe(StakeholderIssueStatus::Archived);
+    expect($otherIssue->fresh()->status)->toBe(StakeholderIssueStatus::Unread);
 });
 
 it('returns 404 for invalid stakeholder token', function () {

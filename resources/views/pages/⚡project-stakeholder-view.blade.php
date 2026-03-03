@@ -29,7 +29,6 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
 
     /** @var array<string, int> */
     public array $featureLimits = [
-        'draft' => 10,
         'backlog' => 10,
         'todo' => 10,
         'doing' => 10,
@@ -69,7 +68,6 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
         $stakeholder->update(['last_accessed_at' => now()]);
 
         $this->featureStatuses = [
-            FeatureStatus::Draft,
             FeatureStatus::Backlog,
             FeatureStatus::Todo,
             FeatureStatus::Doing,
@@ -365,7 +363,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
 
 <div class="flex min-h-screen w-full flex-col bg-zinc-950">
     <div class="border-b border-zinc-800 bg-violet-500/10 px-6 py-3">
-        <div class="mx-auto flex max-w-7xl items-center justify-between">
+        <div class="flex w-full items-center justify-between">
             <div class="flex items-center gap-2">
                 <flux:icon name="eye" class="size-4 text-violet-400" />
                 <span class="text-sm text-violet-300">Visualização de Stakeholder</span>
@@ -376,7 +374,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
         </div>
     </div>
 
-    <div class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-6 xl:flex-row xl:items-start">
+    <div class="flex w-full flex-1 flex-col gap-6 p-6 xl:flex-row xl:items-start">
         <div class="flex min-w-0 flex-1 flex-col gap-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-4">
@@ -1254,8 +1252,8 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
         </flux:tab.group>
         </div>
 
-        <aside class="w-full xl:sticky xl:top-6 xl:w-96 xl:self-start">
-            <flux:card class="space-y-4">
+        <aside class="w-full xl:sticky xl:top-0 xl:h-screen xl:w-96 xl:self-start">
+            <flux:card class="flex h-full flex-col gap-4">
                 <div class="flex items-start justify-between gap-2">
                     <div>
                         <flux:heading size="sm">Issues de Feedback</flux:heading>
@@ -1267,7 +1265,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                     <flux:badge size="sm" color="zinc">{{ $this->stakeholderIssues->count() }}</flux:badge>
                 </div>
 
-                <div class="max-h-[34rem] space-y-2 overflow-y-auto pr-1">
+                <div class="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                     @forelse ($this->stakeholderIssues as $issue)
                         <div wire:key="stakeholder-issue-{{ $issue->id }}" class="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3">
                             <div class="mb-2 flex items-center justify-between gap-2">
@@ -1316,7 +1314,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
     </div>
 
     <div class="border-t border-zinc-800 px-6 py-4">
-        <div class="mx-auto flex max-w-7xl items-center justify-between text-sm text-zinc-500">
+        <div class="flex w-full items-center justify-between text-sm text-zinc-500">
             <span>SoloBoard</span>
             <span>Link de acompanhamento exclusivo</span>
         </div>

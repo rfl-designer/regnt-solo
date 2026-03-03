@@ -9,7 +9,6 @@ use App\Models\Project;
 use App\Models\Stakeholder;
 use App\Models\StakeholderIssue;
 use Carbon\Carbon;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
@@ -55,12 +54,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
 
     public string $mobileTaskStatus = 'doing';
 
-    /** @var list<StakeholderIssueStatus> */
-    public array $issueStatuses = [];
-
     public string $newIssueComment = '';
-
-    public string $newIssueStatus = 'unread';
 
     public function mount(string $token): void
     {
@@ -88,9 +82,6 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
             TaskStatus::Doing,
             TaskStatus::Done,
         ];
-
-        $this->issueStatuses = StakeholderIssueStatus::cases();
-        $this->newIssueStatus = StakeholderIssueStatus::Unread->value;
     }
 
     #[Computed]
@@ -119,7 +110,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
     {
         return StakeholderIssue::query()
             ->where('stakeholder_id', $this->stakeholder->id)
-            ->with('feature')
+            ->with(['feature', 'stakeholder'])
             ->latest('created_at')
             ->get();
     }
@@ -306,47 +297,19 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
     {
         $validated = $this->validate([
             'newIssueComment' => ['required', 'string', 'min:5', 'max:4000'],
-            'newIssueStatus' => ['required', 'string', Rule::enum(StakeholderIssueStatus::class)],
         ], [
             'newIssueComment.required' => 'Escreva um comentário para abrir a issue.',
             'newIssueComment.min' => 'A issue precisa ter pelo menos 5 caracteres.',
-            'newIssueStatus.required' => 'Selecione um status para a issue.',
-            'newIssueStatus.Illuminate\Validation\Rules\Enum' => 'Status de issue inválido.',
         ]);
 
         StakeholderIssue::query()->create([
             'stakeholder_id' => $this->stakeholder->id,
             'project_id' => $this->project->id,
             'comment' => $validated['newIssueComment'],
-            'status' => StakeholderIssueStatus::from($validated['newIssueStatus']),
+            'status' => StakeholderIssueStatus::Unread,
         ]);
 
         $this->newIssueComment = '';
-        $this->newIssueStatus = StakeholderIssueStatus::Unread->value;
-    }
-
-    public function updateIssueStatus(int $issueId, string $status): void
-    {
-        $validated = validator([
-            'status' => $status,
-        ], [
-            'status' => ['required', 'string', Rule::enum(StakeholderIssueStatus::class)],
-        ], [
-            'status.Illuminate\Validation\Rules\Enum' => 'Status de issue inválido.',
-        ])->validate();
-
-        $issue = StakeholderIssue::query()
-            ->where('id', $issueId)
-            ->where('stakeholder_id', $this->stakeholder->id)
-            ->first();
-
-        if (! $issue) {
-            return;
-        }
-
-        $issue->update([
-            'status' => StakeholderIssueStatus::from($validated['status']),
-        ]);
     }
 
     /**
@@ -1304,30 +1267,6 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                     <flux:badge size="sm" color="zinc">{{ $this->stakeholderIssues->count() }}</flux:badge>
                 </div>
 
-                <form wire:submit="addIssue" class="space-y-3 rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
-                    <flux:textarea
-                        wire:model="newIssueComment"
-                        label="Novo comentário / issue"
-                        rows="4"
-                        resize="vertical"
-                        placeholder="Descreva o problema, ideia ou melhoria..."
-                    />
-                    <flux:error name="newIssueComment" />
-
-                    <flux:select wire:model="newIssueStatus" label="Status inicial">
-                        @foreach ($issueStatuses as $status)
-                            <flux:select.option :value="$status->value">
-                                {{ $status->label() }}
-                            </flux:select.option>
-                        @endforeach
-                    </flux:select>
-                    <flux:error name="newIssueStatus" />
-
-                    <flux:button type="submit" variant="primary" class="w-full" icon="plus">
-                        Adicionar issue
-                    </flux:button>
-                </form>
-
                 <div class="max-h-[34rem] space-y-2 overflow-y-auto pr-1">
                     @forelse ($this->stakeholderIssues as $issue)
                         <div wire:key="stakeholder-issue-{{ $issue->id }}" class="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3">
@@ -1340,24 +1279,16 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
 
                             <flux:text class="text-sm text-zinc-200">{{ $issue->comment }}</flux:text>
 
+                            <div class="mt-2 flex items-center gap-1.5 text-xs text-zinc-500">
+                                <flux:icon name="envelope" class="size-3.5" />
+                                <span>{{ $issue->stakeholder?->email ?? $this->stakeholder->email }}</span>
+                            </div>
+
                             @if ($issue->feature)
                                 <div class="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-200">
                                     Feature vinculada: #F-{{ $issue->feature->id }} {{ $issue->feature->title }}
                                 </div>
                             @endif
-
-                            <div class="mt-3 flex flex-wrap gap-1.5">
-                                @foreach ($issueStatuses as $status)
-                                    <flux:button
-                                        type="button"
-                                        wire:click="updateIssueStatus({{ $issue->id }}, '{{ $status->value }}')"
-                                        size="sm"
-                                        variant="{{ $issue->status === $status ? 'primary' : 'ghost' }}"
-                                    >
-                                        {{ $status->label() }}
-                                    </flux:button>
-                                @endforeach
-                            </div>
                         </div>
                     @empty
                         <div class="rounded-lg border border-dashed border-zinc-700 py-8 text-center text-sm text-zinc-500">
@@ -1365,6 +1296,21 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                         </div>
                     @endforelse
                 </div>
+
+                <form wire:submit="addIssue" class="space-y-3 rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
+                    <flux:textarea
+                        wire:model="newIssueComment"
+                        label="Novo comentário / issue"
+                        rows="4"
+                        resize="vertical"
+                        placeholder="Descreva o problema, ideia ou melhoria..."
+                    />
+                    <flux:error name="newIssueComment" />
+
+                    <flux:button type="submit" variant="primary" class="w-full" icon="plus">
+                        Enviar
+                    </flux:button>
+                </form>
             </flux:card>
         </aside>
     </div>

@@ -101,7 +101,7 @@ it('sends email when adding stakeholder', function () {
         ->set('email', 'david@example.com')
         ->call('addStakeholder');
 
-    Mail::assertQueued(StakeholderAccessLink::class, function ($mail) {
+    Mail::assertSent(StakeholderAccessLink::class, function ($mail) {
         return $mail->hasTo('david@example.com');
     });
 });
@@ -118,7 +118,7 @@ it('can resend access link', function () {
         ->dispatch('open-stakeholders-modal', projectId: $this->project->id)
         ->call('resendEmail', $stakeholder->id);
 
-    Mail::assertQueued(StakeholderAccessLink::class, function ($mail) use ($stakeholder) {
+    Mail::assertSent(StakeholderAccessLink::class, function ($mail) use ($stakeholder) {
         return $mail->hasTo($stakeholder->email);
     });
 });

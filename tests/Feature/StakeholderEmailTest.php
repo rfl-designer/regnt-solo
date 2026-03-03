@@ -16,9 +16,9 @@ beforeEach(function () {
 });
 
 it('can send email with stakeholder access link', function () {
-    Mail::to($this->stakeholder->email)->queue(new StakeholderAccessLink($this->stakeholder));
+    Mail::to($this->stakeholder->email)->send(new StakeholderAccessLink($this->stakeholder));
 
-    Mail::assertQueued(StakeholderAccessLink::class, function ($mail) {
+    Mail::assertSent(StakeholderAccessLink::class, function ($mail) {
         return $mail->hasTo($this->stakeholder->email);
     });
 });
@@ -33,10 +33,11 @@ it('email contains stakeholder name, project name and correct link', function ()
         ->toContain($this->stakeholder->access_token);
 });
 
-it('email implements should queue', function () {
-    Mail::to($this->stakeholder->email)->queue(new StakeholderAccessLink($this->stakeholder));
+it('email is sent synchronously (without queue)', function () {
+    Mail::to($this->stakeholder->email)->send(new StakeholderAccessLink($this->stakeholder));
 
-    Mail::assertQueued(StakeholderAccessLink::class);
+    Mail::assertSent(StakeholderAccessLink::class);
+    Mail::assertNothingQueued();
 });
 
 it('email has correct subject', function () {
@@ -48,13 +49,13 @@ it('email has correct subject', function () {
 
 it('can resend access link email', function () {
     // Send email
-    Mail::to($this->stakeholder->email)->queue(new StakeholderAccessLink($this->stakeholder));
+    Mail::to($this->stakeholder->email)->send(new StakeholderAccessLink($this->stakeholder));
 
     // Clear and resend
     Mail::fake();
-    Mail::to($this->stakeholder->email)->queue(new StakeholderAccessLink($this->stakeholder));
+    Mail::to($this->stakeholder->email)->send(new StakeholderAccessLink($this->stakeholder));
 
-    Mail::assertQueued(StakeholderAccessLink::class, function ($mail) {
+    Mail::assertSent(StakeholderAccessLink::class, function ($mail) {
         return $mail->hasTo($this->stakeholder->email);
     });
 });

@@ -49,7 +49,7 @@ new class extends Component
             'email' => $this->email,
         ]);
 
-        Mail::to($stakeholder->email)->queue(new StakeholderAccessLink($stakeholder));
+        Mail::to($stakeholder->email)->send(new StakeholderAccessLink($stakeholder));
 
         $this->reset('name', 'email');
         unset($this->project);
@@ -65,7 +65,7 @@ new class extends Component
     {
         $stakeholder = Stakeholder::findOrFail($stakeholderId);
 
-        Mail::to($stakeholder->email)->queue(new StakeholderAccessLink($stakeholder));
+        Mail::to($stakeholder->email)->send(new StakeholderAccessLink($stakeholder));
 
         Flux::toast(
             variant: 'success',
@@ -132,7 +132,10 @@ new class extends Component
                             wire:target="addStakeholder"
                         >
                             <span wire:loading.remove wire:target="addStakeholder">Adicionar e enviar link</span>
-                            <span wire:loading wire:target="addStakeholder">Enviando...</span>
+                            <span wire:loading wire:target="addStakeholder" class="inline-flex items-center gap-2">
+                                <flux:icon name="arrow-path" class="size-4 animate-spin" />
+                                <span>Enviando...</span>
+                            </span>
                         </flux:button>
                     </div>
                 </form>
@@ -173,12 +176,24 @@ new class extends Component
                                     <flux:button
                                         variant="ghost"
                                         size="xs"
-                                        icon="paper-airplane"
                                         wire:click="resendEmail({{ $stakeholder->id }})"
                                         wire:loading.attr="disabled"
                                         wire:target="resendEmail({{ $stakeholder->id }})"
                                         title="Reenviar link"
-                                    />
+                                    >
+                                        <flux:icon
+                                            wire:loading.remove
+                                            wire:target="resendEmail({{ $stakeholder->id }})"
+                                            name="paper-airplane"
+                                            class="size-3.5"
+                                        />
+                                        <flux:icon
+                                            wire:loading
+                                            wire:target="resendEmail({{ $stakeholder->id }})"
+                                            name="arrow-path"
+                                            class="size-3.5 animate-spin"
+                                        />
+                                    </flux:button>
 
                                     <flux:button
                                         variant="ghost"

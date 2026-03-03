@@ -92,6 +92,21 @@ it('shows issue history with stakeholder email in the panel', function () {
         ->assertSee('Enviar');
 });
 
+it('can hide and show issues panel in stakeholder view', function () {
+    Livewire::test('pages::project-stakeholder-view', ['token' => $this->stakeholder->access_token])
+        ->assertSet('showIssuesPanel', true)
+        ->assertSee('Issues de Feedback')
+        ->assertSee('Esconder issues')
+        ->call('toggleIssuesPanel')
+        ->assertSet('showIssuesPanel', false)
+        ->assertDontSee('Issues de Feedback')
+        ->assertSee('Mostrar issues')
+        ->call('toggleIssuesPanel')
+        ->assertSet('showIssuesPanel', true)
+        ->assertSee('Issues de Feedback')
+        ->assertSee('Esconder issues');
+});
+
 it('returns 404 for invalid stakeholder token', function () {
     $this->withoutVite();
 

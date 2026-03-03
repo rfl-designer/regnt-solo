@@ -55,6 +55,8 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
 
     public string $newIssueComment = '';
 
+    public bool $showIssuesPanel = true;
+
     public function mount(string $token): void
     {
         $this->token = $token;
@@ -310,6 +312,11 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
         $this->newIssueComment = '';
     }
 
+    public function toggleIssuesPanel(): void
+    {
+        $this->showIssuesPanel = ! $this->showIssuesPanel;
+    }
+
     /**
      * @return array{total: int, by_status: array<string, int>, total_hours: float, completion_percent: float, total_commits: int, total_files_changed: int, feature_count: int, done_features: int, feature_completion_percent: float, features_by_status: array<string, int>}
      */
@@ -395,9 +402,20 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                 </div>
             </div>
 
-            <div class="flex items-center gap-2 text-sm text-zinc-500">
-                <flux:icon name="user" class="size-4" />
-                <span>{{ $this->stakeholder->name }}</span>
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 text-sm text-zinc-500">
+                    <flux:icon name="user" class="size-4" />
+                    <span>{{ $this->stakeholder->name }}</span>
+                </div>
+
+                <flux:button
+                    wire:click="toggleIssuesPanel"
+                    variant="ghost"
+                    size="sm"
+                    icon="{{ $showIssuesPanel ? 'eye-slash' : 'eye' }}"
+                >
+                    {{ $showIssuesPanel ? 'Esconder issues' : 'Mostrar issues' }}
+                </flux:button>
             </div>
         </div>
 
@@ -1252,65 +1270,67 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
         </flux:tab.group>
         </div>
 
-        <aside class="w-full xl:sticky xl:top-0 xl:h-screen xl:w-96 xl:self-start">
-            <flux:card class="flex h-full flex-col gap-4">
-                <div class="flex items-start justify-between gap-2">
-                    <div>
-                        <flux:heading size="sm">Issues de Feedback</flux:heading>
-                        <flux:text class="text-xs text-zinc-500">
-                            Comentários laterais que podem virar feature.
-                        </flux:text>
+        @if ($showIssuesPanel)
+            <aside class="w-full xl:sticky xl:top-0 xl:h-screen xl:w-96 xl:self-start">
+                <flux:card class="flex h-full flex-col gap-4">
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <flux:heading size="sm">Issues de Feedback</flux:heading>
+                            <flux:text class="text-xs text-zinc-500">
+                                Comentários laterais que podem virar feature.
+                            </flux:text>
+                        </div>
+
+                        <flux:badge size="sm" color="zinc">{{ $this->stakeholderIssues->count() }}</flux:badge>
                     </div>
 
-                    <flux:badge size="sm" color="zinc">{{ $this->stakeholderIssues->count() }}</flux:badge>
-                </div>
-
-                <div class="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-                    @forelse ($this->stakeholderIssues as $issue)
-                        <div wire:key="stakeholder-issue-{{ $issue->id }}" class="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3">
-                            <div class="mb-2 flex items-center justify-between gap-2">
-                                <flux:badge size="sm" color="{{ $issue->status->color() }}" icon="{{ $issue->status->icon() }}">
-                                    {{ $issue->status->label() }}
-                                </flux:badge>
-                                <span class="text-xs text-zinc-500">{{ $issue->created_at->diffForHumans() }}</span>
-                            </div>
-
-                            <flux:text class="text-sm text-zinc-200">{{ $issue->comment }}</flux:text>
-
-                            <div class="mt-2 flex items-center gap-1.5 text-xs text-zinc-500">
-                                <flux:icon name="envelope" class="size-3.5" />
-                                <span>{{ $issue->stakeholder?->email ?? $this->stakeholder->email }}</span>
-                            </div>
-
-                            @if ($issue->feature)
-                                <div class="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-200">
-                                    Feature vinculada: #F-{{ $issue->feature->id }} {{ $issue->feature->title }}
+                    <div class="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                        @forelse ($this->stakeholderIssues as $issue)
+                            <div wire:key="stakeholder-issue-{{ $issue->id }}" class="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3">
+                                <div class="mb-2 flex items-center justify-between gap-2">
+                                    <flux:badge size="sm" color="{{ $issue->status->color() }}" icon="{{ $issue->status->icon() }}">
+                                        {{ $issue->status->label() }}
+                                    </flux:badge>
+                                    <span class="text-xs text-zinc-500">{{ $issue->created_at->diffForHumans() }}</span>
                                 </div>
-                            @endif
-                        </div>
-                    @empty
-                        <div class="rounded-lg border border-dashed border-zinc-700 py-8 text-center text-sm text-zinc-500">
-                            Nenhuma issue enviada ainda.
-                        </div>
-                    @endforelse
-                </div>
 
-                <form wire:submit="addIssue" class="space-y-3 rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
-                    <flux:textarea
-                        wire:model="newIssueComment"
-                        label="Novo comentário / issue"
-                        rows="4"
-                        resize="vertical"
-                        placeholder="Descreva o problema, ideia ou melhoria..."
-                    />
-                    <flux:error name="newIssueComment" />
+                                <flux:text class="text-sm text-zinc-200">{{ $issue->comment }}</flux:text>
 
-                    <flux:button type="submit" variant="primary" class="w-full" icon="plus">
-                        Enviar
-                    </flux:button>
-                </form>
-            </flux:card>
-        </aside>
+                                <div class="mt-2 flex items-center gap-1.5 text-xs text-zinc-500">
+                                    <flux:icon name="envelope" class="size-3.5" />
+                                    <span>{{ $issue->stakeholder?->email ?? $this->stakeholder->email }}</span>
+                                </div>
+
+                                @if ($issue->feature)
+                                    <div class="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-200">
+                                        Feature vinculada: #F-{{ $issue->feature->id }} {{ $issue->feature->title }}
+                                    </div>
+                                @endif
+                            </div>
+                        @empty
+                            <div class="rounded-lg border border-dashed border-zinc-700 py-8 text-center text-sm text-zinc-500">
+                                Nenhuma issue enviada ainda.
+                            </div>
+                        @endforelse
+                    </div>
+
+                    <form wire:submit="addIssue" class="space-y-3 rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
+                        <flux:textarea
+                            wire:model="newIssueComment"
+                            label="Novo comentário / issue"
+                            rows="4"
+                            resize="vertical"
+                            placeholder="Descreva o problema, ideia ou melhoria..."
+                        />
+                        <flux:error name="newIssueComment" />
+
+                        <flux:button type="submit" variant="primary" class="w-full" icon="plus">
+                            Enviar
+                        </flux:button>
+                    </form>
+                </flux:card>
+            </aside>
+        @endif
     </div>
 
     <div class="border-t border-zinc-800 px-6 py-4">

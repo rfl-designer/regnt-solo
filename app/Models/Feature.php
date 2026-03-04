@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Enums\FeaturePriority;
 use App\Enums\FeatureStatus;
 use App\Enums\TaskStatus;
+use App\Observers\FeatureRealtimeObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
+#[ObservedBy([FeatureRealtimeObserver::class])]
 class Feature extends Model
 {
     /** @use HasFactory<\Database\Factories\FeatureFactory> */

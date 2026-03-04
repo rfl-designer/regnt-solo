@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
 use App\Observers\TaskObserver;
+use App\Observers\TaskRealtimeObserver;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[ObservedBy([TaskObserver::class])]
+#[ObservedBy([TaskObserver::class, TaskRealtimeObserver::class])]
 class Task extends Model
 {
     /** @use HasFactory<\Database\Factories\TaskFactory> */

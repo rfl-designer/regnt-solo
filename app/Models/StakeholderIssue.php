@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use App\Enums\StakeholderIssueStatus;
+use App\Observers\StakeholderIssueRealtimeObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+#[ObservedBy([StakeholderIssueRealtimeObserver::class])]
 class StakeholderIssue extends Model
 {
     /** @use HasFactory<\Database\Factories\StakeholderIssueFactory> */

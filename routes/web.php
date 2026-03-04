@@ -1,8 +1,12 @@
 <?php
 
+use App\Support\RealtimeEntitySync;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard')->name('home');
+
+Route::get('/realtime/snapshot', fn () => response()->json(RealtimeEntitySync::snapshot()))
+    ->name('realtime.snapshot');
 
 Route::livewire('dashboard', 'pages::dashboard')
     ->middleware(['auth'])

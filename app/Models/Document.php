@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use App\Enums\DocumentType;
+use App\Observers\DocumentRealtimeObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
+#[ObservedBy([DocumentRealtimeObserver::class])]
 class Document extends Model
 {
     /** @use HasFactory<\Database\Factories\DocumentFactory> */

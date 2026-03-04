@@ -2,11 +2,13 @@
 
 use App\Enums\FeatureStatus;
 use App\Enums\ProjectStatus;
+use App\Enums\StakeholderIssueStatus;
 use App\Enums\TaskStatus;
 use App\Models\DailyPlan;
 use App\Models\Document;
 use App\Models\Feature;
 use App\Models\Project;
+use App\Models\StakeholderIssue;
 use App\Models\Task;
 use Carbon\Carbon;
 use Flux\Flux;
@@ -102,6 +104,19 @@ new class extends Component
     }
 
     /**
+     * @return \Illuminate\Support\Collection<int, StakeholderIssue>
+     */
+    #[Computed]
+    public function stakeholderIssues(): \Illuminate\Support\Collection
+    {
+        return StakeholderIssue::query()
+            ->where('project_id', $this->project->id)
+            ->with(['stakeholder', 'feature'])
+            ->latest('created_at')
+            ->get();
+    }
+
+    /**
      * @return \Illuminate\Support\Collection<int, \App\Models\Document>
      */
     #[Computed]
@@ -193,6 +208,44 @@ new class extends Component
     public function loadMore(string $status): void
     {
         $this->limits[$status] += 10;
+    }
+
+    public function markIssueAsToFeature(int $issueId): void
+    {
+        $issue = StakeholderIssue::query()
+            ->where('project_id', $this->project->id)
+            ->findOrFail($issueId);
+
+        if ($issue->status === StakeholderIssueStatus::ToFeature) {
+            return;
+        }
+
+        $issue->update([
+            'status' => StakeholderIssueStatus::ToFeature,
+        ]);
+
+        unset($this->stakeholderIssues);
+
+        Flux::toast(variant: 'success', heading: 'Issue atualizada', text: 'Issue marcada para feature.');
+    }
+
+    public function archiveIssue(int $issueId): void
+    {
+        $issue = StakeholderIssue::query()
+            ->where('project_id', $this->project->id)
+            ->findOrFail($issueId);
+
+        if ($issue->status === StakeholderIssueStatus::Archived) {
+            return;
+        }
+
+        $issue->update([
+            'status' => StakeholderIssueStatus::Archived,
+        ]);
+
+        unset($this->stakeholderIssues);
+
+        Flux::toast(variant: 'success', heading: 'Issue arquivada', text: 'A issue foi movida para arquivadas.');
     }
 
     public function toggleExpanded(int $featureId): void
@@ -439,7 +492,7 @@ new class extends Component
     #[On('document-saved')]
     public function refreshProject(): void
     {
-        unset($this->project, $this->features, $this->featuresByStatus, $this->metrics, $this->projectDocuments, $this->selectedDocument, $this->selectedFeature, $this->drillFeature);
+        unset($this->project, $this->features, $this->featuresByStatus, $this->metrics, $this->projectDocuments, $this->selectedDocument, $this->selectedFeature, $this->drillFeature, $this->stakeholderIssues);
     }
 }
 
@@ -538,6 +591,7 @@ new class extends Component
         <flux:tabs wire:model="tab">
             <flux:tab name="board" icon="view-columns">Board</flux:tab>
             <flux:tab name="features" icon="rectangle-stack">Features</flux:tab>
+            <flux:tab name="issues" icon="chat-bubble-left-right">Issues ({{ $this->stakeholderIssues->count() }})</flux:tab>
             <flux:tab name="docs" icon="document-text">Docs</flux:tab>
             <flux:tab name="metrics" icon="chart-bar-square">Métricas</flux:tab>
         </flux:tabs>
@@ -1086,6 +1140,87 @@ new class extends Component
                             @endif
                         @endif
                     </flux:modal>
+                @endif
+            </div>
+        </flux:tab.panel>
+
+        {{-- Tab Panel: Issues --}}
+        <flux:tab.panel name="issues">
+            <div class="flex flex-col gap-4">
+                <div class="flex items-center justify-between">
+                    <flux:badge size="sm" color="zinc">{{ $this->stakeholderIssues->count() }} issues</flux:badge>
+                </div>
+
+                @if ($this->stakeholderIssues->isEmpty())
+                    <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-700 py-16">
+                        <flux:icon name="chat-bubble-left-right" class="mb-3 size-12 text-zinc-600" />
+                        <flux:heading size="sm" class="text-zinc-400">Nenhuma issue de stakeholder neste projeto</flux:heading>
+                        <flux:text class="mt-1 text-sm text-zinc-500">Quando stakeholders enviarem feedback, as issues aparecerão aqui.</flux:text>
+                    </div>
+                @else
+                    <div class="space-y-3">
+                        @foreach ($this->stakeholderIssues as $issue)
+                            <div wire:key="project-issue-{{ $issue->id }}" class="rounded-xl border border-zinc-700 bg-zinc-900/50 p-4">
+                                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div class="min-w-0 space-y-2">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <flux:badge size="sm" color="{{ $issue->status->color() }}" icon="{{ $issue->status->icon() }}">
+                                                {{ $issue->status->label() }}
+                                            </flux:badge>
+
+                                            <span class="text-xs text-zinc-500">#I-{{ $issue->id }}</span>
+                                            <span class="text-xs text-zinc-500">{{ $issue->created_at->format('d/m/Y H:i') }}</span>
+                                        </div>
+
+                                        <p class="text-sm leading-relaxed whitespace-pre-wrap text-zinc-200">{{ $issue->comment }}</p>
+
+                                        <div class="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                                            <span>{{ $issue->stakeholder?->name ?? 'Stakeholder' }}</span>
+                                            <span>•</span>
+                                            <span>{{ $issue->stakeholder?->email ?? 'Sem e-mail' }}</span>
+                                        </div>
+
+                                        @if ($issue->feature)
+                                            <div class="flex items-center gap-2 text-xs">
+                                                <flux:icon name="rectangle-stack" class="size-4 text-emerald-400" />
+                                                <span class="text-zinc-400">Feature vinculada:</span>
+                                                <span class="font-medium text-zinc-200">#F-{{ $issue->feature->id }} {{ $issue->feature->title }}</span>
+                                            </div>
+                                        @endif
+                                    </div>
+
+                                    <div class="flex shrink-0 items-center gap-2">
+                                        @if ($issue->status !== StakeholderIssueStatus::ToFeature && $issue->status !== StakeholderIssueStatus::Feature)
+                                            <flux:button
+                                                size="sm"
+                                                variant="ghost"
+                                                icon="light-bulb"
+                                                wire:click="markIssueAsToFeature({{ $issue->id }})"
+                                                wire:loading.attr="disabled"
+                                                wire:target="markIssueAsToFeature({{ $issue->id }})"
+                                            >
+                                                Para feature
+                                            </flux:button>
+                                        @endif
+
+                                        @if ($issue->status !== StakeholderIssueStatus::Archived)
+                                            <flux:button
+                                                size="sm"
+                                                variant="ghost"
+                                                icon="archive-box"
+                                                class="text-zinc-300 hover:text-zinc-100"
+                                                wire:click="archiveIssue({{ $issue->id }})"
+                                                wire:loading.attr="disabled"
+                                                wire:target="archiveIssue({{ $issue->id }})"
+                                            >
+                                                Arquivar
+                                            </flux:button>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
                 @endif
             </div>
         </flux:tab.panel>

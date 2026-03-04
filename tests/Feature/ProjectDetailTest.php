@@ -2,8 +2,11 @@
 
 use App\Enums\FeatureStatus;
 use App\Enums\ProjectStatus;
+use App\Enums\StakeholderIssueStatus;
 use App\Models\Feature;
 use App\Models\Project;
+use App\Models\Stakeholder;
+use App\Models\StakeholderIssue;
 use App\Models\Task;
 use App\Models\User;
 use Livewire\Livewire;
@@ -234,6 +237,65 @@ test('project detail docs tab shows empty state when no documents', function () 
     Livewire::test('pages::project-detail', ['slug' => $project->slug])
         ->set('tab', 'docs')
         ->assertSee('Nenhum documento neste projeto.');
+});
+
+test('project detail issues tab shows stakeholder issues from the project', function () {
+    $project = Project::factory()->create();
+    $otherProject = Project::factory()->create();
+
+    $stakeholder = Stakeholder::factory()->create([
+        'project_id' => $project->id,
+        'email' => 'stakeholder.projeto@example.com',
+    ]);
+
+    StakeholderIssue::factory()->create([
+        'project_id' => $project->id,
+        'stakeholder_id' => $stakeholder->id,
+        'comment' => 'Issue do projeto principal',
+    ]);
+
+    $otherStakeholder = Stakeholder::factory()->create(['project_id' => $otherProject->id]);
+    StakeholderIssue::factory()->create([
+        'project_id' => $otherProject->id,
+        'stakeholder_id' => $otherStakeholder->id,
+        'comment' => 'Issue de outro projeto',
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->set('tab', 'issues')
+        ->assertSee('Issue do projeto principal')
+        ->assertSee('stakeholder.projeto@example.com')
+        ->assertDontSee('Issue de outro projeto');
+});
+
+test('project detail can mark stakeholder issue as to feature', function () {
+    $project = Project::factory()->create();
+    $stakeholder = Stakeholder::factory()->create(['project_id' => $project->id]);
+    $issue = StakeholderIssue::factory()->create([
+        'project_id' => $project->id,
+        'stakeholder_id' => $stakeholder->id,
+        'status' => StakeholderIssueStatus::Unread,
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->call('markIssueAsToFeature', $issue->id);
+
+    expect($issue->fresh()->status)->toBe(StakeholderIssueStatus::ToFeature);
+});
+
+test('project detail can archive stakeholder issue', function () {
+    $project = Project::factory()->create();
+    $stakeholder = Stakeholder::factory()->create(['project_id' => $project->id]);
+    $issue = StakeholderIssue::factory()->create([
+        'project_id' => $project->id,
+        'stakeholder_id' => $stakeholder->id,
+        'status' => StakeholderIssueStatus::Unread,
+    ]);
+
+    Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->call('archiveIssue', $issue->id);
+
+    expect($issue->fresh()->status)->toBe(StakeholderIssueStatus::Archived);
 });
 
 test('project detail can select document for preview', function () {

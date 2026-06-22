@@ -49,6 +49,9 @@ class GetTaskTool extends Tool
             'pr_url' => $task->pr_url,
             'is_overdue' => $task->isOverdue(),
             'is_running' => $task->isRunning(),
+            'feature_id' => $task->feature_id,
+            'github_issue_number' => $task->github_issue_number,
+            'github_synced_hash' => $task->github_synced_hash,
             'time_entries' => $task->timeEntries->map(fn ($entry) => [
                 'id' => $entry->id,
                 'started_at' => $entry->started_at->toDateTimeString(),

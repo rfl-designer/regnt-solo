@@ -11,7 +11,7 @@ As decisões de fundo estão registradas — leia antes de mexer no comportament
 - `CONTEXT.md` (raiz) — glossário: PRD, Feature, Task, Slice, Follow-up, Loose issue, Mirror, Stakeholder board, `type:prd`.
 - `docs/adr/0001` (GitHub fonte da verdade + mirror one-way), `0002` (Feature.status manual), `0003` (reescrita para clientes).
 
-> **Dependência de backend.** Esta skill persiste exclusivamente via MCP tools. A parte de **Feature** já está operacional (#84 deu `status` manual a `update-feature`; #85 deu `github_issue_number`/`github_synced_hash` e upsert a `create-feature`/`update-feature`). A parte de **Task** (campos github em `create-task`/`update-task`) chega na #86 e a reconciliação na #87 — enquanto essas duas não estiverem mergeadas, o espelhamento de Tasks roda em **dry-run** (mostra o plano) mas não persiste.
+> **Dependência de backend.** Esta skill persiste exclusivamente via MCP tools. Features (#84/#85) e Tasks (#86) já estão operacionais: `create-task`/`update-task` carregam `github_issue_number`, `github_synced_hash` e `feature_id` com upsert idempotente. Falta apenas a **reconciliação por deleção** (#87) — enquanto não mergeada, o passo 6 (remover Tasks de issues mortas) roda em **dry-run** (lista as órfãs) mas não deleta.
 
 ## Invocação
 

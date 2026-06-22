@@ -36,10 +36,14 @@ class UpdateTaskTool extends Tool
             'estimated_minutes' => 'nullable|integer|min:1',
             'session_prompt' => 'nullable|string',
             'session_result' => 'nullable|string',
+            'feature_id' => 'nullable|integer|exists:features,id',
+            'github_issue_number' => 'nullable|integer',
+            'github_synced_hash' => 'nullable|string',
         ], [
             'task_id.required' => 'You must provide a task_id. Use list-tasks to find available task IDs.',
             'task_id.exists' => 'Task not found. Use list-tasks to find available task IDs.',
             'project_slug.exists' => 'Project not found. Use list-projects to find available project slugs.',
+            'feature_id.exists' => 'Feature not found. Use list-features to find available feature IDs.',
         ]);
 
         $task = Task::findOrFail($validated['task_id']);
@@ -87,6 +91,18 @@ class UpdateTaskTool extends Tool
             $updates['session_result'] = $validated['session_result'];
         }
 
+        if (array_key_exists('feature_id', $validated)) {
+            $updates['feature_id'] = $validated['feature_id'];
+        }
+
+        if (isset($validated['github_issue_number'])) {
+            $updates['github_issue_number'] = $validated['github_issue_number'];
+        }
+
+        if (array_key_exists('github_synced_hash', $validated)) {
+            $updates['github_synced_hash'] = $validated['github_synced_hash'];
+        }
+
         if (! empty($updates)) {
             $task->update($updates);
         }
@@ -105,6 +121,9 @@ class UpdateTaskTool extends Tool
             'is_overdue' => $task->isOverdue(),
             'is_running' => $task->isRunning(),
             'is_session_task' => $task->isSessionTask(),
+            'feature_id' => $task->feature_id,
+            'github_issue_number' => $task->github_issue_number,
+            'github_synced_hash' => $task->github_synced_hash,
             'updated_at' => $task->updated_at->toDateTimeString(),
         ];
 
@@ -129,6 +148,9 @@ class UpdateTaskTool extends Tool
             'estimated_minutes' => $schema->integer()->description('New estimated time in minutes.'),
             'session_prompt' => $schema->string()->description('AI session prompt. When provided, the task becomes a session task (AI-assisted coding session). Use User Story format: "## User Story\nComo [persona], quero [ação] para [benefício].\n\n## Contexto\n[Situação atual]\n\n## Critérios de Aceitação\n- [ ] Critério 1\n- [ ] Critério 2\n\n## Notas Técnicas\n[Arquivos, dependências]"'),
             'session_result' => $schema->string()->description('Result/summary of the AI coding session.'),
+            'feature_id' => $schema->integer()->description('ID of the feature this task belongs to (resolved by the sync from the issue parent chain). Use list-features to find IDs.'),
+            'github_issue_number' => $schema->integer()->description('GitHub issue number this task mirrors (upsert key).'),
+            'github_synced_hash' => $schema->string()->description('Digest of the source GitHub issue, used to gate natural-language rewrites.'),
         ];
     }
 }

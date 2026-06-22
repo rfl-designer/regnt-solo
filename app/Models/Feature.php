@@ -32,6 +32,7 @@ class Feature extends Model
         'slug',
         'spec',
         'priority',
+        'status',
         'due_date',
         'sort_order',
     ];
@@ -45,6 +46,7 @@ class Feature extends Model
     {
         return [
             'priority' => FeaturePriority::class,
+            'status' => FeatureStatus::class,
             'due_date' => 'date',
         ];
     }
@@ -91,38 +93,6 @@ class Feature extends Model
     public function stakeholderIssues(): HasMany
     {
         return $this->hasMany(StakeholderIssue::class);
-    }
-
-    /**
-     * Get the computed status based on tasks.
-     */
-    protected function status(): Attribute
-    {
-        return Attribute::get(function (): FeatureStatus {
-            $tasks = $this->relationLoaded('tasks')
-                ? $this->tasks
-                : $this->tasks()->get();
-
-            if ($tasks->isEmpty()) {
-                return FeatureStatus::Draft;
-            }
-
-            $statuses = $tasks->pluck('status');
-
-            if ($statuses->every(fn (TaskStatus $s): bool => $s === TaskStatus::Done)) {
-                return FeatureStatus::Done;
-            }
-
-            if ($statuses->contains(TaskStatus::Doing)) {
-                return FeatureStatus::Doing;
-            }
-
-            if ($statuses->contains(TaskStatus::Todo)) {
-                return FeatureStatus::Todo;
-            }
-
-            return FeatureStatus::Backlog;
-        });
     }
 
     /**

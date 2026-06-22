@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\FeatureStatus;
 use App\Enums\TaskStatus;
 use App\Models\Feature;
 use App\Models\Project;
@@ -17,19 +18,15 @@ beforeEach(function () {
 
 describe('Feature ID on Cards', function () {
     test('feature card renders #F-{id} with the correct ID', function () {
-        $feature = Feature::factory()->create(['title' => 'Test Feature']);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
+        $feature = Feature::factory()->todo()->create(['title' => 'Test Feature']);
 
         $this->get(route('work'))
             ->assertSee("#F-{$feature->id}");
     });
 
     test('feature ID appears on Work page kanban', function () {
-        $feature1 = Feature::factory()->create(['title' => 'Feature Alpha']);
-        Task::factory()->create(['feature_id' => $feature1->id, 'status' => TaskStatus::Todo]);
-
-        $feature2 = Feature::factory()->create(['title' => 'Feature Beta']);
-        Task::factory()->create(['feature_id' => $feature2->id, 'status' => TaskStatus::Doing]);
+        $feature1 = Feature::factory()->todo()->create(['title' => 'Feature Alpha']);
+        $feature2 = Feature::factory()->doing()->create(['title' => 'Feature Beta']);
 
         $response = $this->get(route('work'));
 
@@ -42,6 +39,7 @@ describe('Feature ID on Cards', function () {
         $feature = Feature::factory()->create([
             'title' => 'Project Feature',
             'project_id' => $project->id,
+            'status' => FeatureStatus::Todo,
         ]);
         Task::factory()->create([
             'feature_id' => $feature->id,

@@ -44,15 +44,10 @@ test('list-features filters by project slug', function () {
 });
 
 test('list-features filters by status', function () {
-    // Create features with specific tasks to control computed status
-    $draftFeature = Feature::factory()->create(['title' => 'Draft Feature']);
-    // No tasks = draft status
-
-    $doingFeature = Feature::factory()->create(['title' => 'Doing Feature']);
-    Task::factory()->doing()->create(['feature_id' => $doingFeature->id]);
-
-    $doneFeature = Feature::factory()->create(['title' => 'Done Feature']);
-    Task::factory()->done()->create(['feature_id' => $doneFeature->id]);
+    // Status is now a persisted column, set explicitly
+    Feature::factory()->create(['title' => 'Draft Feature', 'status' => 'draft']);
+    Feature::factory()->create(['title' => 'Doing Feature', 'status' => 'doing']);
+    Feature::factory()->create(['title' => 'Done Feature', 'status' => 'done']);
 
     $response = SoloBoardServer::tool(ListFeaturesTool::class, [
         'status' => 'doing',
@@ -228,6 +223,34 @@ test('update-feature changes priority', function () {
     expect($feature->priority)->toBe(FeaturePriority::Urgent);
 });
 
+test('update-feature persists status column', function () {
+    $feature = Feature::factory()->create(['status' => 'backlog']);
+
+    $response = SoloBoardServer::tool(UpdateFeatureTool::class, [
+        'feature_id' => $feature->id,
+        'status' => 'doing',
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('"status": "doing"');
+
+    $this->assertDatabaseHas('features', [
+        'id' => $feature->id,
+        'status' => 'doing',
+    ]);
+});
+
+test('update-feature rejects invalid status', function () {
+    $feature = Feature::factory()->create();
+
+    $response = SoloBoardServer::tool(UpdateFeatureTool::class, [
+        'feature_id' => $feature->id,
+        'status' => 'invalid-status',
+    ]);
+
+    $response->assertHasErrors();
+});
+
 test('update-feature fails for non-existent feature', function () {
     $response = SoloBoardServer::tool(UpdateFeatureTool::class, [
         'feature_id' => 999,
@@ -348,11 +371,9 @@ test('add-task-to-feature fails for non-existent feature', function () {
 
 // ProjectOverviewResource tests (features section)
 test('overview resource includes active features', function () {
-    $doingFeature = Feature::factory()->create(['title' => 'Active Feature']);
-    Task::factory()->doing()->create(['feature_id' => $doingFeature->id]);
-
-    $doneFeature = Feature::factory()->create(['title' => 'Completed Feature']);
-    Task::factory()->done()->create(['feature_id' => $doneFeature->id]);
+    // Status is now a persisted column, set explicitly
+    Feature::factory()->create(['title' => 'Active Feature', 'status' => 'doing']);
+    Feature::factory()->create(['title' => 'Completed Feature', 'status' => 'done']);
 
     $response = SoloBoardServer::resource(ProjectOverviewResource::class);
 

@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\FeaturePriority;
+use App\Enums\FeatureStatus;
 use App\Models\Feature;
 use App\Models\Project;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -44,6 +45,7 @@ class CreateFeatureTool extends Tool
             'spec' => $validated['spec'] ?? null,
             'project_id' => $projectId,
             'priority' => $validated['priority'] ?? FeaturePriority::Medium,
+            'status' => FeatureStatus::Draft,
             'due_date' => $validated['due_date'] ?? null,
         ]);
 

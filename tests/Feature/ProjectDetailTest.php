@@ -423,7 +423,7 @@ test('project detail getColumnFeatures returns features by computed status', fun
     $draft = Feature::factory()->create(['project_id' => $project->id]);
 
     // Backlog feature
-    $backlog = Feature::factory()->create(['project_id' => $project->id]);
+    $backlog = Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Backlog]);
     Task::factory()->backlog()->create(['feature_id' => $backlog->id, 'project_id' => $project->id]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);

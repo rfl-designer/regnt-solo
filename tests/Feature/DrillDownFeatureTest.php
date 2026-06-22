@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\FeatureStatus;
 use App\Enums\TaskStatus;
 use App\Models\Feature;
 use App\Models\Project;
@@ -21,7 +22,7 @@ beforeEach(function () {
 
 describe('Ver Tasks button', function () {
     test('appears on feature card when feature has tasks', function () {
-        $feature = Feature::factory()->create(['title' => 'Feature Com Tasks']);
+        $feature = Feature::factory()->todo()->create(['title' => 'Feature Com Tasks']);
         Task::factory()->count(3)->todo()->create(['feature_id' => $feature->id]);
 
         $this->get(route('work'))
@@ -36,6 +37,7 @@ describe('Ver Tasks button', function () {
         $feature = Feature::factory()->create([
             'title' => 'Feature Sem Tasks',
             'project_id' => $project->id,
+            'status' => FeatureStatus::Draft,
         ]);
 
         Livewire::test('pages::project-detail', ['slug' => $project->slug])
@@ -50,7 +52,7 @@ describe('Ver Tasks button', function () {
 
 describe('Drill-down on Work page (features)', function () {
     test('enterDrill sets drillFeatureId', function () {
-        $feature = Feature::factory()->create();
+        $feature = Feature::factory()->todo()->create();
         Task::factory()->todo()->create(['feature_id' => $feature->id]);
 
         Livewire::test('pages::features')
@@ -59,7 +61,7 @@ describe('Drill-down on Work page (features)', function () {
     });
 
     test('exitDrill clears drillFeatureId', function () {
-        $feature = Feature::factory()->create();
+        $feature = Feature::factory()->todo()->create();
         Task::factory()->todo()->create(['feature_id' => $feature->id]);
 
         Livewire::test('pages::features')
@@ -70,7 +72,7 @@ describe('Drill-down on Work page (features)', function () {
     });
 
     test('drill mode renders task kanban with 4 columns', function () {
-        $feature = Feature::factory()->create(['title' => 'Drill Feature']);
+        $feature = Feature::factory()->doing()->create(['title' => 'Drill Feature']);
         Task::factory()->backlog()->create(['feature_id' => $feature->id, 'title' => 'Task Backlog']);
         Task::factory()->todo()->create(['feature_id' => $feature->id, 'title' => 'Task Todo']);
         Task::factory()->doing()->create(['feature_id' => $feature->id, 'title' => 'Task Doing']);
@@ -85,8 +87,8 @@ describe('Drill-down on Work page (features)', function () {
     });
 
     test('drill mode only shows tasks from selected feature', function () {
-        $feature = Feature::factory()->create(['title' => 'Target Feature']);
-        $otherFeature = Feature::factory()->create(['title' => 'Other Feature']);
+        $feature = Feature::factory()->todo()->create(['title' => 'Target Feature']);
+        $otherFeature = Feature::factory()->todo()->create(['title' => 'Other Feature']);
 
         Task::factory()->todo()->create(['feature_id' => $feature->id, 'title' => 'Target Task']);
         Task::factory()->todo()->create(['feature_id' => $otherFeature->id, 'title' => 'Other Task']);
@@ -98,7 +100,7 @@ describe('Drill-down on Work page (features)', function () {
     });
 
     test('drill mode header shows feature title and back button', function () {
-        $feature = Feature::factory()->create(['title' => 'Header Feature']);
+        $feature = Feature::factory()->doing()->create(['title' => 'Header Feature']);
         Task::factory()->doing()->create(['feature_id' => $feature->id]);
 
         Livewire::test('pages::features')
@@ -108,7 +110,7 @@ describe('Drill-down on Work page (features)', function () {
     });
 
     test('drill mode header shows progress', function () {
-        $feature = Feature::factory()->create(['title' => 'Progress Feature']);
+        $feature = Feature::factory()->doing()->create(['title' => 'Progress Feature']);
         Task::factory()->done()->create(['feature_id' => $feature->id]);
         Task::factory()->done()->create(['feature_id' => $feature->id]);
         Task::factory()->todo()->create(['feature_id' => $feature->id]);
@@ -119,7 +121,7 @@ describe('Drill-down on Work page (features)', function () {
     });
 
     test('direct URL access with feature query param enters drill mode', function () {
-        $feature = Feature::factory()->create(['title' => 'URL Feature']);
+        $feature = Feature::factory()->todo()->create(['title' => 'URL Feature']);
         Task::factory()->todo()->create(['feature_id' => $feature->id, 'title' => 'URL Task']);
 
         $this->get(route('work', ['feature' => $feature->id]))
@@ -135,7 +137,7 @@ describe('Drill-down on Work page (features)', function () {
 
 describe('Drag-drop in drill mode', function () {
     test('handleTaskSort updates task status', function () {
-        $feature = Feature::factory()->create();
+        $feature = Feature::factory()->todo()->create();
         $task = Task::factory()->todo()->create([
             'feature_id' => $feature->id,
         ]);
@@ -149,7 +151,7 @@ describe('Drag-drop in drill mode', function () {
     });
 
     test('handleTaskSort to Done marks task as done with completed_at', function () {
-        $feature = Feature::factory()->create();
+        $feature = Feature::factory()->todo()->create();
         $task = Task::factory()->todo()->create([
             'feature_id' => $feature->id,
         ]);
@@ -164,7 +166,7 @@ describe('Drag-drop in drill mode', function () {
     });
 
     test('handleTaskSort from Done clears completed_at', function () {
-        $feature = Feature::factory()->create();
+        $feature = Feature::factory()->doing()->create();
         $task = Task::factory()->done()->create([
             'feature_id' => $feature->id,
         ]);
@@ -179,8 +181,8 @@ describe('Drag-drop in drill mode', function () {
     });
 
     test('handleTaskSort rejects tasks not belonging to drilled feature', function () {
-        $feature = Feature::factory()->create();
-        $otherFeature = Feature::factory()->create();
+        $feature = Feature::factory()->todo()->create();
+        $otherFeature = Feature::factory()->todo()->create();
         $task = Task::factory()->todo()->create([
             'feature_id' => $otherFeature->id,
         ]);

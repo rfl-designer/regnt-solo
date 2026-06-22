@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\FeaturePriority;
+use App\Enums\FeatureStatus;
 use App\Models\Feature;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -25,6 +26,7 @@ class FeatureFactory extends Factory
             'title' => $title,
             'slug' => Str::slug($title),
             'priority' => FeaturePriority::Medium,
+            'status' => FeatureStatus::Draft,
             'due_date' => null,
             'sort_order' => 0,
         ];
@@ -77,6 +79,46 @@ class FeatureFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'due_date' => $date ?? fake()->dateTimeBetween('now', '+30 days'),
+        ]);
+    }
+
+    /**
+     * Indicate that the feature is in backlog status.
+     */
+    public function backlog(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => FeatureStatus::Backlog,
+        ]);
+    }
+
+    /**
+     * Indicate that the feature is in todo status.
+     */
+    public function todo(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => FeatureStatus::Todo,
+        ]);
+    }
+
+    /**
+     * Indicate that the feature is in doing status.
+     */
+    public function doing(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => FeatureStatus::Doing,
+        ]);
+    }
+
+    /**
+     * Indicate that the feature is done.
+     */
+    public function done(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => FeatureStatus::Done,
         ]);
     }
 

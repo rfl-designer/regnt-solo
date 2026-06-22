@@ -60,6 +60,8 @@ class ListFeaturesTool extends Tool
             'project' => $feature->project?->name,
             'due_date' => $feature->due_date?->toDateString(),
             'is_running' => $feature->isRunning(),
+            'github_issue_number' => $feature->github_issue_number,
+            'github_synced_hash' => $feature->github_synced_hash,
         ])->all();
 
         return Response::text(json_encode($data, JSON_PRETTY_PRINT));

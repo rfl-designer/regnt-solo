@@ -66,6 +66,8 @@ class GetFeatureTool extends Tool
                 'is_focus_session' => $entry->is_focus_session,
             ])->all(),
             'total_time_minutes' => round($feature->total_time, 0),
+            'github_issue_number' => $feature->github_issue_number,
+            'github_synced_hash' => $feature->github_synced_hash,
             'created_at' => $feature->created_at->toDateTimeString(),
             'updated_at' => $feature->updated_at->toDateTimeString(),
         ];

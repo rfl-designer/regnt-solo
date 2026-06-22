@@ -35,6 +35,8 @@ class Feature extends Model
         'status',
         'due_date',
         'sort_order',
+        'github_issue_number',
+        'github_synced_hash',
     ];
 
     /**

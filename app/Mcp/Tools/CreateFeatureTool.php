@@ -29,6 +29,8 @@ class CreateFeatureTool extends Tool
             'project_slug' => 'nullable|string|exists:projects,slug',
             'priority' => ['nullable', 'string', Rule::enum(FeaturePriority::class)],
             'due_date' => 'nullable|date',
+            'github_issue_number' => 'nullable|integer',
+            'github_synced_hash' => 'nullable|string',
         ], [
             'title.required' => 'You must provide a title for the feature.',
             'project_slug.exists' => 'Project not found. Use list-projects to find available project slugs.',
@@ -40,15 +42,29 @@ class CreateFeatureTool extends Tool
             $projectId = Project::query()->where('slug', $validated['project_slug'])->value('id');
         }
 
-        $feature = Feature::create([
+        $payload = [
             'title' => $validated['title'],
             'spec' => $validated['spec'] ?? null,
             'project_id' => $projectId,
             'priority' => $validated['priority'] ?? FeaturePriority::Medium,
-            'status' => FeatureStatus::Draft,
             'due_date' => $validated['due_date'] ?? null,
-        ]);
+        ];
 
+        if (array_key_exists('github_synced_hash', $validated)) {
+            $payload['github_synced_hash'] = $validated['github_synced_hash'];
+        }
+
+        if (! empty($validated['github_issue_number'])) {
+            $feature = Feature::updateOrCreate(
+                ['github_issue_number' => $validated['github_issue_number']],
+                $payload,
+            );
+        } else {
+            $payload['status'] = FeatureStatus::Draft;
+            $feature = Feature::create($payload);
+        }
+
+        $feature->refresh();
         $feature->load('project');
 
         $data = [
@@ -57,8 +73,11 @@ class CreateFeatureTool extends Tool
             'slug' => $feature->slug,
             'status' => $feature->status->value,
             'priority' => $feature->priority->value,
+            'progress' => $feature->progress,
             'project' => $feature->project?->name,
             'due_date' => $feature->due_date?->toDateString(),
+            'github_issue_number' => $feature->github_issue_number,
+            'github_synced_hash' => $feature->github_synced_hash,
             'created_at' => $feature->created_at->toDateTimeString(),
         ];
 
@@ -78,6 +97,8 @@ class CreateFeatureTool extends Tool
             'project_slug' => $schema->string()->description('Slug of the project to assign the feature to. Use list-projects to find slugs.'),
             'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('Feature priority. Default: medium.'),
             'due_date' => $schema->string()->description('Due date in YYYY-MM-DD format.'),
+            'github_issue_number' => $schema->integer()->description('GitHub issue number this feature mirrors. When provided, the feature is upserted by this number (no duplicate on repeated syncs). Never sets status.'),
+            'github_synced_hash' => $schema->string()->description('Digest of the source GitHub issue (title + body + labels + state). Used to gate natural-language rewrites between syncs.'),
         ];
     }
 }

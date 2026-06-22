@@ -260,6 +260,104 @@ test('update-feature fails for non-existent feature', function () {
     $response->assertHasErrors();
 });
 
+// GitHub mirror tests (issue #85)
+test('create-feature persists github_issue_number and github_synced_hash', function () {
+    $response = SoloBoardServer::tool(CreateFeatureTool::class, [
+        'title' => 'Mirrored Feature',
+        'github_issue_number' => 42,
+        'github_synced_hash' => 'hash-abc',
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('"github_issue_number": 42');
+
+    $this->assertDatabaseHas('features', [
+        'title' => 'Mirrored Feature',
+        'github_issue_number' => 42,
+        'github_synced_hash' => 'hash-abc',
+    ]);
+});
+
+test('create-feature upserts by github_issue_number without duplicating', function () {
+    SoloBoardServer::tool(CreateFeatureTool::class, [
+        'title' => 'First Title',
+        'github_issue_number' => 100,
+        'github_synced_hash' => 'hash-1',
+    ]);
+
+    $response = SoloBoardServer::tool(CreateFeatureTool::class, [
+        'title' => 'Rewritten Title',
+        'github_issue_number' => 100,
+        'github_synced_hash' => 'hash-2',
+    ]);
+
+    $response->assertOk();
+
+    expect(Feature::query()->where('github_issue_number', 100)->count())->toBe(1);
+
+    $this->assertDatabaseHas('features', [
+        'github_issue_number' => 100,
+        'title' => 'Rewritten Title',
+        'github_synced_hash' => 'hash-2',
+    ]);
+});
+
+test('update-feature persists github_issue_number and github_synced_hash', function () {
+    $feature = Feature::factory()->create();
+
+    $response = SoloBoardServer::tool(UpdateFeatureTool::class, [
+        'feature_id' => $feature->id,
+        'github_issue_number' => 7,
+        'github_synced_hash' => 'hash-xyz',
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('"github_issue_number": 7');
+
+    $this->assertDatabaseHas('features', [
+        'id' => $feature->id,
+        'github_issue_number' => 7,
+        'github_synced_hash' => 'hash-xyz',
+    ]);
+});
+
+test('mirroring a feature via update-feature without status does not change a defined status', function () {
+    $feature = Feature::factory()->create([
+        'status' => 'doing',
+        'github_issue_number' => 55,
+    ]);
+
+    $response = SoloBoardServer::tool(UpdateFeatureTool::class, [
+        'feature_id' => $feature->id,
+        'title' => 'Rewritten plain title',
+        'spec' => 'Rewritten plain spec',
+        'github_synced_hash' => 'new-hash',
+    ]);
+
+    $response->assertOk();
+
+    $feature->refresh();
+    expect($feature->status->value)->toBe('doing');
+    expect($feature->title)->toBe('Rewritten plain title');
+});
+
+test('list-features and get-feature expose github fields', function () {
+    $feature = Feature::factory()->create([
+        'github_issue_number' => 321,
+        'github_synced_hash' => 'list-hash',
+    ]);
+
+    $list = SoloBoardServer::tool(ListFeaturesTool::class, []);
+    $list->assertOk();
+    $list->assertSee('"github_issue_number": 321');
+    $list->assertSee('list-hash');
+
+    $get = SoloBoardServer::tool(GetFeatureTool::class, ['feature_id' => $feature->id]);
+    $get->assertOk();
+    $get->assertSee('"github_issue_number": 321');
+    $get->assertSee('list-hash');
+});
+
 // DeleteFeatureTool tests
 test('delete-feature removes feature and unlinks tasks', function () {
     $feature = Feature::factory()->create();

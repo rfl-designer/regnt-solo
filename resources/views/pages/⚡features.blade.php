@@ -380,6 +380,14 @@ new class extends Component
             $this->dispatch('open-timer-notes', entryId: $runningEntry->id);
         }
     }
+
+    public function handleFeatureSort(int|string $id, int $position, string $groupId): void
+    {
+        $feature = Feature::findOrFail((int) $id);
+        $feature->update(['status' => FeatureStatus::from($groupId), 'sort_order' => $position]);
+        unset($this->features);
+        $this->dispatch('feature-updated');
+    }
 }
 
 ?>
@@ -764,17 +772,26 @@ new class extends Component
                     @if ($isDone) x-show="!doneCollapsed" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif
                     class="flex-1 space-y-3 overflow-y-auto p-3"
                 >
-                    @forelse ($features as $feature)
-                        <x-feature-card
-                            :feature="$feature"
-                            :expanded="$this->isExpanded($feature->id)"
-                            :show-project="true"
-                        />
-                    @empty
-                        <div class="py-8 text-center text-sm text-zinc-600">
-                            Nenhuma feature
-                        </div>
-                    @endforelse
+                    <ul
+                        wire:sort="handleFeatureSort"
+                        wire:sort:group="features"
+                        wire:sort:group-id="{{ $status->value }}"
+                        class="flex min-h-[2rem] flex-col gap-3"
+                    >
+                        @forelse ($features as $feature)
+                            <li wire:key="feature-{{ $feature->id }}" wire:sort:item="{{ $feature->id }}" wire:sort:handle>
+                                <x-feature-card
+                                    :feature="$feature"
+                                    :expanded="$this->isExpanded($feature->id)"
+                                    :show-project="true"
+                                />
+                            </li>
+                        @empty
+                            <li class="py-8 text-center text-sm text-zinc-600">
+                                Nenhuma feature
+                            </li>
+                        @endforelse
+                    </ul>
 
                     {{-- Load More Button --}}
                     @if ($hasMore)

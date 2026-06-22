@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\FeaturePriority;
+use App\Enums\FeatureStatus;
 use App\Models\Feature;
 use App\Models\Project;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -28,12 +29,14 @@ class UpdateFeatureTool extends Tool
             'spec' => 'nullable|string',
             'project_slug' => 'nullable|string|exists:projects,slug',
             'priority' => ['nullable', 'string', Rule::enum(FeaturePriority::class)],
+            'status' => ['nullable', 'string', Rule::enum(FeatureStatus::class)],
             'due_date' => 'nullable|date',
         ], [
             'feature_id.required' => 'You must provide a feature_id. Use list-features to find available feature IDs.',
             'feature_id.exists' => 'Feature not found. Use list-features to find available feature IDs.',
             'project_slug.exists' => 'Project not found. Use list-projects to find available project slugs.',
             'priority.Illuminate\Validation\Rules\Enum' => 'Invalid priority. Valid values: urgent, high, medium, low.',
+            'status.Illuminate\Validation\Rules\Enum' => 'Invalid status. Valid values: draft, backlog, todo, doing, done.',
         ]);
 
         $feature = Feature::findOrFail($validated['feature_id']);
@@ -54,6 +57,10 @@ class UpdateFeatureTool extends Tool
 
         if (isset($validated['priority'])) {
             $updates['priority'] = $validated['priority'];
+        }
+
+        if (isset($validated['status'])) {
+            $updates['status'] = $validated['status'];
         }
 
         if (array_key_exists('due_date', $validated)) {
@@ -96,6 +103,7 @@ class UpdateFeatureTool extends Tool
             'spec' => $schema->string()->description('New specification in markdown format.'),
             'project_slug' => $schema->string()->description('Slug of the project to assign the feature to.'),
             'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('New priority.'),
+            'status' => $schema->string()->enum(['draft', 'backlog', 'todo', 'doing', 'done'])->description('Feature status (manual). Default: draft.'),
             'due_date' => $schema->string()->description('New due date in YYYY-MM-DD format.'),
         ];
     }

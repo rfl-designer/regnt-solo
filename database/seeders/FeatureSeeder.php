@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Enums\FeaturePriority;
+use App\Enums\FeatureStatus;
 use App\Enums\TaskPriority;
 use App\Enums\TaskStatus;
 use App\Models\Feature;
@@ -28,6 +29,7 @@ class FeatureSeeder extends Seeder
                 'title' => 'Autenticação com 2FA',
                 'slug' => 'auth-2fa',
                 'priority' => FeaturePriority::High,
+                'status' => FeatureStatus::Doing,
                 'spec' => $this->getAuth2faSpec(),
                 'tasks' => [
                     ['title' => 'Migration para two_factor_secret', 'status' => TaskStatus::Done],
@@ -41,6 +43,7 @@ class FeatureSeeder extends Seeder
                 'title' => 'Dashboard de Analytics',
                 'slug' => 'analytics-dashboard',
                 'priority' => FeaturePriority::Medium,
+                'status' => FeatureStatus::Todo,
                 'spec' => $this->getAnalyticsSpec(),
                 'tasks' => [
                     ['title' => 'Componente de heatmap', 'status' => TaskStatus::Todo],
@@ -52,6 +55,7 @@ class FeatureSeeder extends Seeder
                 'title' => 'Export de Relatórios',
                 'slug' => 'export-reports',
                 'priority' => FeaturePriority::Low,
+                'status' => FeatureStatus::Draft,
                 'spec' => $this->getExportSpec(),
                 'tasks' => [],
             ],

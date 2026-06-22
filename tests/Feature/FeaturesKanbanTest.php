@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\FeaturePriority;
+use App\Enums\FeatureStatus;
 use App\Enums\TaskStatus;
 use App\Models\Feature;
 use App\Models\Project;
@@ -30,37 +31,12 @@ describe('Features Kanban Page', function () {
             ->assertSee('Work');
     });
 
-    test('displays features in correct columns by computed status', function () {
-        // Feature with no tasks = Draft (not shown in kanban by default)
-        $draftFeature = Feature::factory()->create(['title' => 'Draft Feature']);
-
-        // Feature with backlog tasks = Backlog
-        $backlogFeature = Feature::factory()->create(['title' => 'Backlog Feature']);
-        Task::factory()->create([
-            'feature_id' => $backlogFeature->id,
-            'status' => TaskStatus::Backlog,
-        ]);
-
-        // Feature with todo tasks = Todo
-        $todoFeature = Feature::factory()->create(['title' => 'Todo Feature']);
-        Task::factory()->create([
-            'feature_id' => $todoFeature->id,
-            'status' => TaskStatus::Todo,
-        ]);
-
-        // Feature with doing tasks = Doing
-        $doingFeature = Feature::factory()->create(['title' => 'Doing Feature']);
-        Task::factory()->create([
-            'feature_id' => $doingFeature->id,
-            'status' => TaskStatus::Doing,
-        ]);
-
-        // Feature with all done tasks = Done
-        $doneFeature = Feature::factory()->create(['title' => 'Done Feature']);
-        Task::factory()->create([
-            'feature_id' => $doneFeature->id,
-            'status' => TaskStatus::Done,
-        ]);
+    test('displays features in correct columns by explicit status', function () {
+        // Features now use explicit status (not derived from tasks)
+        $backlogFeature = Feature::factory()->backlog()->create(['title' => 'Backlog Feature']);
+        $todoFeature = Feature::factory()->todo()->create(['title' => 'Todo Feature']);
+        $doingFeature = Feature::factory()->doing()->create(['title' => 'Doing Feature']);
+        $doneFeature = Feature::factory()->done()->create(['title' => 'Done Feature']);
 
         $this->get(route('work'))
             ->assertSee('Backlog Feature')
@@ -70,7 +46,7 @@ describe('Features Kanban Page', function () {
     });
 
     test('displays feature progress correctly', function () {
-        $feature = Feature::factory()->create(['title' => 'Progress Feature']);
+        $feature = Feature::factory()->todo()->create(['title' => 'Progress Feature']);
 
         // 2 done, 2 not done = 50%
         Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Done]);
@@ -87,17 +63,15 @@ describe('Features Kanban Page', function () {
         $project1 = Project::factory()->create(['name' => 'Project Alpha']);
         $project2 = Project::factory()->create(['name' => 'Project Beta']);
 
-        $feature1 = Feature::factory()->create([
+        Feature::factory()->todo()->create([
             'title' => 'Feature Alpha',
             'project_id' => $project1->id,
         ]);
-        Task::factory()->create(['feature_id' => $feature1->id, 'status' => TaskStatus::Todo]);
 
-        $feature2 = Feature::factory()->create([
+        Feature::factory()->todo()->create([
             'title' => 'Feature Beta',
             'project_id' => $project2->id,
         ]);
-        Task::factory()->create(['feature_id' => $feature2->id, 'status' => TaskStatus::Todo]);
 
         $this->get(route('work', ['filterProject' => $project1->id]))
             ->assertSee('Feature Alpha')
@@ -105,17 +79,15 @@ describe('Features Kanban Page', function () {
     });
 
     test('filters features by priority', function () {
-        $highFeature = Feature::factory()->create([
+        Feature::factory()->todo()->create([
             'title' => 'High Priority Feature',
             'priority' => FeaturePriority::High,
         ]);
-        Task::factory()->create(['feature_id' => $highFeature->id, 'status' => TaskStatus::Todo]);
 
-        $lowFeature = Feature::factory()->create([
+        Feature::factory()->todo()->create([
             'title' => 'Low Priority Feature',
             'priority' => FeaturePriority::Low,
         ]);
-        Task::factory()->create(['feature_id' => $lowFeature->id, 'status' => TaskStatus::Todo]);
 
         $this->get(route('work', ['filterPriority' => 'high']))
             ->assertSee('High Priority Feature')
@@ -128,11 +100,10 @@ describe('Features Kanban Page', function () {
             'emoji' => '🚀',
         ]);
 
-        $feature = Feature::factory()->create([
+        Feature::factory()->todo()->create([
             'title' => 'Feature with Project',
             'project_id' => $project->id,
         ]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
 
         $this->get(route('work'))
             ->assertSee('Feature with Project')
@@ -234,7 +205,7 @@ describe('Feature Modal', function () {
     });
 
     test('displays feature status and progress when editing', function () {
-        $feature = Feature::factory()->create(['title' => 'Feature with Tasks']);
+        $feature = Feature::factory()->todo()->create(['title' => 'Feature with Tasks']);
         Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Done]);
         Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
 
@@ -271,7 +242,7 @@ describe('Feature Modal', function () {
 
 describe('Features Kanban Expandable Tasks', function () {
     test('can toggle task list expansion', function () {
-        $feature = Feature::factory()->create();
+        $feature = Feature::factory()->todo()->create();
         Task::factory()->count(3)->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
 
         Livewire::test('pages::features')
@@ -283,10 +254,45 @@ describe('Features Kanban Expandable Tasks', function () {
     });
 
     test('displays task count on feature card', function () {
-        $feature = Feature::factory()->create(['title' => 'Multi Task Feature']);
+        $feature = Feature::factory()->todo()->create(['title' => 'Multi Task Feature']);
         Task::factory()->count(5)->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
 
         $this->get(route('work'))
             ->assertSee('5 tasks');
+    });
+});
+
+describe('Feature Kanban Sort', function () {
+    test('handleFeatureSort persists new status and sort_order', function () {
+        $feature = Feature::factory()->create([
+            'status' => FeatureStatus::Backlog,
+            'sort_order' => 0,
+        ]);
+
+        Livewire::test('pages::features')
+            ->call('handleFeatureSort', $feature->id, 1, 'todo')
+            ->assertDispatched('feature-updated');
+
+        $this->assertDatabaseHas('features', [
+            'id' => $feature->id,
+            'status' => 'todo',
+            'sort_order' => 1,
+        ]);
+    });
+
+    test('handleFeatureSort moves feature to done column', function () {
+        $feature = Feature::factory()->create([
+            'status' => FeatureStatus::Doing,
+            'sort_order' => 0,
+        ]);
+
+        Livewire::test('pages::features')
+            ->call('handleFeatureSort', $feature->id, 0, 'done')
+            ->assertDispatched('feature-updated');
+
+        $this->assertDatabaseHas('features', [
+            'id' => $feature->id,
+            'status' => 'done',
+        ]);
     });
 });

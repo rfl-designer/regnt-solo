@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\FeaturePriority;
+use App\Enums\FeatureStatus;
 use App\Enums\TaskStatus;
 use App\Models\Feature;
 use App\Models\Project;
@@ -82,7 +83,7 @@ describe('Work Page View Mode Toggle', function () {
     });
 
     test('kanban view shows kanban board', function () {
-        $feature = Feature::factory()->create(['title' => 'Kanban Test Feature']);
+        $feature = Feature::factory()->create(['title' => 'Kanban Test Feature', 'status' => FeatureStatus::Todo]);
         Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
 
         Livewire::test('pages::features')
@@ -125,7 +126,7 @@ describe('Work Page Table View Columns', function () {
     });
 
     test('table view renders feature status badge', function () {
-        $feature = Feature::factory()->create();
+        $feature = Feature::factory()->create(['status' => FeatureStatus::Todo]);
         Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
 
         Livewire::test('pages::features')

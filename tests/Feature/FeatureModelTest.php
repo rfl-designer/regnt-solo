@@ -63,43 +63,40 @@ describe('Feature Model', function () {
     });
 });
 
-describe('Feature Status (computed)', function () {
-    test('status is draft when no tasks', function () {
+describe('Feature Status (persisted)', function () {
+    test('status defaults to draft on creation', function () {
         $feature = Feature::factory()->create();
 
         expect($feature->status)->toBe(FeatureStatus::Draft);
+        $this->assertDatabaseHas('features', ['id' => $feature->id, 'status' => 'draft']);
     });
 
-    test('status is backlog when all tasks are inbox or backlog', function () {
-        $feature = Feature::factory()->create();
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Inbox]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Backlog]);
-
-        expect($feature->status)->toBe(FeatureStatus::Backlog);
-    });
-
-    test('status is todo when any task is todo', function () {
-        $feature = Feature::factory()->create();
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Backlog]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
-
-        expect($feature->status)->toBe(FeatureStatus::Todo);
-    });
-
-    test('status is doing when any task is doing', function () {
-        $feature = Feature::factory()->create();
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Doing]);
+    test('status can be set to any FeatureStatus value', function () {
+        $feature = Feature::factory()->create(['status' => FeatureStatus::Doing]);
 
         expect($feature->status)->toBe(FeatureStatus::Doing);
+        $this->assertDatabaseHas('features', ['id' => $feature->id, 'status' => 'doing']);
     });
 
-    test('status is done when all tasks are done', function () {
-        $feature = Feature::factory()->create();
+    test('status persists when updated', function () {
+        $feature = Feature::factory()->create(['status' => FeatureStatus::Backlog]);
+        $feature->update(['status' => FeatureStatus::Todo]);
+        $feature->refresh();
+
+        expect($feature->status)->toBe(FeatureStatus::Todo);
+        $this->assertDatabaseHas('features', ['id' => $feature->id, 'status' => 'todo']);
+    });
+
+    test('status is independent of tasks', function () {
+        // Feature manually set to Doing, but all tasks are Done → status stays Doing
+        $feature = Feature::factory()->create(['status' => FeatureStatus::Doing]);
         Task::factory()->done()->create(['feature_id' => $feature->id]);
         Task::factory()->done()->create(['feature_id' => $feature->id]);
 
-        expect($feature->status)->toBe(FeatureStatus::Done);
+        $feature->refresh();
+
+        expect($feature->status)->toBe(FeatureStatus::Doing)
+            ->and($feature->progress)->toBe(100);
     });
 });
 

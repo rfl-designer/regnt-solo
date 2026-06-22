@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\FeatureStatus;
 use App\Enums\StakeholderIssueStatus;
 use App\Models\Feature;
 use App\Models\Project;
@@ -43,6 +44,7 @@ it('renders stakeholder view with project detail tabs and feature board', functi
     $feature = Feature::factory()->withSpec()->create([
         'project_id' => $this->project->id,
         'title' => 'Portal de Stakeholders',
+        'status' => FeatureStatus::Doing,
     ]);
 
     Task::factory()->forFeature($feature)->doing()->create([

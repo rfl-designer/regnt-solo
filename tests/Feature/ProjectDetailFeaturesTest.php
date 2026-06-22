@@ -15,27 +15,15 @@ beforeEach(function () {
 // Kanban renders features (not tasks)
 // ========================================
 
-test('project board shows features grouped by computed status', function () {
+test('project board shows features grouped by explicit status', function () {
     $project = Project::factory()->create();
 
-    // Draft = no tasks
-    $draft = Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature Rascunho']);
-
-    // Backlog = only backlog tasks
-    $backlog = Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature Backlog']);
-    Task::factory()->backlog()->create(['feature_id' => $backlog->id, 'project_id' => $project->id]);
-
-    // Todo = has todo tasks
-    $todo = Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature A Fazer']);
-    Task::factory()->todo()->create(['feature_id' => $todo->id, 'project_id' => $project->id]);
-
-    // Doing = has doing tasks
-    $doing = Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature Em Progresso']);
-    Task::factory()->doing()->create(['feature_id' => $doing->id, 'project_id' => $project->id]);
-
-    // Done = all tasks done
-    $done = Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature Concluida']);
-    Task::factory()->done()->create(['feature_id' => $done->id, 'project_id' => $project->id]);
+    // Each feature has explicit status set
+    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature Rascunho', 'status' => FeatureStatus::Draft]);
+    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature Backlog', 'status' => FeatureStatus::Backlog]);
+    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature A Fazer', 'status' => FeatureStatus::Todo]);
+    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature Em Progresso', 'status' => FeatureStatus::Doing]);
+    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature Concluida', 'status' => FeatureStatus::Done]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
@@ -62,12 +50,13 @@ test('project board kanban has all five column headers', function () {
 // Draft column for features without tasks
 // ========================================
 
-test('draft column shows features with no tasks', function () {
+test('draft column shows features with draft status', function () {
     $project = Project::factory()->create();
 
     $draft = Feature::factory()->create([
         'project_id' => $project->id,
         'title' => 'Feature Sem Tasks',
+        'status' => FeatureStatus::Draft,
     ]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
@@ -79,15 +68,11 @@ test('draft column shows features with no tasks', function () {
     $component->assertSee('Feature Sem Tasks');
 });
 
-test('draft column does not include features with tasks', function () {
+test('draft column does not include features with non-draft status', function () {
     $project = Project::factory()->create();
 
-    // Draft (no tasks)
-    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Draft Feature']);
-
-    // Has tasks (not draft)
-    $withTasks = Feature::factory()->create(['project_id' => $project->id, 'title' => 'Backlog Feature']);
-    Task::factory()->backlog()->create(['feature_id' => $withTasks->id, 'project_id' => $project->id]);
+    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Draft Feature', 'status' => FeatureStatus::Draft]);
+    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Backlog Feature', 'status' => FeatureStatus::Backlog]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
@@ -96,10 +81,10 @@ test('draft column does not include features with tasks', function () {
     expect($draftFeatures->first()->title)->toBe('Draft Feature');
 });
 
-test('draft column count reflects features without tasks', function () {
+test('draft column count reflects features with draft status', function () {
     $project = Project::factory()->create();
 
-    Feature::factory()->count(4)->create(['project_id' => $project->id]);
+    Feature::factory()->count(4)->create(['project_id' => $project->id, 'status' => FeatureStatus::Draft]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
     expect($component->instance()->getColumnTotal(FeatureStatus::Draft))->toBe(4);
@@ -142,10 +127,10 @@ test('features tab shows selection prompt before selecting a feature', function 
 test('features tab shows status badge for each feature', function () {
     $project = Project::factory()->create();
 
-    // Draft feature (no tasks)
     Feature::factory()->create([
         'project_id' => $project->id,
         'title' => 'Feature Draft Tab',
+        'status' => FeatureStatus::Draft,
     ]);
 
     Livewire::test('pages::project-detail', ['slug' => $project->slug])
@@ -347,15 +332,12 @@ test('metrics includes feature count', function () {
 test('metrics includes done features count', function () {
     $project = Project::factory()->create();
 
-    // 2 done features
-    $done1 = Feature::factory()->create(['project_id' => $project->id]);
-    Task::factory()->done()->create(['feature_id' => $done1->id, 'project_id' => $project->id]);
-
-    $done2 = Feature::factory()->create(['project_id' => $project->id]);
-    Task::factory()->done()->create(['feature_id' => $done2->id, 'project_id' => $project->id]);
+    // 2 done features (explicit status)
+    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]);
+    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]);
 
     // 1 not-done feature
-    Feature::factory()->create(['project_id' => $project->id]);
+    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Draft]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
     $metrics = $component->get('metrics');
@@ -367,15 +349,12 @@ test('metrics includes done features count', function () {
 test('metrics includes feature completion percentage', function () {
     $project = Project::factory()->create();
 
-    // 2 done features (all tasks done)
-    $done1 = Feature::factory()->create(['project_id' => $project->id]);
-    Task::factory()->done()->create(['feature_id' => $done1->id, 'project_id' => $project->id]);
+    // 2 done features
+    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]);
+    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]);
 
-    $done2 = Feature::factory()->create(['project_id' => $project->id]);
-    Task::factory()->done()->create(['feature_id' => $done2->id, 'project_id' => $project->id]);
-
-    // 2 not-done features (drafts)
-    Feature::factory()->count(2)->create(['project_id' => $project->id]);
+    // 2 not-done features
+    Feature::factory()->count(2)->create(['project_id' => $project->id, 'status' => FeatureStatus::Draft]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
     $metrics = $component->get('metrics');
@@ -386,16 +365,9 @@ test('metrics includes feature completion percentage', function () {
 test('metrics includes features by status breakdown', function () {
     $project = Project::factory()->create();
 
-    // 2 drafts (no tasks)
-    Feature::factory()->count(2)->create(['project_id' => $project->id]);
-
-    // 1 backlog
-    $backlog = Feature::factory()->create(['project_id' => $project->id]);
-    Task::factory()->backlog()->create(['feature_id' => $backlog->id, 'project_id' => $project->id]);
-
-    // 1 done
-    $done = Feature::factory()->create(['project_id' => $project->id]);
-    Task::factory()->done()->create(['feature_id' => $done->id, 'project_id' => $project->id]);
+    Feature::factory()->count(2)->create(['project_id' => $project->id, 'status' => FeatureStatus::Draft]);
+    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Backlog]);
+    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
     $metrics = $component->get('metrics');
@@ -421,15 +393,11 @@ test('metrics feature completion is zero when no features', function () {
 // featuresByStatus computed property
 // ========================================
 
-test('featuresByStatus groups features by computed status', function () {
+test('featuresByStatus groups features by explicit status', function () {
     $project = Project::factory()->create();
 
-    // 2 drafts
-    Feature::factory()->count(2)->create(['project_id' => $project->id]);
-
-    // 1 doing
-    $doing = Feature::factory()->create(['project_id' => $project->id]);
-    Task::factory()->doing()->create(['feature_id' => $doing->id, 'project_id' => $project->id]);
+    Feature::factory()->count(2)->create(['project_id' => $project->id, 'status' => FeatureStatus::Draft]);
+    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Doing]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
     $byStatus = $component->get('featuresByStatus');

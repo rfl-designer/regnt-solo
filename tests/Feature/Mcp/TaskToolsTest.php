@@ -197,6 +197,29 @@ test('delete-task fails for non-existent task', function () {
     $response->assertHasErrors();
 });
 
+// Reconciliation tests (issue #87)
+test('reconciliation deletes the orphan mirrored task and preserves eligible ones', function () {
+    $eligible = Task::factory()->create(['github_issue_number' => 300]);
+    TimeEntry::factory()->count(2)->create(['task_id' => $eligible->id]);
+
+    $orphan = Task::factory()->create(['github_issue_number' => 301]);
+    TimeEntry::factory()->count(3)->create(['task_id' => $orphan->id]);
+
+    // The orphan's issue is no longer eligible (e.g. became wontfix or was removed),
+    // so the sync deletes its mirrored task via delete-task.
+    $response = SoloBoardServer::tool(DeleteTaskTool::class, [
+        'task_id' => $orphan->id,
+    ]);
+
+    $response->assertOk();
+
+    $this->assertDatabaseMissing('tasks', ['id' => $orphan->id]);
+    $this->assertDatabaseMissing('time_entries', ['task_id' => $orphan->id]);
+
+    $this->assertDatabaseHas('tasks', ['id' => $eligible->id]);
+    expect(TimeEntry::query()->where('task_id', $eligible->id)->count())->toBe(2);
+});
+
 // TaskSession: CreateTaskTool session tests
 test('create-task accepts session_prompt', function () {
     $response = SoloBoardServer::tool(CreateTaskTool::class, [

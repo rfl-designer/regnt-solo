@@ -7,6 +7,7 @@ use App\Mcp\Tools\DeleteTaskTool;
 use App\Mcp\Tools\GetTaskTool;
 use App\Mcp\Tools\ListTasksTool;
 use App\Mcp\Tools\UpdateTaskTool;
+use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
@@ -241,4 +242,104 @@ test('get-task includes session_summary', function () {
     $response->assertOk();
     $response->assertSee('session_summary');
     $response->assertSee('"is_session": true');
+});
+
+// GitHub mirror tests (issue #86)
+test('create-task persists github fields and feature_id', function () {
+    $feature = Feature::factory()->create();
+
+    $response = SoloBoardServer::tool(CreateTaskTool::class, [
+        'title' => 'Mirrored Task',
+        'github_issue_number' => 200,
+        'github_synced_hash' => 'task-hash-1',
+        'feature_id' => $feature->id,
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('"github_issue_number": 200');
+
+    $this->assertDatabaseHas('tasks', [
+        'title' => 'Mirrored Task',
+        'github_issue_number' => 200,
+        'github_synced_hash' => 'task-hash-1',
+        'feature_id' => $feature->id,
+    ]);
+});
+
+test('create-task upserts by github_issue_number without duplicating', function () {
+    SoloBoardServer::tool(CreateTaskTool::class, [
+        'title' => 'First Task Title',
+        'github_issue_number' => 201,
+        'status' => 'todo',
+    ]);
+
+    SoloBoardServer::tool(CreateTaskTool::class, [
+        'title' => 'Rewritten Task Title',
+        'github_issue_number' => 201,
+        'status' => 'backlog',
+    ]);
+
+    expect(Task::query()->where('github_issue_number', 201)->count())->toBe(1);
+
+    $this->assertDatabaseHas('tasks', [
+        'github_issue_number' => 201,
+        'title' => 'Rewritten Task Title',
+        'status' => 'backlog',
+    ]);
+});
+
+test('create-task maps closed issue status to done', function () {
+    $response = SoloBoardServer::tool(CreateTaskTool::class, [
+        'title' => 'Closed Issue Task',
+        'github_issue_number' => 202,
+        'status' => 'done',
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('"status": "done"');
+
+    $task = Task::query()->where('github_issue_number', 202)->first();
+    expect($task->status)->toBe(TaskStatus::Done);
+    expect($task->completed_at)->not->toBeNull();
+});
+
+test('update-task persists github fields and feature_id', function () {
+    $feature = Feature::factory()->create();
+    $task = Task::factory()->create();
+
+    $response = SoloBoardServer::tool(UpdateTaskTool::class, [
+        'task_id' => $task->id,
+        'github_issue_number' => 9,
+        'github_synced_hash' => 'task-hash-xyz',
+        'feature_id' => $feature->id,
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('"github_issue_number": 9');
+
+    $this->assertDatabaseHas('tasks', [
+        'id' => $task->id,
+        'github_issue_number' => 9,
+        'github_synced_hash' => 'task-hash-xyz',
+        'feature_id' => $feature->id,
+    ]);
+});
+
+test('list-tasks and get-task expose github fields and feature_id', function () {
+    $feature = Feature::factory()->create();
+    $task = Task::factory()->create([
+        'github_issue_number' => 654,
+        'github_synced_hash' => 'task-list-hash',
+        'feature_id' => $feature->id,
+    ]);
+
+    $list = SoloBoardServer::tool(ListTasksTool::class, []);
+    $list->assertOk();
+    $list->assertSee('"github_issue_number": 654');
+    $list->assertSee('task-list-hash');
+
+    $get = SoloBoardServer::tool(GetTaskTool::class, ['task_id' => $task->id]);
+    $get->assertOk();
+    $get->assertSee('"github_issue_number": 654');
+    $get->assertSee('task-list-hash');
 });

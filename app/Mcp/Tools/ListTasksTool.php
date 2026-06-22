@@ -54,6 +54,9 @@ class ListTasksTool extends Tool
             'estimated_minutes' => $task->estimated_minutes,
             'is_overdue' => $task->isOverdue(),
             'is_running' => $task->isRunning(),
+            'feature_id' => $task->feature_id,
+            'github_issue_number' => $task->github_issue_number,
+            'github_synced_hash' => $task->github_synced_hash,
         ])->all();
 
         return Response::text(json_encode($data, JSON_PRETTY_PRINT));

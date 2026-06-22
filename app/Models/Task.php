@@ -43,6 +43,8 @@ class Task extends Model
         'pr_url',
         'session_prompt',
         'session_result',
+        'github_issue_number',
+        'github_synced_hash',
     ];
 
     /**

@@ -148,13 +148,10 @@ new class extends Component
 
                 Flux::toast(variant: 'success', heading: 'Task concluída', text: $task->title);
             } else {
-                $task->update([
-                    'status' => $newStatus,
-                    'sort_order' => $position,
-                ]);
+                $task->update(['status' => $newStatus]);
             }
 
-            $this->recalculateSortOrder($newStatus);
+            $this->reorderColumn($newStatus, $task->id, $position);
         });
     }
 
@@ -209,9 +206,15 @@ new class extends Component
         return $query;
     }
 
-    private function recalculateSortOrder(TaskStatus $status): void
+    /**
+     * Insert the moved task at the given position within its column and
+     * renumber every task in that column to a unique, sequential sort_order.
+     */
+    private function reorderColumn(TaskStatus $status, int $movedId, int $position): void
     {
-        $query = Task::query()->where('status', $status);
+        $query = Task::query()
+            ->where('status', $status)
+            ->where('id', '!=', $movedId);
 
         if ($status === TaskStatus::Done) {
             $query->whereBetween('completed_at', [
@@ -220,12 +223,13 @@ new class extends Component
             ]);
         }
 
-        $tasks = $query->orderBy('sort_order')->orderBy('created_at', 'desc')->get();
+        $ids = $query->orderBy('sort_order')->orderBy('id')->pluck('id')->all();
 
-        foreach ($tasks as $index => $task) {
-            if ($task->sort_order !== $index) {
-                $task->update(['sort_order' => $index]);
-            }
+        $position = max(0, min($position, count($ids)));
+        array_splice($ids, $position, 0, [$movedId]);
+
+        foreach ($ids as $index => $id) {
+            Task::query()->where('id', $id)->update(['sort_order' => $index]);
         }
     }
 }

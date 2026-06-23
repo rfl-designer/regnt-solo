@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\FeatureStatus;
 use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Task;
@@ -13,83 +14,56 @@ beforeEach(function () {
 test('feature kanban shows initial limit of 10 features per column', function () {
     $project = Project::factory()->create();
 
-    // Create 15 features with tasks (so they're in Backlog status)
-    $features = Feature::factory()->count(15)->create([
+    // 15 features in Backlog status
+    Feature::factory()->backlog()->count(15)->create([
         'project_id' => $project->id,
     ]);
 
-    foreach ($features as $feature) {
-        Task::factory()->backlog()->create(['feature_id' => $feature->id, 'project_id' => $project->id]);
-    }
-
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
-    // Should show only 10 features
-    foreach ($features->take(10) as $feature) {
-        $component->assertSee($feature->title);
-    }
-
-    // Should not show features beyond the limit
-    foreach ($features->skip(10) as $feature) {
-        $component->assertDontSee($feature->title);
-    }
+    // The backlog column should be capped at the initial limit of 10
+    expect($component->instance()->getColumnFeatures(FeatureStatus::Backlog))->toHaveCount(10);
 });
 
 test('load more button increases limit by 10', function () {
     $project = Project::factory()->create();
 
-    // Create 25 features with tasks (Backlog status)
-    $features = Feature::factory()->count(25)->create([
+    // 25 features in Backlog status
+    Feature::factory()->backlog()->count(25)->create([
         'project_id' => $project->id,
     ]);
 
-    foreach ($features as $feature) {
-        Task::factory()->backlog()->create(['feature_id' => $feature->id, 'project_id' => $project->id]);
-    }
-
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
-    // Should not show features beyond initial limit
-    $component->assertDontSee($features[20]->title);
+    // Initial limit shows only 10 of the 25 backlog features
+    expect($component->instance()->getColumnFeatures(FeatureStatus::Backlog))->toHaveCount(10);
 
-    // Load more
+    // Load more bumps the limit to 20
     $component->call('loadMore', 'backlog');
+    expect($component->instance()->getColumnFeatures(FeatureStatus::Backlog))->toHaveCount(20);
 
-    // Should now show more features
-    $component->assertSee($features[15]->title);
-
-    // Should still not show all
-    $component->assertDontSee($features[24]->title);
-
-    // Load more again
+    // Loading more again shows all 25
     $component->call('loadMore', 'backlog');
-
-    // Should now show all features
-    $component->assertSee($features[24]->title);
+    expect($component->instance()->getColumnFeatures(FeatureStatus::Backlog))->toHaveCount(25);
 });
 
 test('each column has independent lazy loading', function () {
     $project = Project::factory()->create();
 
-    // Create 15 draft features (no tasks)
-    $draftFeatures = Feature::factory()->count(15)->create(['project_id' => $project->id]);
+    // 15 features in Draft status
+    Feature::factory()->count(15)->create(['project_id' => $project->id]);
 
-    // Create 25 features with backlog tasks
-    $backlogFeatures = Feature::factory()->count(25)->create(['project_id' => $project->id]);
-    foreach ($backlogFeatures as $feature) {
-        Task::factory()->backlog()->create(['feature_id' => $feature->id, 'project_id' => $project->id]);
-    }
+    // 25 features in Backlog status
+    Feature::factory()->backlog()->count(25)->create(['project_id' => $project->id]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
     // Load more in backlog only
     $component->call('loadMore', 'backlog');
 
-    // Backlog should now show 20
-    $component->assertSee($backlogFeatures[15]->title);
-
-    // Draft should still show only 10
-    $component->assertDontSee($draftFeatures[14]->title);
+    // Backlog should now show 20, while draft stays capped at the initial 10
+    expect($component->instance()->getColumnFeatures(FeatureStatus::Backlog))->toHaveCount(20);
+    expect($component->instance()->getColumnFeatures(FeatureStatus::Draft))->toHaveCount(10);
 });
 
 test('feature kanban renders load more button when there are more features', function () {

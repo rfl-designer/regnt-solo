@@ -10,6 +10,7 @@ use App\Models\TimeEntry;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class AnalyticsService
 {
@@ -25,10 +26,12 @@ class AnalyticsService
         $startDate = Carbon::today()->subWeeks($weeks)->startOfDay();
         $endDate = Carbon::today()->endOfDay();
 
+        $durationSeconds = $this->durationInSecondsSql();
+
         $hoursByDate = TimeEntry::query()
             ->whereNotNull('stopped_at')
             ->where('started_at', '>=', $startDate)
-            ->selectRaw('date(started_at) as date, sum(EXTRACT(EPOCH FROM (stopped_at - started_at)) / 3600) as total_hours')
+            ->selectRaw("date(started_at) as date, sum({$durationSeconds} / 3600) as total_hours")
             ->groupByRaw('date(started_at)')
             ->pluck('total_hours', 'date');
 
@@ -118,13 +121,15 @@ class AnalyticsService
     {
         $since = $this->parsePeriod($period);
 
+        $durationSeconds = $this->durationInSecondsSql();
+
         $totals = TimeEntry::query()
             ->whereNotNull('stopped_at')
             ->where('started_at', '>=', $since)
-            ->selectRaw('
-                sum(EXTRACT(EPOCH FROM (stopped_at - started_at)) / 60) as total_minutes,
-                sum(case when is_focus_session = true then EXTRACT(EPOCH FROM (stopped_at - started_at)) / 60 else 0 end) as focus_minutes
-            ')
+            ->selectRaw("
+                sum({$durationSeconds} / 60) as total_minutes,
+                sum(case when is_focus_session = true then {$durationSeconds} / 60 else 0 end) as focus_minutes
+            ")
             ->first();
 
         $totalMinutes = (float) ($totals->total_minutes ?? 0);
@@ -334,6 +339,19 @@ class AnalyticsService
     }
 
     /**
+     * Build a driver-portable SQL expression for the duration between
+     * started_at and stopped_at, expressed in seconds.
+     */
+    private function durationInSecondsSql(): string
+    {
+        return match (DB::connection()->getDriverName()) {
+            'pgsql' => 'EXTRACT(EPOCH FROM (stopped_at - started_at))',
+            'mysql', 'mariadb' => 'TIMESTAMPDIFF(SECOND, started_at, stopped_at)',
+            default => '(julianday(stopped_at) - julianday(started_at)) * 86400',
+        };
+    }
+
+    /**
      * Parse a period string (e.g., '7d', '12w', '6m') into a Carbon start date.
      */
     private function parsePeriod(string $period): Carbon
@@ -445,12 +463,14 @@ class AnalyticsService
      */
     private function getFocusDates(): array
     {
+        $durationSeconds = $this->durationInSecondsSql();
+
         return TimeEntry::query()
             ->where('is_focus_session', true)
             ->whereNotNull('stopped_at')
-            ->selectRaw('date(started_at) as date, sum(EXTRACT(EPOCH FROM (stopped_at - started_at)) / 3600) as total_hours')
+            ->selectRaw("date(started_at) as date, sum({$durationSeconds} / 3600) as total_hours")
             ->groupByRaw('date(started_at)')
-            ->havingRaw('sum(EXTRACT(EPOCH FROM (stopped_at - started_at)) / 3600) >= 2')
+            ->havingRaw("sum({$durationSeconds} / 3600) >= 2")
             ->pluck('date')
             ->sort()
             ->values()

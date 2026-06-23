@@ -50,7 +50,7 @@ new class extends Component
         $query = Task::inbox()->with('project');
 
         if ($this->search !== '') {
-            $query->where('title', 'ilike', "%{$this->search}%");
+            $query->whereRaw('lower(title) like ?', ['%'.mb_strtolower($this->search).'%']);
         }
 
         return $query->orderBy($this->sortBy, $this->sortDirection)->get();

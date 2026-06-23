@@ -174,7 +174,7 @@ test('AI analyze button is hidden when ai_enabled is false', function () {
     config(['soloboard.ai_enabled' => false]);
 
     Livewire::test('pages::inbox')
-        ->assertDontSee('Analisar backlog');
+        ->assertDontSee('Analisar pendentes');
 });
 
 test('AI analyze button is visible when ai_enabled is true', function () {
@@ -184,7 +184,7 @@ test('AI analyze button is visible when ai_enabled is true', function () {
     ]);
 
     Livewire::test('pages::inbox')
-        ->assertSee('Analisar backlog');
+        ->assertSee('Analisar pendentes');
 });
 
 test('analyzeBacklog calls service and shows analysis', function () {

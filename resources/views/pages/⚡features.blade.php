@@ -833,11 +833,12 @@ new class extends Component
                         class="flex min-h-[2rem] flex-col gap-3"
                     >
                         @forelse ($features as $feature)
-                            <li wire:key="feature-{{ $feature->id }}" wire:sort:item="{{ $feature->id }}" wire:sort:handle>
+                            <li wire:key="feature-{{ $feature->id }}" wire:sort:item="{{ $feature->id }}">
                                 <x-feature-card
                                     :feature="$feature"
                                     :expanded="$this->isExpanded($feature->id)"
                                     :show-project="true"
+                                    :sortable="true"
                                 />
                             </li>
                         @empty

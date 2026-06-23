@@ -467,20 +467,85 @@ new class extends Component
                 if ($task->status === TaskStatus::Done && $newStatus !== TaskStatus::Done) {
                     $task->update([
                         'status' => $newStatus,
-                        'sort_order' => $position,
                         'completed_at' => null,
                     ]);
                 } else {
-                    $task->update([
-                        'status' => $newStatus,
-                        'sort_order' => $position,
-                    ]);
+                    $task->update(['status' => $newStatus]);
                 }
             }
+
+            $this->reorderDrillColumn($newStatus, $task->id, $position);
         });
 
         unset($this->drillFeature);
         $this->dispatch('task-updated');
+    }
+
+    /**
+     * Insert the moved task at the given position within the drill-down
+     * column and renumber the column's tasks to unique sort_order values.
+     */
+    private function reorderDrillColumn(TaskStatus $status, int $movedId, int $position): void
+    {
+        $query = Task::query()
+            ->where('feature_id', $this->drillFeatureId)
+            ->where('status', $status)
+            ->where('id', '!=', $movedId);
+
+        if ($status === TaskStatus::Done) {
+            $query->whereBetween('completed_at', [
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ]);
+        }
+
+        $ids = $query->orderBy('sort_order')->orderBy('id')->pluck('id')->all();
+
+        $position = max(0, min($position, count($ids)));
+        array_splice($ids, $position, 0, [$movedId]);
+
+        foreach ($ids as $index => $id) {
+            Task::query()->where('id', $id)->update(['sort_order' => $index]);
+        }
+    }
+
+    public function handleFeatureSort(int|string $id, int $position, string $groupId): void
+    {
+        $feature = Feature::query()
+            ->forProject($this->project->id)
+            ->findOrFail((int) $id);
+        $newStatus = FeatureStatus::from($groupId);
+
+        DB::transaction(function () use ($feature, $newStatus, $position): void {
+            $feature->update(['status' => $newStatus]);
+            $this->reorderFeatureColumn($newStatus, $feature->id, $position);
+        });
+
+        unset($this->features);
+        $this->dispatch('feature-updated');
+    }
+
+    /**
+     * Insert the moved feature at the given position within its column and
+     * renumber the project's features to unique sort_order values.
+     */
+    private function reorderFeatureColumn(FeatureStatus $status, int $movedId, int $position): void
+    {
+        $ids = Feature::query()
+            ->forProject($this->project->id)
+            ->where('status', $status)
+            ->where('id', '!=', $movedId)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+
+        $position = max(0, min($position, count($ids)));
+        array_splice($ids, $position, 0, [$movedId]);
+
+        foreach ($ids as $index => $id) {
+            Feature::query()->where('id', $id)->update(['sort_order' => $index]);
+        }
     }
 
     #[On('feature-created')]
@@ -915,17 +980,27 @@ new class extends Component
                                 @if ($isDone) x-show="!doneCollapsed" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif
                                 class="flex-1 space-y-3 overflow-y-auto p-3"
                             >
-                                @forelse ($features as $feature)
-                                    <x-feature-card
-                                        :feature="$feature"
-                                        :expanded="$this->isExpanded($feature->id)"
-                                        :show-project="false"
-                                    />
-                                @empty
-                                    <div class="py-8 text-center text-sm text-zinc-600">
-                                        Nenhuma feature
-                                    </div>
-                                @endforelse
+                                <ul
+                                    wire:sort="handleFeatureSort"
+                                    wire:sort:group="features"
+                                    wire:sort:group-id="{{ $status->value }}"
+                                    class="flex min-h-[2rem] flex-col gap-3"
+                                >
+                                    @forelse ($features as $feature)
+                                        <li wire:key="feature-{{ $feature->id }}" wire:sort:item="{{ $feature->id }}">
+                                            <x-feature-card
+                                                :feature="$feature"
+                                                :expanded="$this->isExpanded($feature->id)"
+                                                :show-project="false"
+                                                :sortable="true"
+                                            />
+                                        </li>
+                                    @empty
+                                        <li class="py-8 text-center text-sm text-zinc-600">
+                                            Nenhuma feature
+                                        </li>
+                                    @endforelse
+                                </ul>
 
                                 {{-- Load More Button --}}
                                 @if ($hasMore)

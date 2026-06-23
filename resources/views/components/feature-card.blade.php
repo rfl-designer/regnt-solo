@@ -2,6 +2,7 @@
     'feature',
     'expanded' => false,
     'showProject' => true,
+    'sortable' => false,
 ])
 
 @php
@@ -16,10 +17,21 @@
     class="group rounded-lg border border-zinc-700 bg-zinc-800 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
 >
     {{-- Card Header --}}
-    <div
-        class="cursor-pointer p-3"
-        wire:click="$dispatch('open-feature-modal', { featureId: {{ $feature->id }} })"
-    >
+    <div class="flex items-start gap-2 p-3">
+        @if ($sortable)
+            <div
+                wire:sort:handle
+                x-on:click.stop
+                class="mt-0.5 shrink-0 cursor-grab text-zinc-600 transition-colors hover:text-zinc-300 active:cursor-grabbing"
+            >
+                <flux:icon name="grip-vertical" class="size-4" />
+            </div>
+        @endif
+
+        <div
+            class="min-w-0 flex-1 cursor-pointer"
+            wire:click="$dispatch('open-feature-modal', { featureId: {{ $feature->id }} })"
+        >
         {{-- Title + ID --}}
         <div class="flex items-start justify-between gap-2">
             <h3 class="line-clamp-2 text-sm font-medium text-zinc-200">
@@ -116,6 +128,7 @@
                     </button>
                 @endif
             </div>
+        </div>
         </div>
     </div>
 

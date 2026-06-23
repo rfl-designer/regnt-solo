@@ -23,3 +23,6 @@ yarn-error.log
 /.zed
 /storage/ralph
 /workspace
+/.claude
+/.agents
+/skills-lock.json

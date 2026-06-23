@@ -7,12 +7,18 @@ on:
       - main
       - master
       - workos
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   pull_request:
     branches:
       - develop
       - main
       - master
       - workos
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
 
 jobs:
   ci:

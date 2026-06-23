@@ -70,6 +70,10 @@ Route::livewire('templates', 'pages::templates')
     ->middleware(['auth'])
     ->name('templates');
 
+Route::livewire('prompts', 'pages::prompts')
+    ->middleware(['auth'])
+    ->name('prompts');
+
 // Public stakeholder view (no auth required)
 Route::livewire('projects/shared/{token}', 'pages::project-stakeholder-view')
     ->name('project.stakeholder-view');

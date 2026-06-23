@@ -53,6 +53,9 @@
                     <flux:sidebar.item icon="clipboard-document-list" :href="route('templates')" :current="request()->routeIs('templates')" wire:navigate>
                         Templates
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="command-line" :href="route('prompts')" :current="request()->routeIs('prompts')" wire:navigate>
+                        Prompts
+                    </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 

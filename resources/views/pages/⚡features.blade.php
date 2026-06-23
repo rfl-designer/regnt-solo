@@ -331,20 +331,46 @@ new class extends Component
                 if ($task->status === TaskStatus::Done && $newStatus !== TaskStatus::Done) {
                     $task->update([
                         'status' => $newStatus,
-                        'sort_order' => $position,
                         'completed_at' => null,
                     ]);
                 } else {
-                    $task->update([
-                        'status' => $newStatus,
-                        'sort_order' => $position,
-                    ]);
+                    $task->update(['status' => $newStatus]);
                 }
             }
+
+            $this->reorderDrillColumn($newStatus, $task->id, $position);
         });
 
         unset($this->drillFeature);
         $this->dispatch('task-updated');
+    }
+
+    /**
+     * Insert the moved task at the given position within the drill-down
+     * column and renumber the column's tasks to unique sort_order values.
+     */
+    private function reorderDrillColumn(TaskStatus $status, int $movedId, int $position): void
+    {
+        $query = Task::query()
+            ->where('feature_id', $this->drillFeatureId)
+            ->where('status', $status)
+            ->where('id', '!=', $movedId);
+
+        if ($status === TaskStatus::Done) {
+            $query->whereBetween('completed_at', [
+                Carbon::now()->startOfWeek(),
+                Carbon::now()->endOfWeek(),
+            ]);
+        }
+
+        $ids = $query->orderBy('sort_order')->orderBy('id')->pluck('id')->all();
+
+        $position = max(0, min($position, count($ids)));
+        array_splice($ids, $position, 0, [$movedId]);
+
+        foreach ($ids as $index => $id) {
+            Task::query()->where('id', $id)->update(['sort_order' => $index]);
+        }
     }
 
     #[On('feature-updated')]
@@ -384,9 +410,37 @@ new class extends Component
     public function handleFeatureSort(int|string $id, int $position, string $groupId): void
     {
         $feature = Feature::findOrFail((int) $id);
-        $feature->update(['status' => FeatureStatus::from($groupId), 'sort_order' => $position]);
+        $newStatus = FeatureStatus::from($groupId);
+
+        DB::transaction(function () use ($feature, $newStatus, $position): void {
+            $feature->update(['status' => $newStatus]);
+            $this->reorderFeatureColumn($newStatus, $feature->id, $position);
+        });
+
         unset($this->features);
         $this->dispatch('feature-updated');
+    }
+
+    /**
+     * Insert the moved feature at the given position within its column and
+     * renumber the column's features to unique sort_order values.
+     */
+    private function reorderFeatureColumn(FeatureStatus $status, int $movedId, int $position): void
+    {
+        $ids = Feature::query()
+            ->where('status', $status)
+            ->where('id', '!=', $movedId)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+
+        $position = max(0, min($position, count($ids)));
+        array_splice($ids, $position, 0, [$movedId]);
+
+        foreach ($ids as $index => $id) {
+            Feature::query()->where('id', $id)->update(['sort_order' => $index]);
+        }
     }
 }
 

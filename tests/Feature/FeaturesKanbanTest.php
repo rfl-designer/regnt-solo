@@ -276,7 +276,7 @@ describe('Feature Kanban Sort', function () {
         $this->assertDatabaseHas('features', [
             'id' => $feature->id,
             'status' => 'todo',
-            'sort_order' => 1,
+            'sort_order' => 0,
         ]);
     });
 

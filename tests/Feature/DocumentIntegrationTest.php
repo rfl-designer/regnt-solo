@@ -65,12 +65,13 @@ test('task modal renders session prompt as markdown when done', function () {
         ->assertSeeHtml('<strong>bold result</strong>');
 });
 
-test('task modal shows textarea for session prompt when not done', function () {
+test('task modal shows session prompt field when not done', function () {
     $task = Task::factory()->doing()->create([
         'session_prompt' => 'My prompt',
     ]);
 
     Livewire::test('task-modal')
         ->call('openTask', $task->id)
-        ->assertSee('User Story');
+        ->assertSee('Instruções AI')
+        ->assertSee('My prompt');
 });

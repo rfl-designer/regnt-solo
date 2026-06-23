@@ -49,15 +49,15 @@ test('analytics period can be changed to 6m', function () {
 
 test('analytics shows streak section', function () {
     Livewire::test('pages::analytics')
-        ->assertSee('Streak atual')
-        ->assertSee('Melhor streak')
-        ->assertSee('Focus streak')
-        ->assertSee('Melhor focus');
+        ->assertSee('Sequência atual')
+        ->assertSee('Melhor sequência')
+        ->assertSee('Sequência de foco')
+        ->assertSee('Melhor foco');
 });
 
 test('analytics shows velocity section', function () {
     Livewire::test('pages::analytics')
-        ->assertSee('Velocity');
+        ->assertSee('Velocidade');
 });
 
 test('analytics shows cycle time section', function () {
@@ -82,7 +82,7 @@ test('analytics shows heatmap section', function () {
 
 test('analytics shows focus ratio', function () {
     Livewire::test('pages::analytics')
-        ->assertSee('Focus Ratio');
+        ->assertSee('Taxa de foco');
 });
 
 test('analytics heatmap displays data when time entries exist', function () {

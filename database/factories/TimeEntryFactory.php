@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\Task;
+use App\Models\Activity;
 use App\Models\TimeEntry;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -23,7 +23,7 @@ class TimeEntryFactory extends Factory
         $stoppedAt->modify('+'.rand(15, 120).' minutes');
 
         return [
-            'task_id' => Task::factory(),
+            'activity_id' => Activity::factory(),
             'started_at' => $startedAt,
             'stopped_at' => $stoppedAt,
             'notes' => fake()->optional()->sentence(),

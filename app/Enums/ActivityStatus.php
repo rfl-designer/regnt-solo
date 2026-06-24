@@ -2,9 +2,9 @@
 
 namespace App\Enums;
 
-enum FeatureStatus: string
+enum ActivityStatus: string
 {
-    case Draft = 'draft';
+    case Inbox = 'inbox';
     case Backlog = 'backlog';
     case Todo = 'todo';
     case Doing = 'doing';
@@ -16,10 +16,10 @@ enum FeatureStatus: string
     public function label(): string
     {
         return match ($this) {
-            self::Draft => 'Rascunho',
+            self::Inbox => 'Caixa de Entrada',
             self::Backlog => 'Backlog',
             self::Todo => 'A Fazer',
-            self::Doing => 'Em Progresso',
+            self::Doing => 'Fazendo',
             self::Done => 'Concluída',
         };
     }
@@ -30,7 +30,7 @@ enum FeatureStatus: string
     public function color(): string
     {
         return match ($this) {
-            self::Draft => 'zinc',
+            self::Inbox => 'zinc',
             self::Backlog => 'slate',
             self::Todo => 'blue',
             self::Doing => 'amber',
@@ -39,12 +39,12 @@ enum FeatureStatus: string
     }
 
     /**
-     * Get the hex color for inline styles.
+     * Get the hex color for inline styles (e.g., segmented bars).
      */
     public function hexColor(): string
     {
         return match ($this) {
-            self::Draft => '#71717a',   // zinc-500
+            self::Inbox => '#a1a1aa',   // zinc-400
             self::Backlog => '#94a3b8', // slate-400
             self::Todo => '#60a5fa',    // blue-400
             self::Doing => '#fbbf24',   // amber-400
@@ -58,7 +58,7 @@ enum FeatureStatus: string
     public function icon(): string
     {
         return match ($this) {
-            self::Draft => 'document',
+            self::Inbox => 'inbox',
             self::Backlog => 'archive-box',
             self::Todo => 'clipboard-document-list',
             self::Doing => 'play-circle',

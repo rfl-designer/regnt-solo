@@ -46,19 +46,19 @@ class Project extends Model
     }
 
     /**
-     * Get the features for this project.
+     * Get the epic activities for this project.
      */
     public function features(): HasMany
     {
-        return $this->hasMany(Feature::class);
+        return $this->hasMany(Activity::class)->where('type', ActivityType::Epic);
     }
 
     /**
-     * Get the tasks for this project.
+     * Get the work activities (issues and personal tasks) for this project.
      */
     public function tasks(): HasMany
     {
-        return $this->hasMany(Task::class);
+        return $this->hasMany(Activity::class)->whereIn('type', [ActivityType::Issue, ActivityType::Task]);
     }
 
     /**

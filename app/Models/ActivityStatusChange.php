@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class TaskStatusChange extends Model
+class ActivityStatusChange extends Model
 {
-    /** @use HasFactory<\Database\Factories\TaskStatusChangeFactory> */
+    /** @use HasFactory<\Database\Factories\ActivityStatusChangeFactory> */
     use HasFactory;
 
     public $timestamps = false;
@@ -21,7 +21,7 @@ class TaskStatusChange extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'task_id',
+        'activity_id',
         'from_status',
         'to_status',
         'changed_at',
@@ -35,32 +35,32 @@ class TaskStatusChange extends Model
     protected function casts(): array
     {
         return [
-            'from_status' => TaskStatus::class,
-            'to_status' => TaskStatus::class,
+            'from_status' => ActivityStatus::class,
+            'to_status' => ActivityStatus::class,
             'changed_at' => 'datetime',
         ];
     }
 
     /**
-     * Get the task this status change belongs to.
+     * Get the activity this status change belongs to.
      */
-    public function task(): BelongsTo
+    public function activity(): BelongsTo
     {
-        return $this->belongsTo(Task::class);
+        return $this->belongsTo(Activity::class);
     }
 
     /**
-     * Scope to filter status changes for a specific task.
+     * Scope to filter status changes for a specific activity.
      */
-    public function scopeForTask(Builder $query, int $taskId): void
+    public function scopeForActivity(Builder $query, int $activityId): void
     {
-        $query->where('task_id', $taskId);
+        $query->where('activity_id', $activityId);
     }
 
     /**
      * Scope to filter status changes for a specific status (as to_status).
      */
-    public function scopeForStatus(Builder $query, TaskStatus $status): void
+    public function scopeForStatus(Builder $query, ActivityStatus $status): void
     {
         $query->where('to_status', $status);
     }

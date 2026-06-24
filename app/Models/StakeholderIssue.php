@@ -23,7 +23,7 @@ class StakeholderIssue extends Model
     protected $fillable = [
         'stakeholder_id',
         'project_id',
-        'feature_id',
+        'activity_id',
         'comment',
         'status',
         'converted_at',
@@ -59,10 +59,10 @@ class StakeholderIssue extends Model
     }
 
     /**
-     * Get the feature linked to this issue.
+     * Get the activity linked to this issue.
      */
-    public function feature(): BelongsTo
+    public function activity(): BelongsTo
     {
-        return $this->belongsTo(Feature::class);
+        return $this->belongsTo(Activity::class);
     }
 }

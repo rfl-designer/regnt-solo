@@ -2,8 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -39,7 +37,7 @@ class TaskTemplate extends Model
     protected function casts(): array
     {
         return [
-            'default_priority' => TaskPriority::class,
+            'default_priority' => ActivityPriority::class,
             'is_system' => 'boolean',
         ];
     }
@@ -59,11 +57,11 @@ class TaskTemplate extends Model
     }
 
     /**
-     * Get the tasks created from this template.
+     * Get the activities created from this template.
      */
     public function tasks(): HasMany
     {
-        return $this->hasMany(Task::class);
+        return $this->hasMany(Activity::class);
     }
 
     /**
@@ -87,17 +85,18 @@ class TaskTemplate extends Model
      *
      * @param  array<string, mixed>  $overrides
      */
-    public function createTask(array $overrides = []): Task
+    public function createTask(array $overrides = []): Activity
     {
         $defaults = [
+            'type' => ActivityType::Task,
             'task_template_id' => $this->id,
             'title' => $this->name,
             'description' => $this->description,
-            'status' => TaskStatus::Inbox,
+            'status' => ActivityStatus::Inbox,
             'priority' => $this->default_priority,
             'estimated_minutes' => $this->default_estimated_minutes,
         ];
 
-        return Task::create(array_merge($defaults, $overrides));
+        return Activity::create(array_merge($defaults, $overrides));
     }
 }

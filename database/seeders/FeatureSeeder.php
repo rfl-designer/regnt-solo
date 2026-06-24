@@ -2,13 +2,11 @@
 
 namespace Database\Seeders;
 
-use App\Enums\FeaturePriority;
-use App\Enums\FeatureStatus;
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
-use App\Models\Feature;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use Illuminate\Database\Seeder;
 
 class FeatureSeeder extends Seeder
@@ -24,60 +22,62 @@ class FeatureSeeder extends Seeder
             return;
         }
 
-        $features = [
+        $epics = [
             [
                 'title' => 'Autenticação com 2FA',
                 'slug' => 'auth-2fa',
-                'priority' => FeaturePriority::High,
-                'status' => FeatureStatus::Doing,
+                'priority' => ActivityPriority::High,
+                'status' => ActivityStatus::Doing,
                 'spec' => $this->getAuth2faSpec(),
                 'tasks' => [
-                    ['title' => 'Migration para two_factor_secret', 'status' => TaskStatus::Done],
-                    ['title' => 'Tela de configuração 2FA', 'status' => TaskStatus::Done],
-                    ['title' => 'Validação TOTP no login', 'status' => TaskStatus::Doing],
-                    ['title' => 'Recovery codes', 'status' => TaskStatus::Todo],
-                    ['title' => 'Testes de autenticação 2FA', 'status' => TaskStatus::Backlog],
+                    ['title' => 'Migration para two_factor_secret', 'status' => ActivityStatus::Done],
+                    ['title' => 'Tela de configuração 2FA', 'status' => ActivityStatus::Done],
+                    ['title' => 'Validação TOTP no login', 'status' => ActivityStatus::Doing],
+                    ['title' => 'Recovery codes', 'status' => ActivityStatus::Todo],
+                    ['title' => 'Testes de autenticação 2FA', 'status' => ActivityStatus::Backlog],
                 ],
             ],
             [
                 'title' => 'Dashboard de Analytics',
                 'slug' => 'analytics-dashboard',
-                'priority' => FeaturePriority::Medium,
-                'status' => FeatureStatus::Todo,
+                'priority' => ActivityPriority::Medium,
+                'status' => ActivityStatus::Todo,
                 'spec' => $this->getAnalyticsSpec(),
                 'tasks' => [
-                    ['title' => 'Componente de heatmap', 'status' => TaskStatus::Todo],
-                    ['title' => 'Gráfico de velocity', 'status' => TaskStatus::Backlog],
-                    ['title' => 'Health score calculator', 'status' => TaskStatus::Backlog],
+                    ['title' => 'Componente de heatmap', 'status' => ActivityStatus::Todo],
+                    ['title' => 'Gráfico de velocity', 'status' => ActivityStatus::Backlog],
+                    ['title' => 'Health score calculator', 'status' => ActivityStatus::Backlog],
                 ],
             ],
             [
                 'title' => 'Export de Relatórios',
                 'slug' => 'export-reports',
-                'priority' => FeaturePriority::Low,
-                'status' => FeatureStatus::Draft,
+                'priority' => ActivityPriority::Low,
+                'status' => ActivityStatus::Backlog,
                 'spec' => $this->getExportSpec(),
                 'tasks' => [],
             ],
         ];
 
-        foreach ($features as $featureData) {
-            $tasks = $featureData['tasks'];
-            unset($featureData['tasks']);
+        foreach ($epics as $epicData) {
+            $tasks = $epicData['tasks'];
+            unset($epicData['tasks']);
 
-            $feature = Feature::create([
-                ...$featureData,
+            $epic = Activity::create([
+                ...$epicData,
+                'type' => ActivityType::Epic,
                 'project_id' => $project->id,
             ]);
 
             foreach ($tasks as $index => $taskData) {
-                Task::create([
+                Activity::create([
                     ...$taskData,
-                    'feature_id' => $feature->id,
+                    'type' => ActivityType::Task,
+                    'parent_id' => $epic->id,
                     'project_id' => $project->id,
-                    'priority' => TaskPriority::Medium,
+                    'priority' => ActivityPriority::Medium,
                     'sort_order' => $index,
-                    'completed_at' => $taskData['status'] === TaskStatus::Done ? now() : null,
+                    'completed_at' => $taskData['status'] === ActivityStatus::Done ? now() : null,
                 ]);
             }
         }

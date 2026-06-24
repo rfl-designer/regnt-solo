@@ -2,7 +2,7 @@
 
 namespace App\Mcp\Tools;
 
-use App\Models\Task;
+use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -22,13 +22,13 @@ class GetTaskTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'task_id' => 'required|integer|exists:tasks,id',
+            'task_id' => 'required|integer|exists:activities,id',
         ], [
             'task_id.required' => 'You must provide a task_id. Use list-tasks to find available task IDs.',
             'task_id.exists' => 'Task not found. Use list-tasks to find available task IDs.',
         ]);
 
-        $task = Task::query()
+        $task = Activity::query()
             ->with(['project', 'timeEntries', 'dailyPlans', 'statusChanges', 'commits'])
             ->findOrFail($validated['task_id']);
 
@@ -49,7 +49,7 @@ class GetTaskTool extends Tool
             'pr_url' => $task->pr_url,
             'is_overdue' => $task->isOverdue(),
             'is_running' => $task->isRunning(),
-            'feature_id' => $task->feature_id,
+            'feature_id' => $task->parent_id,
             'github_issue_number' => $task->github_issue_number,
             'github_synced_hash' => $task->github_synced_hash,
             'time_entries' => $task->timeEntries->map(fn ($entry) => [
@@ -86,7 +86,7 @@ class GetTaskTool extends Tool
      *
      * @return array<int, array{from_status: string|null, to_status: string, changed_at: string, duration_minutes: float}>
      */
-    private function buildStatusTimeline(Task $task): array
+    private function buildStatusTimeline(Activity $task): array
     {
         $changes = $task->statusChanges->sortBy('changed_at')->values();
 

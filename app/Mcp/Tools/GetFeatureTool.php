@@ -2,7 +2,7 @@
 
 namespace App\Mcp\Tools;
 
-use App\Models\Feature;
+use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -22,14 +22,14 @@ class GetFeatureTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'feature_id' => 'required|integer|exists:features,id',
+            'feature_id' => 'required|integer|exists:activities,id',
         ], [
             'feature_id.required' => 'You must provide a feature_id. Use list-features to find available feature IDs.',
             'feature_id.exists' => 'Feature not found. Use list-features to find available feature IDs.',
         ]);
 
-        $feature = Feature::query()
-            ->with(['project', 'tasks.project', 'timeEntries'])
+        $feature = Activity::query()->epics()
+            ->with(['project', 'children.project', 'timeEntries'])
             ->findOrFail($validated['feature_id']);
 
         $data = [
@@ -47,7 +47,7 @@ class GetFeatureTool extends Tool
             ] : null,
             'due_date' => $feature->due_date?->toDateString(),
             'is_running' => $feature->isRunning(),
-            'tasks' => $feature->tasks->map(fn ($task) => [
+            'tasks' => $feature->children->map(fn ($task) => [
                 'id' => $task->id,
                 'title' => $task->title,
                 'status' => $task->status->value,

@@ -2,8 +2,7 @@
 
 namespace App\Mcp\Tools;
 
-use App\Models\Feature;
-use App\Models\Task;
+use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -21,8 +20,8 @@ class AddTaskToFeatureTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'task_id' => 'required|integer|exists:tasks,id',
-            'feature_id' => 'required|integer|exists:features,id',
+            'task_id' => 'required|integer|exists:activities,id',
+            'feature_id' => 'required|integer|exists:activities,id',
         ], [
             'task_id.required' => 'You must provide a task_id. Use list-tasks to find available task IDs.',
             'task_id.exists' => 'Task not found. Use list-tasks to find available task IDs.',
@@ -30,10 +29,10 @@ class AddTaskToFeatureTool extends Tool
             'feature_id.exists' => 'Feature not found. Use list-features to find available feature IDs.',
         ]);
 
-        $task = Task::findOrFail($validated['task_id']);
-        $feature = Feature::findOrFail($validated['feature_id']);
+        $task = Activity::findOrFail($validated['task_id']);
+        $feature = Activity::query()->epics()->findOrFail($validated['feature_id']);
 
-        $updates = ['feature_id' => $feature->id];
+        $updates = ['parent_id' => $feature->id];
 
         // Inherit project from feature if task doesn't have one
         if ($task->project_id === null && $feature->project_id !== null) {
@@ -41,7 +40,7 @@ class AddTaskToFeatureTool extends Tool
         }
 
         $task->update($updates);
-        $task->load(['project', 'feature']);
+        $task->load(['project', 'parent']);
 
         $data = [
             'task_id' => $task->id,

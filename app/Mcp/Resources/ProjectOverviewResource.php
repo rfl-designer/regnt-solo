@@ -2,10 +2,9 @@
 
 namespace App\Mcp\Resources;
 
-use App\Enums\TaskStatus;
-use App\Models\Feature;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TimeEntry;
 use Carbon\Carbon;
 use Laravel\Mcp\Request;
@@ -26,8 +25,8 @@ class ProjectOverviewResource extends Resource
     public function handle(Request $request): Response
     {
         $withCounts = [];
-        foreach (TaskStatus::cases() as $status) {
-            $withCounts["tasks as tasks_{$status->value}_count"] = fn ($q) => $q->where('status', $status);
+        foreach (ActivityStatus::cases() as $status) {
+            $withCounts["activities as tasks_{$status->value}_count"] = fn ($q) => $q->where('status', $status);
         }
 
         $projects = Project::query()
@@ -37,7 +36,7 @@ class ProjectOverviewResource extends Resource
             ->get()
             ->map(function (Project $project) {
                 $taskCounts = [];
-                foreach (TaskStatus::cases() as $status) {
+                foreach (ActivityStatus::cases() as $status) {
                     $count = (int) $project->{"tasks_{$status->value}_count"};
                     if ($count > 0) {
                         $taskCounts[$status->value] = $count;
@@ -53,7 +52,7 @@ class ProjectOverviewResource extends Resource
             })->all();
 
         $runningEntry = TimeEntry::query()
-            ->with('task.project')
+            ->with('activity.project')
             ->running()
             ->latest('started_at')
             ->first();
@@ -61,20 +60,20 @@ class ProjectOverviewResource extends Resource
         $timer = null;
         if ($runningEntry) {
             $timer = [
-                'task_id' => $runningEntry->task_id,
-                'task_title' => $runningEntry->task->title,
-                'project' => $runningEntry->task->project?->name,
+                'task_id' => $runningEntry->activity_id,
+                'task_title' => $runningEntry->activity->title,
+                'project' => $runningEntry->activity->project?->name,
                 'started_at' => $runningEntry->started_at->toDateTimeString(),
                 'duration_minutes' => $runningEntry->duration_minutes,
             ];
         }
 
-        $overdueTasks = Task::query()
+        $overdueTasks = Activity::query()
             ->with('project')
             ->overdue()
             ->orderBy('due_date')
             ->get()
-            ->map(fn (Task $task) => [
+            ->map(fn (Activity $task) => [
                 'id' => $task->id,
                 'title' => $task->title,
                 'due_date' => $task->due_date->toDateString(),
@@ -90,12 +89,12 @@ class ProjectOverviewResource extends Resource
         $hoursToday = round($minutesToday / 60, 2);
 
         // Get active features (not done)
-        $activeFeatures = Feature::query()
-            ->with(['project', 'tasks'])
+        $activeFeatures = Activity::query()->epics()
+            ->with(['project', 'children'])
             ->get()
-            ->filter(fn (Feature $f) => $f->status->value !== 'done')
+            ->filter(fn (Activity $f) => $f->status->value !== 'done')
             ->take(10)
-            ->map(fn (Feature $feature) => [
+            ->map(fn (Activity $feature) => [
                 'id' => $feature->id,
                 'title' => $feature->title,
                 'slug' => $feature->slug,

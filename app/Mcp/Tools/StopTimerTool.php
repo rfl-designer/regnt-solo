@@ -2,8 +2,7 @@
 
 namespace App\Mcp\Tools;
 
-use App\Models\Feature;
-use App\Models\Task;
+use App\Models\Activity;
 use App\Models\TimeEntry;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -22,8 +21,8 @@ class StopTimerTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'task_id' => 'nullable|integer|exists:tasks,id',
-            'feature_id' => 'nullable|integer|exists:features,id',
+            'task_id' => 'nullable|integer|exists:activities,id',
+            'feature_id' => 'nullable|integer|exists:activities,id',
             'notes' => 'nullable|string|max:1000',
         ], [
             'task_id.exists' => 'Task not found. Use list-tasks to find available task IDs.',
@@ -40,7 +39,7 @@ class StopTimerTool extends Tool
         $notes = $validated['notes'] ?? null;
 
         if ($featureId !== null) {
-            $feature = Feature::findOrFail($featureId);
+            $feature = Activity::query()->epics()->findOrFail($featureId);
             $entry = $feature->stopTimer($notes);
 
             if ($entry === null) {
@@ -61,10 +60,10 @@ class StopTimerTool extends Tool
             return Response::text(json_encode($data, JSON_PRETTY_PRINT));
         }
 
-        $task = Task::findOrFail($taskId);
+        $task = Activity::findOrFail($taskId);
 
         $entry = TimeEntry::query()
-            ->where('task_id', $task->id)
+            ->where('activity_id', $task->id)
             ->running()
             ->latest('started_at')
             ->first();

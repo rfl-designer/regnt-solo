@@ -2,10 +2,10 @@
 
 namespace App\Mcp\Prompts;
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TimeEntry;
 use Carbon\Carbon;
 use Laravel\Mcp\Request;
@@ -42,9 +42,9 @@ class DailyPlanningPrompt extends Prompt
     {
         $focusProject = $request->string('focus_project');
 
-        $overdueTasks = Task::query()->overdue()->with('project')->get();
-        $doingTasks = Task::query()->byStatus(TaskStatus::Doing)->with('project')->get();
-        $todoTasks = Task::query()->byStatus(TaskStatus::Todo)->with('project')
+        $overdueTasks = Activity::query()->overdue()->with('project')->get();
+        $doingTasks = Activity::query()->byStatus(ActivityStatus::Doing)->with('project')->get();
+        $todoTasks = Activity::query()->byStatus(ActivityStatus::Todo)->with('project')
             ->orderByRaw("CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END")
             ->limit(10)
             ->get();

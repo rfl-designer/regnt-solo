@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -83,12 +83,12 @@ class WeeklyReview extends Model
     /**
      * Get tasks completed during this week, with project and time entries eager loaded.
      *
-     * @return Collection<int, Task>
+     * @return Collection<int, Activity>
      */
     public function completedTasks(): Collection
     {
-        return Task::query()
-            ->where('status', TaskStatus::Done)
+        return Activity::query()
+            ->where('status', ActivityStatus::Done)
             ->whereBetween('completed_at', $this->weekRange())
             ->with(['project', 'timeEntries'])
             ->orderByDesc('completed_at')
@@ -117,11 +117,11 @@ class WeeklyReview extends Model
         return TimeEntry::query()
             ->whereNotNull('stopped_at')
             ->whereBetween('started_at', $this->weekRange())
-            ->with('task.project')
+            ->with('activity.project')
             ->get()
-            ->groupBy(fn (TimeEntry $entry): int => $entry->task?->project_id ?? 0)
+            ->groupBy(fn (TimeEntry $entry): int => $entry->activity?->project_id ?? 0)
             ->map(fn (SupportCollection $entries, int $projectId): array => [
-                'project' => $entries->first()->task?->project,
+                'project' => $entries->first()->activity?->project,
                 'minutes' => $entries->sum('duration_minutes'),
             ])
             ->sortByDesc('minutes')
@@ -131,15 +131,15 @@ class WeeklyReview extends Model
     /**
      * Get active tasks that had no status change during this week.
      *
-     * @return Collection<int, Task>
+     * @return Collection<int, Activity>
      */
     public function staleTasks(): Collection
     {
         $range = $this->weekRange();
 
-        return Task::query()
+        return Activity::query()
             ->active()
-            ->where('status', '!=', TaskStatus::Inbox)
+            ->where('status', '!=', ActivityStatus::Inbox)
             ->whereDoesntHave('statusChanges', fn (Builder $query) => $query->whereBetween('changed_at', $range))
             ->with('project')
             ->get();
@@ -152,8 +152,8 @@ class WeeklyReview extends Model
      */
     public function statusTimeAverages(): array
     {
-        $doneTasks = Task::query()
-            ->where('status', TaskStatus::Done)
+        $doneTasks = Activity::query()
+            ->where('status', ActivityStatus::Done)
             ->whereBetween('completed_at', $this->weekRange())
             ->with('statusChanges')
             ->get();
@@ -192,11 +192,11 @@ class WeeklyReview extends Model
         $range = $this->weekRange();
 
         return [
-            'created' => Task::query()
+            'created' => Activity::query()
                 ->whereBetween('created_at', $range)
                 ->count(),
-            'completed' => Task::query()
-                ->where('status', TaskStatus::Done)
+            'completed' => Activity::query()
+                ->where('status', ActivityStatus::Done)
                 ->whereBetween('completed_at', $range)
                 ->count(),
         ];

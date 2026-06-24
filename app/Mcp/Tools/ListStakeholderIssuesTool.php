@@ -34,7 +34,7 @@ class ListStakeholderIssuesTool extends Tool
         ]);
 
         $query = StakeholderIssue::query()
-            ->with(['project', 'stakeholder', 'feature'])
+            ->with(['project', 'stakeholder', 'activity'])
             ->latest('created_at');
 
         if (! empty($validated['project_slug'])) {
@@ -68,10 +68,10 @@ class ListStakeholderIssuesTool extends Tool
                 'name' => $issue->stakeholder?->name,
                 'email' => $issue->stakeholder?->email,
             ],
-            'feature' => $issue->feature ? [
-                'id' => $issue->feature->id,
-                'title' => $issue->feature->title,
-                'slug' => $issue->feature->slug,
+            'feature' => $issue->activity ? [
+                'id' => $issue->activity->id,
+                'title' => $issue->activity->title,
+                'slug' => $issue->activity->slug,
             ] : null,
             'converted_at' => $issue->converted_at?->toDateTimeString(),
             'created_at' => $issue->created_at->toDateTimeString(),

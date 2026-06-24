@@ -2,8 +2,8 @@
 
 namespace App\Mcp\Prompts;
 
-use App\Enums\TaskStatus;
-use App\Models\Feature;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Prompt;
@@ -37,8 +37,8 @@ class FeaturePlanningPrompt extends Prompt
     public function handle(Request $request): array
     {
         $featureId = $request->integer('feature_id');
-        $feature = Feature::query()
-            ->with(['project', 'tasks', 'timeEntries'])
+        $feature = Activity::query()->epics()
+            ->with(['project', 'children', 'timeEntries'])
             ->findOrFail($featureId);
 
         $context = "## Feature\n";
@@ -62,12 +62,12 @@ class FeaturePlanningPrompt extends Prompt
             $context .= "\n## Feature Specification\n{$feature->spec}\n";
         }
 
-        if ($feature->tasks->isNotEmpty()) {
+        if ($feature->children->isNotEmpty()) {
             $context .= "\n## Tasks ({$feature->completedTasksCount()}/{$feature->tasksCount()} completed)\n";
 
-            $tasksByStatus = $feature->tasks->groupBy(fn ($t) => $t->status->value);
+            $tasksByStatus = $feature->children->groupBy(fn ($t) => $t->status->value);
 
-            foreach ([TaskStatus::Doing, TaskStatus::Todo, TaskStatus::Backlog, TaskStatus::Done] as $status) {
+            foreach ([ActivityStatus::Doing, ActivityStatus::Todo, ActivityStatus::Backlog, ActivityStatus::Done] as $status) {
                 $tasks = $tasksByStatus->get($status->value, collect());
                 if ($tasks->isEmpty()) {
                     continue;

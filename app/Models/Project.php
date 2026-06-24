@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ActivityType;
 use App\Enums\ProjectPriority;
 use App\Enums\ProjectStatus;
 use App\Observers\ProjectRealtimeObserver;

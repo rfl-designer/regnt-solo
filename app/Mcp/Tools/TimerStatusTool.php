@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Enums\ActivityType;
 use App\Models\TimeEntry;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -22,7 +23,7 @@ class TimerStatusTool extends Tool
     public function handle(Request $request): Response
     {
         $entry = TimeEntry::query()
-            ->with(['task', 'feature'])
+            ->with('activity')
             ->running()
             ->latest('started_at')
             ->first();
@@ -42,14 +43,14 @@ class TimerStatusTool extends Tool
             'is_focus_session' => $entry->is_focus_session,
         ];
 
-        if ($entry->feature_id !== null && $entry->feature !== null) {
-            $data['feature_id'] = $entry->feature_id;
-            $data['feature_title'] = $entry->feature->title;
-        }
-
-        if ($entry->task_id !== null && $entry->task !== null) {
-            $data['task_id'] = $entry->task_id;
-            $data['task_title'] = $entry->task->title;
+        if ($entry->activity_id !== null && $entry->activity !== null) {
+            if ($entry->activity->type === ActivityType::Epic) {
+                $data['feature_id'] = $entry->activity_id;
+                $data['feature_title'] = $entry->activity->title;
+            } else {
+                $data['task_id'] = $entry->activity_id;
+                $data['task_title'] = $entry->activity->title;
+            }
         }
 
         return Response::text(json_encode($data, JSON_PRETTY_PRINT));

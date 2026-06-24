@@ -2,8 +2,7 @@
 
 namespace App\Mcp\Tools;
 
-use App\Models\Feature;
-use App\Models\Task;
+use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -21,8 +20,8 @@ class StartTimerTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'task_id' => 'nullable|integer|exists:tasks,id',
-            'feature_id' => 'nullable|integer|exists:features,id',
+            'task_id' => 'nullable|integer|exists:activities,id',
+            'feature_id' => 'nullable|integer|exists:activities,id',
             'focus' => 'nullable|boolean',
         ], [
             'task_id.exists' => 'Task not found. Use list-tasks to find available task IDs.',
@@ -39,7 +38,7 @@ class StartTimerTool extends Tool
         $isFocus = $validated['focus'] ?? false;
 
         if ($featureId !== null) {
-            $feature = Feature::findOrFail($featureId);
+            $feature = Activity::query()->epics()->findOrFail($featureId);
             $entry = $feature->startTimer($isFocus);
 
             $data = [
@@ -56,7 +55,7 @@ class StartTimerTool extends Tool
             return Response::text(json_encode($data, JSON_PRETTY_PRINT));
         }
 
-        $task = Task::findOrFail($taskId);
+        $task = Activity::findOrFail($taskId);
         $entry = $task->startTimer($isFocus);
         $task->refresh();
 

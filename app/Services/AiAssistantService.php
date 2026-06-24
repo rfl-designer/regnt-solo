@@ -28,7 +28,7 @@ class AiAssistantService
     /**
      * Suggest a daily plan based on available tasks and completion history.
      *
-     * @param  Collection<int, \App\Models\Task>  $tasks
+     * @param  Collection<int, \App\Models\Activity>  $tasks
      * @param  array<string, mixed>  $history
      * @return array<int, array{task_id: int, reason: string, priority_score: int}>
      */
@@ -48,7 +48,7 @@ class AiAssistantService
     /**
      * Analyze backlog tasks and suggest actions for each.
      *
-     * @param  Collection<int, \App\Models\Task>  $tasks
+     * @param  Collection<int, \App\Models\Activity>  $tasks
      * @return array<int, array{task_id: int, action: string, reason: string, suggested_priority: string|null, suggested_project: string|null}>
      */
     public function analyzeBacklog(Collection $tasks): array
@@ -130,7 +130,7 @@ class AiAssistantService
     /**
      * Build system and user prompts for daily plan suggestions.
      *
-     * @param  Collection<int, \App\Models\Task>  $tasks
+     * @param  Collection<int, \App\Models\Activity>  $tasks
      * @param  array<string, mixed>  $history
      * @return array{system: string, user: string}
      */
@@ -162,7 +162,7 @@ class AiAssistantService
     /**
      * Build system and user prompts for backlog analysis.
      *
-     * @param  Collection<int, \App\Models\Task>  $tasks
+     * @param  Collection<int, \App\Models\Activity>  $tasks
      * @return array{system: string, user: string}
      */
     private function buildBacklogPrompt(Collection $tasks): array

@@ -2,10 +2,10 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
@@ -26,17 +26,17 @@ class UpdateTaskTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'task_id' => 'required|integer|exists:tasks,id',
+            'task_id' => 'required|integer|exists:activities,id',
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'project_slug' => 'nullable|string|exists:projects,slug',
-            'status' => ['nullable', 'string', Rule::enum(TaskStatus::class)],
-            'priority' => ['nullable', 'string', Rule::enum(TaskPriority::class)],
+            'status' => ['nullable', 'string', Rule::enum(ActivityStatus::class)],
+            'priority' => ['nullable', 'string', Rule::enum(ActivityPriority::class)],
             'due_date' => 'nullable|date',
             'estimated_minutes' => 'nullable|integer|min:1',
             'session_prompt' => 'nullable|string',
             'session_result' => 'nullable|string',
-            'feature_id' => 'nullable|integer|exists:features,id',
+            'feature_id' => 'nullable|integer|exists:activities,id',
             'github_issue_number' => 'nullable|integer',
             'github_synced_hash' => 'nullable|string',
         ], [
@@ -46,9 +46,9 @@ class UpdateTaskTool extends Tool
             'feature_id.exists' => 'Feature not found. Use list-features to find available feature IDs.',
         ]);
 
-        $task = Task::findOrFail($validated['task_id']);
+        $task = Activity::findOrFail($validated['task_id']);
 
-        if (isset($validated['status']) && $validated['status'] === TaskStatus::Done->value && $task->status !== TaskStatus::Done) {
+        if (isset($validated['status']) && $validated['status'] === ActivityStatus::Done->value && $task->status !== ActivityStatus::Done) {
             $task->markAsDone();
             $task->refresh();
         }
@@ -67,7 +67,7 @@ class UpdateTaskTool extends Tool
             $updates['project_id'] = Project::query()->where('slug', $validated['project_slug'])->value('id');
         }
 
-        if (isset($validated['status']) && $validated['status'] !== TaskStatus::Done->value) {
+        if (isset($validated['status']) && $validated['status'] !== ActivityStatus::Done->value) {
             $updates['status'] = $validated['status'];
         }
 
@@ -92,7 +92,7 @@ class UpdateTaskTool extends Tool
         }
 
         if (array_key_exists('feature_id', $validated)) {
-            $updates['feature_id'] = $validated['feature_id'];
+            $updates['parent_id'] = $validated['feature_id'];
         }
 
         if (isset($validated['github_issue_number'])) {
@@ -121,7 +121,7 @@ class UpdateTaskTool extends Tool
             'is_overdue' => $task->isOverdue(),
             'is_running' => $task->isRunning(),
             'is_session_task' => $task->isSessionTask(),
-            'feature_id' => $task->feature_id,
+            'feature_id' => $task->parent_id,
             'github_issue_number' => $task->github_issue_number,
             'github_synced_hash' => $task->github_synced_hash,
             'updated_at' => $task->updated_at->toDateTimeString(),

@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\ActivityPriority;
 use App\Enums\RecurrenceFrequency;
 use App\Models\Project;
 use App\Models\RecurringTask;

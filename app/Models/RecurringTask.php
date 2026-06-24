@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
 use App\Enums\RecurrenceFrequency;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;

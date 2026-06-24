@@ -2,10 +2,10 @@
 
 namespace App\Mcp\Prompts;
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Document;
-use App\Models\Task;
 use App\Models\TimeEntry;
 use Carbon\Carbon;
 use Laravel\Mcp\Request;
@@ -65,7 +65,7 @@ class DevelopmentWorkflowPrompt extends Prompt
             ];
         }
 
-        $task = Task::query()
+        $task = Activity::query()
             ->with(['project', 'commits', 'timeEntries', 'statusChanges', 'recurringTask', 'taskTemplate'])
             ->find($taskId);
 
@@ -150,7 +150,7 @@ SYSTEM;
         ];
     }
 
-    private function buildTaskContext(Task $task): string
+    private function buildTaskContext(Activity $task): string
     {
         $context = "## 📋 Task para Implementar\n";
         $context .= "- **ID**: {$task->id}\n";
@@ -201,7 +201,7 @@ SYSTEM;
         return $context;
     }
 
-    private function buildProjectContext(Task $task): string
+    private function buildProjectContext(Activity $task): string
     {
         if (! $task->project) {
             return "\n## 📁 Projeto\n- *Sem projeto atribuído*\n";
@@ -218,9 +218,9 @@ SYSTEM;
         $context .= "- **Slug**: `{$project->slug}`\n";
 
         $taskCounts = [
-            'doing' => Task::query()->where('project_id', $project->id)->byStatus(TaskStatus::Doing)->count(),
-            'todo' => Task::query()->where('project_id', $project->id)->byStatus(TaskStatus::Todo)->count(),
-            'backlog' => Task::query()->where('project_id', $project->id)->byStatus(TaskStatus::Backlog)->count(),
+            'doing' => Activity::query()->where('project_id', $project->id)->byStatus(ActivityStatus::Doing)->count(),
+            'todo' => Activity::query()->where('project_id', $project->id)->byStatus(ActivityStatus::Todo)->count(),
+            'backlog' => Activity::query()->where('project_id', $project->id)->byStatus(ActivityStatus::Backlog)->count(),
         ];
 
         $context .= "- **Tasks ativas**: {$taskCounts['doing']} doing, {$taskCounts['todo']} todo, {$taskCounts['backlog']} backlog\n";
@@ -228,7 +228,7 @@ SYSTEM;
         return $context;
     }
 
-    private function buildRelatedDocuments(Task $task): string
+    private function buildRelatedDocuments(Activity $task): string
     {
         if (! $task->project) {
             return '';
@@ -256,16 +256,16 @@ SYSTEM;
         return $context;
     }
 
-    private function buildRelatedTasks(Task $task): string
+    private function buildRelatedTasks(Activity $task): string
     {
         if (! $task->project) {
             return '';
         }
 
-        $relatedTasks = Task::query()
+        $relatedTasks = Activity::query()
             ->where('project_id', $task->project_id)
             ->where('id', '!=', $task->id)
-            ->whereIn('status', [TaskStatus::Doing, TaskStatus::Todo])
+            ->whereIn('status', [ActivityStatus::Doing, ActivityStatus::Todo])
             ->orderByRaw("CASE status WHEN 'doing' THEN 1 WHEN 'todo' THEN 2 END")
             ->orderByRaw("CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END")
             ->limit(5)
@@ -287,14 +287,14 @@ SYSTEM;
     private function buildTodayContext(): string
     {
         $todayPlan = DailyPlan::query()->whereDate('date', Carbon::today())->first();
-        $runningEntry = TimeEntry::query()->whereNull('stopped_at')->with('task')->first();
+        $runningEntry = TimeEntry::query()->whereNull('stopped_at')->with('activity')->first();
 
         $context = "\n## ⏰ Contexto de Hoje\n";
         $context .= '- **Data**: '.Carbon::today()->format('d/m/Y (l)')."\n";
 
         if ($runningEntry) {
             $elapsed = $runningEntry->started_at->diffForHumans(now(), true);
-            $context .= "- **Timer ativo**: {$runningEntry->task->title} ({$elapsed})\n";
+            $context .= "- **Timer ativo**: {$runningEntry->activity->title} ({$elapsed})\n";
             $context .= "  ⚠️ *Timer será parado automaticamente ao iniciar esta task*\n";
         } else {
             $context .= "- **Timer ativo**: Nenhum\n";
@@ -316,11 +316,11 @@ SYSTEM;
         return $context;
     }
 
-    private function buildWorkflowInstructions(Task $task): string
+    private function buildWorkflowInstructions(Activity $task): string
     {
         $instructions = "## 🚀 Próximos Passos\n\n";
 
-        if ($task->status === TaskStatus::Done) {
+        if ($task->status === ActivityStatus::Done) {
             $instructions .= "⚠️ **Esta task já está concluída!** Se precisar reabrir:\n";
             $instructions .= "1. Use `update-task` para mudar status para `doing`\n";
             $instructions .= "2. Use `start-timer` para iniciar novo timer\n";
@@ -332,7 +332,7 @@ SYSTEM;
         $instructions .= "```\n";
         $instructions .= "1. start-timer task_id={$task->id}\n";
 
-        if ($task->status !== TaskStatus::Doing) {
+        if ($task->status !== ActivityStatus::Doing) {
             $instructions .= "2. update-task task_id={$task->id} status=doing\n";
         }
 
@@ -361,7 +361,7 @@ SYSTEM;
         return $instructions;
     }
 
-    private function detectRequiredSkills(Task $task): string
+    private function detectRequiredSkills(Activity $task): string
     {
         $prompt = strtolower($task->session_prompt ?? '');
         $title = strtolower($task->title);

@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
+use App\Models\ActivityStatusChange;
 use App\Models\Project;
-use App\Models\Task;
-use App\Models\TaskStatusChange;
 use App\Models\TimeEntry;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -35,7 +35,7 @@ class AnalyticsService
             ->groupByRaw('date(started_at)')
             ->pluck('total_hours', 'date');
 
-        $tasksByDate = Task::query()
+        $tasksByDate = Activity::query()
             ->whereNotNull('completed_at')
             ->where('completed_at', '>=', $startDate)
             ->selectRaw('date(completed_at) as date, count(*) as total')
@@ -70,37 +70,37 @@ class AnalyticsService
         $since = $this->parsePeriod($period);
 
         // Get the first status change per task (the start of the cycle)
-        $firstChanges = TaskStatusChange::query()
-            ->selectRaw('task_id, min(changed_at) as first_change_at')
-            ->groupBy('task_id');
+        $firstChanges = ActivityStatusChange::query()
+            ->selectRaw('activity_id, min(changed_at) as first_change_at')
+            ->groupBy('activity_id');
 
         // Get the "to done" status change per task (the end of the cycle)
-        $doneChanges = TaskStatusChange::query()
-            ->where('to_status', TaskStatus::Done)
+        $doneChanges = ActivityStatusChange::query()
+            ->where('to_status', ActivityStatus::Done)
             ->where('changed_at', '>=', $since)
             ->when($projectId !== null, function ($query) use ($projectId): void {
-                $query->whereHas('task', fn ($q) => $q->where('project_id', $projectId));
+                $query->whereHas('activity', fn ($q) => $q->where('project_id', $projectId));
             })
-            ->with('task.project')
+            ->with('activity.project')
             ->get();
 
-        $firstChangeMap = TaskStatusChange::query()
-            ->whereIn('task_id', $doneChanges->pluck('task_id'))
-            ->selectRaw('task_id, min(changed_at) as first_change_at')
-            ->groupBy('task_id')
-            ->pluck('first_change_at', 'task_id')
+        $firstChangeMap = ActivityStatusChange::query()
+            ->whereIn('activity_id', $doneChanges->pluck('activity_id'))
+            ->selectRaw('activity_id, min(changed_at) as first_change_at')
+            ->groupBy('activity_id')
+            ->pluck('first_change_at', 'activity_id')
             ->map(fn (string $date): Carbon => Carbon::parse($date));
 
         /** @var Collection<string, Collection<int, array{minutes: float, project_name: string|null}>> $grouped */
         $grouped = $doneChanges
-            ->filter(fn (TaskStatusChange $change): bool => $firstChangeMap->has($change->task_id))
-            ->map(function (TaskStatusChange $change) use ($firstChangeMap): array {
-                $firstChange = $firstChangeMap[$change->task_id];
+            ->filter(fn (ActivityStatusChange $change): bool => $firstChangeMap->has($change->activity_id))
+            ->map(function (ActivityStatusChange $change) use ($firstChangeMap): array {
+                $firstChange = $firstChangeMap[$change->activity_id];
 
                 return [
                     'date' => $change->changed_at->toDateString(),
                     'minutes' => $firstChange->diffInMinutes($change->changed_at),
-                    'project_name' => $change->task?->project?->name,
+                    'project_name' => $change->activity?->project?->name,
                 ];
             })
             ->groupBy('date');
@@ -153,7 +153,7 @@ class AnalyticsService
     {
         $projects = Project::query()
             ->active()
-            ->with(['tasks' => fn ($q) => $q->where('status', '!=', TaskStatus::Done)])
+            ->with(['tasks' => fn ($q) => $q->where('status', '!=', ActivityStatus::Done)])
             ->get();
 
         $now = Carbon::now();
@@ -181,11 +181,11 @@ class AnalyticsService
             }
 
             $staleTasks = $activeTasks->filter(
-                fn (Task $task): bool => $task->updated_at->lt($staleThreshold)
+                fn (Activity $task): bool => $task->updated_at->lt($staleThreshold)
             )->count();
 
             $overdueTasks = $activeTasks->filter(
-                fn (Task $task): bool => $task->isOverdue()
+                fn (Activity $task): bool => $task->isOverdue()
             )->count();
 
             $lastActivity = $this->lastProjectActivityDate($project);
@@ -225,18 +225,18 @@ class AnalyticsService
     {
         $startDate = Carbon::today()->subWeeks($weeks)->startOfWeek();
 
-        $completedByWeek = Task::query()
-            ->where('status', TaskStatus::Done)
+        $completedByWeek = Activity::query()
+            ->where('status', ActivityStatus::Done)
             ->whereNotNull('completed_at')
             ->where('completed_at', '>=', $startDate)
             ->get()
-            ->groupBy(fn (Task $task): string => $task->completed_at->startOfWeek()->toDateString())
+            ->groupBy(fn (Activity $task): string => $task->completed_at->startOfWeek()->toDateString())
             ->map(fn (Collection $tasks): int => $tasks->count());
 
-        $createdByWeek = Task::query()
+        $createdByWeek = Activity::query()
             ->where('created_at', '>=', $startDate)
             ->get()
-            ->groupBy(fn (Task $task): string => $task->created_at->startOfWeek()->toDateString())
+            ->groupBy(fn (Activity $task): string => $task->created_at->startOfWeek()->toDateString())
             ->map(fn (Collection $tasks): int => $tasks->count());
 
         $trend = [];
@@ -413,15 +413,15 @@ class AnalyticsService
         }
 
         $lastTimeEntry = TimeEntry::query()
-            ->whereIn('task_id', $taskIds)
+            ->whereIn('activity_id', $taskIds)
             ->max('started_at');
 
-        $lastCompletion = Task::query()
+        $lastCompletion = Activity::query()
             ->where('project_id', $project->id)
             ->max('completed_at');
 
-        $lastStatusChange = TaskStatusChange::query()
-            ->whereIn('task_id', $taskIds)
+        $lastStatusChange = ActivityStatusChange::query()
+            ->whereIn('activity_id', $taskIds)
             ->max('changed_at');
 
         $dates = collect([$lastTimeEntry, $lastCompletion, $lastStatusChange])
@@ -443,7 +443,7 @@ class AnalyticsService
             ->selectRaw('distinct date(started_at) as date')
             ->pluck('date');
 
-        $completionDates = Task::query()
+        $completionDates = Activity::query()
             ->whereNotNull('completed_at')
             ->selectRaw('distinct date(completed_at) as date')
             ->pluck('date');

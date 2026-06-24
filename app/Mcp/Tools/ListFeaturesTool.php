@@ -2,7 +2,7 @@
 
 namespace App\Mcp\Tools;
 
-use App\Models\Feature;
+use App\Models\Activity;
 use App\Models\Project;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -24,14 +24,14 @@ class ListFeaturesTool extends Tool
     {
         $validated = $request->validate([
             'project_slug' => 'nullable|string|exists:projects,slug',
-            'status' => 'nullable|string|in:draft,backlog,todo,doing,done',
+            'status' => 'nullable|string|in:backlog,todo,doing,done',
             'limit' => 'nullable|integer|min:1|max:100',
         ], [
             'project_slug.exists' => 'Project not found. Use list-projects to find available project slugs.',
-            'status.in' => 'Invalid status. Valid values: draft, backlog, todo, doing, done.',
+            'status.in' => 'Invalid status. Valid values: backlog, todo, doing, done.',
         ]);
 
-        $query = Feature::query()->with(['project', 'tasks', 'timeEntries']);
+        $query = Activity::query()->epics()->with(['project', 'children', 'timeEntries']);
 
         if (! empty($validated['project_slug'])) {
             $project = Project::query()->where('slug', $validated['project_slug'])->first();
@@ -44,10 +44,10 @@ class ListFeaturesTool extends Tool
 
         // Filter by computed status if provided
         if (! empty($validated['status'])) {
-            $features = $features->filter(fn (Feature $f) => $f->status->value === $validated['status'])->values();
+            $features = $features->filter(fn (Activity $f) => $f->status->value === $validated['status'])->values();
         }
 
-        $data = $features->map(fn (Feature $feature) => [
+        $data = $features->map(fn (Activity $feature) => [
             'id' => $feature->id,
             'title' => $feature->title,
             'slug' => $feature->slug,
@@ -76,7 +76,7 @@ class ListFeaturesTool extends Tool
     {
         return [
             'project_slug' => $schema->string()->description('Filter features by project slug. Optional.'),
-            'status' => $schema->string()->enum(['draft', 'backlog', 'todo', 'doing', 'done'])->description('Filter features by computed status. Optional.'),
+            'status' => $schema->string()->enum(['backlog', 'todo', 'doing', 'done'])->description('Filter features by computed status. Optional.'),
             'limit' => $schema->integer()->description('Maximum number of features to return. Default: 20, max: 100.'),
         ];
     }

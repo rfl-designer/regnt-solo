@@ -2,9 +2,9 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\FeaturePriority;
-use App\Enums\FeatureStatus;
-use App\Models\Feature;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Validation\Rule;
@@ -24,12 +24,12 @@ class UpdateFeatureTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'feature_id' => 'required|integer|exists:features,id',
+            'feature_id' => 'required|integer|exists:activities,id',
             'title' => 'nullable|string|max:255',
             'spec' => 'nullable|string',
             'project_slug' => 'nullable|string|exists:projects,slug',
-            'priority' => ['nullable', 'string', Rule::enum(FeaturePriority::class)],
-            'status' => ['nullable', 'string', Rule::enum(FeatureStatus::class)],
+            'priority' => ['nullable', 'string', Rule::enum(ActivityPriority::class)],
+            'status' => ['nullable', 'string', Rule::enum(ActivityStatus::class)],
             'due_date' => 'nullable|date',
             'github_issue_number' => 'nullable|integer',
             'github_synced_hash' => 'nullable|string',
@@ -38,10 +38,10 @@ class UpdateFeatureTool extends Tool
             'feature_id.exists' => 'Feature not found. Use list-features to find available feature IDs.',
             'project_slug.exists' => 'Project not found. Use list-projects to find available project slugs.',
             'priority.Illuminate\Validation\Rules\Enum' => 'Invalid priority. Valid values: urgent, high, medium, low.',
-            'status.Illuminate\Validation\Rules\Enum' => 'Invalid status. Valid values: draft, backlog, todo, doing, done.',
+            'status.Illuminate\Validation\Rules\Enum' => 'Invalid status. Valid values: backlog, todo, doing, done.',
         ]);
 
-        $feature = Feature::findOrFail($validated['feature_id']);
+        $feature = Activity::query()->epics()->findOrFail($validated['feature_id']);
 
         $updates = [];
 
@@ -81,7 +81,7 @@ class UpdateFeatureTool extends Tool
             $feature->update($updates);
         }
 
-        $feature->load(['project', 'tasks']);
+        $feature->load(['project', 'children']);
 
         $data = [
             'id' => $feature->id,
@@ -115,7 +115,7 @@ class UpdateFeatureTool extends Tool
             'spec' => $schema->string()->description('New specification in markdown format.'),
             'project_slug' => $schema->string()->description('Slug of the project to assign the feature to.'),
             'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('New priority.'),
-            'status' => $schema->string()->enum(['draft', 'backlog', 'todo', 'doing', 'done'])->description('Feature status (manual). Default: draft.'),
+            'status' => $schema->string()->enum(['backlog', 'todo', 'doing', 'done'])->description('Feature status (manual). Default: backlog.'),
             'due_date' => $schema->string()->description('New due date in YYYY-MM-DD format.'),
             'github_issue_number' => $schema->integer()->description('GitHub issue number this feature mirrors (upsert key).'),
             'github_synced_hash' => $schema->string()->description('Digest of the source GitHub issue, used to gate natural-language rewrites.'),

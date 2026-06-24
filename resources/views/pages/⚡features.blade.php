@@ -1,12 +1,11 @@
 <?php
 
-use App\Enums\FeaturePriority;
-use App\Enums\FeatureStatus;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
+use App\Models\Activity;
 use App\Models\DailyPlan;
-use App\Models\Feature;
 use App\Models\Project;
-use App\Models\Task;
 use Carbon\Carbon;
 use Flux\Flux;
 use Illuminate\Support\Facades\DB;
@@ -40,7 +39,6 @@ new class extends Component
 
     /** @var array<string, int> */
     public array $limits = [
-        'draft' => 20,
         'backlog' => 20,
         'todo' => 20,
         'doing' => 20,
@@ -58,26 +56,26 @@ new class extends Component
     /** @var array<string, bool> */
     public array $expanded = [];
 
-    /** @var list<FeatureStatus> */
+    /** @var list<ActivityStatus> */
     public array $kanbanStatuses = [];
 
-    /** @var list<TaskStatus> */
+    /** @var list<ActivityStatus> */
     public array $drillTaskStatuses = [];
 
     public function mount(): void
     {
         $this->kanbanStatuses = [
-            FeatureStatus::Backlog,
-            FeatureStatus::Todo,
-            FeatureStatus::Doing,
-            FeatureStatus::Done,
+            ActivityStatus::Backlog,
+            ActivityStatus::Todo,
+            ActivityStatus::Doing,
+            ActivityStatus::Done,
         ];
 
         $this->drillTaskStatuses = [
-            TaskStatus::Backlog,
-            TaskStatus::Todo,
-            TaskStatus::Doing,
-            TaskStatus::Done,
+            ActivityStatus::Backlog,
+            ActivityStatus::Todo,
+            ActivityStatus::Doing,
+            ActivityStatus::Done,
         ];
     }
 
@@ -93,13 +91,14 @@ new class extends Component
     /**
      * Get all features with eager loading.
      *
-     * @return \Illuminate\Support\Collection<int, Feature>
+     * @return \Illuminate\Support\Collection<int, Activity>
      */
     #[Computed]
     public function features(): \Illuminate\Support\Collection
     {
-        $query = Feature::query()
-            ->with(['project', 'tasks', 'timeEntries'])
+        $query = Activity::query()
+            ->epics()
+            ->with(['project', 'children', 'timeEntries'])
             ->ordered();
 
         if ($this->filterProject !== '') {
@@ -113,7 +112,7 @@ new class extends Component
         $features = $query->get();
 
         if ($this->filterOverdue) {
-            $features = $features->filter(fn (Feature $f): bool => $f->due_date?->lt(today()) && $f->status !== FeatureStatus::Done);
+            $features = $features->filter(fn (Activity $f): bool => $f->due_date?->lt(today()) && $f->status !== ActivityStatus::Done);
         }
 
         return $features;
@@ -122,7 +121,7 @@ new class extends Component
     /**
      * Get features sorted for table view.
      *
-     * @return \Illuminate\Support\Collection<int, Feature>
+     * @return \Illuminate\Support\Collection<int, Activity>
      */
     #[Computed]
     public function sortedFeatures(): \Illuminate\Support\Collection
@@ -131,11 +130,11 @@ new class extends Component
 
         $priorityOrder = ['urgent' => 0, 'high' => 1, 'medium' => 2, 'low' => 3];
 
-        return $features->sortBy(function (Feature $f) use ($priorityOrder) {
+        return $features->sortBy(function (Activity $f) use ($priorityOrder) {
             return match ($this->sortBy) {
                 'id' => $f->id,
                 'title' => mb_strtolower($f->title),
-                'status' => array_search($f->status->value, ['draft', 'backlog', 'todo', 'doing', 'done']),
+                'status' => array_search($f->status->value, ['backlog', 'todo', 'doing', 'done']),
                 'priority' => $priorityOrder[$f->priority?->value ?? 'low'],
                 'progress' => $f->progress,
                 'time' => $f->total_time,
@@ -160,22 +159,22 @@ new class extends Component
     /**
      * Get features for a specific column by computed status.
      *
-     * @return \Illuminate\Support\Collection<int, Feature>
+     * @return \Illuminate\Support\Collection<int, Activity>
      */
-    public function getColumnFeatures(FeatureStatus $status): \Illuminate\Support\Collection
+    public function getColumnFeatures(ActivityStatus $status): \Illuminate\Support\Collection
     {
         return $this->features
-            ->filter(fn (Feature $f): bool => $f->status === $status)
+            ->filter(fn (Activity $f): bool => $f->status === $status)
             ->take($this->limits[$status->value]);
     }
 
     /**
      * Get total count for a column.
      */
-    public function getColumnTotal(FeatureStatus $status): int
+    public function getColumnTotal(ActivityStatus $status): int
     {
         return $this->features
-            ->filter(fn (Feature $f): bool => $f->status === $status)
+            ->filter(fn (Activity $f): bool => $f->status === $status)
             ->count();
     }
 
@@ -219,13 +218,13 @@ new class extends Component
     }
 
     #[Computed]
-    public function drillFeature(): ?Feature
+    public function drillFeature(): ?Activity
     {
         if (! $this->drillFeatureId) {
             return null;
         }
 
-        return Feature::with(['tasks.project', 'tasks.timeEntries', 'project'])->find($this->drillFeatureId);
+        return Activity::with(['children.project', 'children.timeEntries', 'project'])->find($this->drillFeatureId);
     }
 
     public function enterDrill(int $featureId): void
@@ -251,9 +250,9 @@ new class extends Component
     /**
      * Get tasks for a drill-down column.
      *
-     * @return \Illuminate\Support\Collection<int, Task>
+     * @return \Illuminate\Support\Collection<int, Activity>
      */
-    public function getDrillColumnTasks(TaskStatus $status): \Illuminate\Support\Collection
+    public function getDrillColumnTasks(ActivityStatus $status): \Illuminate\Support\Collection
     {
         $feature = $this->drillFeature;
 
@@ -261,11 +260,11 @@ new class extends Component
             return collect();
         }
 
-        $tasks = $feature->tasks
-            ->filter(fn (Task $t): bool => $t->status === $status);
+        $tasks = $feature->children
+            ->filter(fn (Activity $t): bool => $t->status === $status);
 
-        if ($status === TaskStatus::Done) {
-            $tasks = $tasks->filter(fn (Task $t): bool => $t->completed_at?->between(
+        if ($status === ActivityStatus::Done) {
+            $tasks = $tasks->filter(fn (Activity $t): bool => $t->completed_at?->between(
                 Carbon::now()->startOfWeek(),
                 Carbon::now()->endOfWeek(),
             ));
@@ -280,7 +279,7 @@ new class extends Component
     /**
      * Get total task count for a drill-down column.
      */
-    public function getDrillColumnTotal(TaskStatus $status): int
+    public function getDrillColumnTotal(ActivityStatus $status): int
     {
         $feature = $this->drillFeature;
 
@@ -288,11 +287,11 @@ new class extends Component
             return 0;
         }
 
-        $tasks = $feature->tasks
-            ->filter(fn (Task $t): bool => $t->status === $status);
+        $tasks = $feature->children
+            ->filter(fn (Activity $t): bool => $t->status === $status);
 
-        if ($status === TaskStatus::Done) {
-            $tasks = $tasks->filter(fn (Task $t): bool => $t->completed_at?->between(
+        if ($status === ActivityStatus::Done) {
+            $tasks = $tasks->filter(fn (Activity $t): bool => $t->completed_at?->between(
                 Carbon::now()->startOfWeek(),
                 Carbon::now()->endOfWeek(),
             ));
@@ -308,19 +307,19 @@ new class extends Component
 
     public function handleTaskSort(int|string $id, int $position, string $groupId): void
     {
-        $task = Task::findOrFail((int) $id);
-        $newStatus = TaskStatus::from($groupId);
+        $task = Activity::findOrFail((int) $id);
+        $newStatus = ActivityStatus::from($groupId);
 
-        if (! $this->drillFeatureId || $task->feature_id !== $this->drillFeatureId) {
+        if (! $this->drillFeatureId || $task->parent_id !== $this->drillFeatureId) {
             return;
         }
 
         DB::transaction(function () use ($task, $newStatus, $position): void {
-            if ($newStatus === TaskStatus::Done && $task->status !== TaskStatus::Done) {
+            if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
                 $dailyPlan = DailyPlan::getOrCreateForDate(Carbon::today());
 
-                if (! $dailyPlan->tasks()->where('task_id', $task->id)->exists()) {
-                    $maxOrder = $dailyPlan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+                if (! $dailyPlan->tasks()->where('activity_id', $task->id)->exists()) {
+                    $maxOrder = $dailyPlan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
                     $dailyPlan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
                 }
 
@@ -328,7 +327,7 @@ new class extends Component
 
                 Flux::toast(variant: 'success', heading: 'Task concluída', text: $task->title);
             } else {
-                if ($task->status === TaskStatus::Done && $newStatus !== TaskStatus::Done) {
+                if ($task->status === ActivityStatus::Done && $newStatus !== ActivityStatus::Done) {
                     $task->update([
                         'status' => $newStatus,
                         'completed_at' => null,
@@ -349,14 +348,14 @@ new class extends Component
      * Insert the moved task at the given position within the drill-down
      * column and renumber the column's tasks to unique sort_order values.
      */
-    private function reorderDrillColumn(TaskStatus $status, int $movedId, int $position): void
+    private function reorderDrillColumn(ActivityStatus $status, int $movedId, int $position): void
     {
-        $query = Task::query()
-            ->where('feature_id', $this->drillFeatureId)
+        $query = Activity::query()
+            ->where('parent_id', $this->drillFeatureId)
             ->where('status', $status)
             ->where('id', '!=', $movedId);
 
-        if ($status === TaskStatus::Done) {
+        if ($status === ActivityStatus::Done) {
             $query->whereBetween('completed_at', [
                 Carbon::now()->startOfWeek(),
                 Carbon::now()->endOfWeek(),
@@ -369,7 +368,7 @@ new class extends Component
         array_splice($ids, $position, 0, [$movedId]);
 
         foreach ($ids as $index => $id) {
-            Task::query()->where('id', $id)->update(['sort_order' => $index]);
+            Activity::query()->where('id', $id)->update(['sort_order' => $index]);
         }
     }
 
@@ -388,7 +387,7 @@ new class extends Component
 
     public function startTimer(int $featureId): void
     {
-        $feature = Feature::findOrFail($featureId);
+        $feature = Activity::findOrFail($featureId);
         $feature->startTimer();
 
         Flux::toast(variant: 'success', heading: 'Timer iniciado', text: $feature->title);
@@ -399,7 +398,7 @@ new class extends Component
 
     public function stopTimer(int $featureId): void
     {
-        $feature = Feature::findOrFail($featureId);
+        $feature = Activity::findOrFail($featureId);
         $runningEntry = $feature->runningEntry();
 
         if ($runningEntry) {
@@ -409,8 +408,8 @@ new class extends Component
 
     public function handleFeatureSort(int|string $id, int $position, string $groupId): void
     {
-        $feature = Feature::findOrFail((int) $id);
-        $newStatus = FeatureStatus::from($groupId);
+        $feature = Activity::findOrFail((int) $id);
+        $newStatus = ActivityStatus::from($groupId);
 
         DB::transaction(function () use ($feature, $newStatus, $position): void {
             $feature->update(['status' => $newStatus]);
@@ -425,9 +424,10 @@ new class extends Component
      * Insert the moved feature at the given position within its column and
      * renumber the column's features to unique sort_order values.
      */
-    private function reorderFeatureColumn(FeatureStatus $status, int $movedId, int $position): void
+    private function reorderFeatureColumn(ActivityStatus $status, int $movedId, int $position): void
     {
-        $ids = Feature::query()
+        $ids = Activity::query()
+            ->where('type', ActivityType::Epic)
             ->where('status', $status)
             ->where('id', '!=', $movedId)
             ->orderBy('sort_order')
@@ -439,7 +439,7 @@ new class extends Component
         array_splice($ids, $position, 0, [$movedId]);
 
         foreach ($ids as $index => $id) {
-            Feature::query()->where('id', $id)->update(['sort_order' => $index]);
+            Activity::query()->where('id', $id)->update(['sort_order' => $index]);
         }
     }
 }
@@ -466,7 +466,7 @@ new class extends Component
             {{-- Priority filter --}}
             <flux:select wire:model.live="filterPriority" size="sm" class="w-32">
                 <option value="">Prioridades</option>
-                @foreach (FeaturePriority::cases() as $priority)
+                @foreach (ActivityPriority::cases() as $priority)
                     <option value="{{ $priority->value }}">{{ $priority->label() }}</option>
                 @endforeach
             </flux:select>
@@ -581,7 +581,7 @@ new class extends Component
                 $total = $this->getDrillColumnTotal($status);
                 $limit = $drillLimits[$status->value];
                 $hasMore = $total > $limit;
-                $isDone = $status === TaskStatus::Done;
+                $isDone = $status === ActivityStatus::Done;
             @endphp
 
             <div
@@ -753,7 +753,7 @@ new class extends Component
                 $total = $this->getColumnTotal($status);
                 $limit = $limits[$status->value];
                 $hasMore = $total > $limit;
-                $isDone = $status === FeatureStatus::Done;
+                $isDone = $status === ActivityStatus::Done;
             @endphp
 
             <div
@@ -901,7 +901,7 @@ new class extends Component
                             $tasksCount = $feature->tasksCount();
                             $completedCount = $feature->completedTasksCount();
                             $totalTime = $feature->total_time;
-                            $isOverdue = $feature->due_date?->isPast() && $feature->status !== FeatureStatus::Done;
+                            $isOverdue = $feature->due_date?->isPast() && $feature->status !== ActivityStatus::Done;
                         @endphp
 
                         <flux:table.row

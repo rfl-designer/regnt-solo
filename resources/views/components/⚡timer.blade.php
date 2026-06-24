@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Task;
+use App\Models\Activity;
 use App\Models\TimeEntry;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
@@ -19,7 +19,7 @@ new class extends Component
     public function isRunning(): bool
     {
         return TimeEntry::query()
-            ->where('task_id', $this->taskId)
+            ->where('activity_id', $this->taskId)
             ->running()
             ->exists();
     }
@@ -31,7 +31,7 @@ new class extends Component
     public function runningEntry(): ?TimeEntry
     {
         return TimeEntry::query()
-            ->where('task_id', $this->taskId)
+            ->where('activity_id', $this->taskId)
             ->running()
             ->first();
     }
@@ -62,7 +62,7 @@ new class extends Component
      */
     public function start(bool $focus = false): void
     {
-        $task = Task::findOrFail($this->taskId);
+        $task = Activity::findOrFail($this->taskId);
         $task->startTimer($focus);
 
         unset($this->isRunning, $this->runningEntry, $this->isFocusSession);

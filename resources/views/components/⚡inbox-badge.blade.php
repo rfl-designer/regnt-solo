@@ -1,6 +1,7 @@
 <?php
 
-use App\Models\Task;
+use App\Enums\ActivityType;
+use App\Models\Activity;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -10,7 +11,10 @@ new class extends Component
     #[Computed]
     public function count(): int
     {
-        return Task::inbox()->count();
+        return Activity::query()
+            ->whereIn('type', [ActivityType::Issue, ActivityType::Task])
+            ->inbox()
+            ->count();
     }
 
     #[On('task-created')]

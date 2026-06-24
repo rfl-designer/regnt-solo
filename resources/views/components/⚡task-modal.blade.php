@@ -1,10 +1,11 @@
 <?php
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
+use App\Models\Activity;
+use App\Models\ActivityCommit;
 use App\Models\Project;
-use App\Models\Task;
-use App\Models\TaskCommit;
 use App\Models\TimeEntry;
 use Flux\Flux;
 use Livewire\Attributes\Computed;
@@ -83,7 +84,7 @@ new class extends Component
     #[On('open-task-modal')]
     public function openTask(int $taskId): void
     {
-        $task = Task::with(['timeEntries', 'statusChanges', 'commits'])->findOrFail($taskId);
+        $task = Activity::with(['timeEntries', 'statusChanges', 'commits'])->findOrFail($taskId);
 
         $this->taskId = $task->id;
         $this->title = $task->title;
@@ -116,7 +117,7 @@ new class extends Component
 
         $this->commits = $task->commits
             ->sortByDesc('committed_at')
-            ->map(fn (TaskCommit $commit) => [
+            ->map(fn (ActivityCommit $commit) => [
                 'hash' => $commit->hash,
                 'short_hash' => substr($commit->hash, 0, 7),
                 'message' => $commit->message,
@@ -154,11 +155,11 @@ new class extends Component
     }
 
     /**
-     * Build the segmented bar data from the task's time_in_status accessor.
+     * Build the segmented bar data from the activity's time_in_status accessor.
      *
      * @return array<string, array{label: string, minutes: float, color: string, hex_color: string, percentage: float}>
      */
-    private function buildStatusTimeSegments(Task $task): array
+    private function buildStatusTimeSegments(Activity $task): array
     {
         if ($task->statusChanges->count() <= 1) {
             return [];
@@ -173,7 +174,7 @@ new class extends Component
 
         $segments = [];
 
-        foreach (TaskStatus::cases() as $status) {
+        foreach (ActivityStatus::cases() as $status) {
             $minutes = $timeInStatus[$status->value] ?? 0.0;
 
             if ($minutes <= 0) {
@@ -222,17 +223,17 @@ new class extends Component
         $this->validate([
             'title' => 'required|string|max:255',
             'projectId' => 'nullable|exists:projects,id',
-            'priority' => 'required|in:'.implode(',', array_column(TaskPriority::cases(), 'value')),
-            'status' => 'required|in:'.implode(',', array_column(TaskStatus::cases(), 'value')),
+            'priority' => 'required|in:'.implode(',', array_column(ActivityPriority::cases(), 'value')),
+            'status' => 'required|in:'.implode(',', array_column(ActivityStatus::cases(), 'value')),
             'dueDate' => 'nullable|date',
             'estimatedMinutes' => 'nullable|integer|min:1',
         ]);
 
-        $task = Task::findOrFail($this->taskId);
+        $task = Activity::findOrFail($this->taskId);
 
-        $newStatus = TaskStatus::from($this->status);
+        $newStatus = ActivityStatus::from($this->status);
 
-        if ($newStatus === TaskStatus::Done && $task->status !== TaskStatus::Done) {
+        if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
             $task->update([
                 'title' => $this->title,
                 'project_id' => $this->projectId ? (int) $this->projectId : null,
@@ -244,7 +245,7 @@ new class extends Component
                 'session_result' => $this->sessionResult ?: null,
             ]);
             $task->markAsDone();
-            $this->status = TaskStatus::Done->value;
+            $this->status = ActivityStatus::Done->value;
         } else {
             $task->update([
                 'title' => $this->title,
@@ -253,7 +254,7 @@ new class extends Component
                 'priority' => $this->priority,
                 'due_date' => $this->dueDate ?: null,
                 'estimated_minutes' => $this->estimatedMinutes,
-                'completed_at' => $newStatus === TaskStatus::Done ? $task->completed_at : null,
+                'completed_at' => $newStatus === ActivityStatus::Done ? $task->completed_at : null,
                 'pr_url' => $this->prUrl ?: null,
                 'session_prompt' => $this->sessionPrompt ?: null,
                 'session_result' => $this->sessionResult ?: null,
@@ -262,7 +263,7 @@ new class extends Component
 
         foreach ($this->timeEntries as $entryData) {
             $entry = TimeEntry::find($entryData['id']);
-            if ($entry && $entry->task_id === $this->taskId) {
+            if ($entry && $entry->activity_id === $this->taskId) {
                 $data = [
                     'started_at' => $entryData['started_at'] ?: null,
                     'notes' => $entryData['notes'] ?: null,
@@ -285,7 +286,7 @@ new class extends Component
 
     public function deleteTimeEntry(int $entryId): void
     {
-        $entry = TimeEntry::where('task_id', $this->taskId)->findOrFail($entryId);
+        $entry = TimeEntry::where('activity_id', $this->taskId)->findOrFail($entryId);
         $entry->delete();
 
         $this->timeEntries = collect($this->timeEntries)
@@ -307,7 +308,7 @@ new class extends Component
             return;
         }
 
-        $task = Task::findOrFail($this->taskId);
+        $task = Activity::findOrFail($this->taskId);
         $title = $task->title;
         $task->delete();
 
@@ -407,7 +408,7 @@ new class extends Component
 
                         {{-- Priority --}}
                         <flux:select wire:model="priority" label="Prioridade">
-                            @foreach (TaskPriority::cases() as $p)
+                            @foreach (ActivityPriority::cases() as $p)
                                 <flux:select.option :value="$p->value">
                                     {{ $p->label() }}
                                 </flux:select.option>
@@ -416,7 +417,7 @@ new class extends Component
 
                         {{-- Status --}}
                         <flux:select wire:model="status" label="Status">
-                            @foreach (TaskStatus::cases() as $s)
+                            @foreach (ActivityStatus::cases() as $s)
                                 <flux:select.option :value="$s->value">
                                     {{ $s->label() }}
                                 </flux:select.option>
@@ -445,7 +446,7 @@ new class extends Component
                             $totalMinutes = collect($timeEntries)->sum('duration_minutes');
                             $commitsCount = count($commits);
                             $focusMinutes = collect($timeEntries)->where('is_focus_session', true)->sum('duration_minutes');
-                            $isDone = $status === TaskStatus::Done->value;
+                            $isDone = $status === ActivityStatus::Done->value;
                         @endphp
                         <div class="space-y-4">
                             <flux:heading size="sm" class="flex items-center gap-2">

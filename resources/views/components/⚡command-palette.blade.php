@@ -1,10 +1,11 @@
 <?php
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
+use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TimeEntry;
 use Carbon\Carbon;
 use Flux\Flux;
@@ -74,7 +75,7 @@ new class extends Component
             return;
         }
 
-        $task = Task::find($taskId);
+        $task = Activity::find($taskId);
 
         if (! $task) {
             Flux::toast(variant: 'warning', heading: 'Task não encontrada', text: "Task #{$taskId} não existe.");
@@ -97,13 +98,14 @@ new class extends Component
     }
 
     /**
-     * Search tasks by title.
+     * Search tasks (Issue + Task types) by title.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, Task>
+     * @return \Illuminate\Database\Eloquent\Collection<int, Activity>
      */
     private function searchTasks(): \Illuminate\Database\Eloquent\Collection
     {
-        return Task::query()
+        return Activity::query()
+            ->whereIn('type', [ActivityType::Issue, ActivityType::Task])
             ->with('project')
             ->where('title', 'like', '%'.trim($this->search).'%')
             ->orderByRaw("CASE status WHEN 'doing' THEN 1 WHEN 'todo' THEN 2 WHEN 'backlog' THEN 3 WHEN 'inbox' THEN 4 WHEN 'done' THEN 5 END")
@@ -154,7 +156,8 @@ new class extends Component
             return $matchingVerbs->values()->all();
         }
 
-        $tasks = Task::query()
+        $tasks = Activity::query()
+            ->whereIn('type', [ActivityType::Issue, ActivityType::Task])
             ->where('title', 'like', '%'.$taskSearch.'%')
             ->limit(8)
             ->get();
@@ -205,9 +208,9 @@ new class extends Component
     /**
      * Move a task to a new status.
      */
-    private function moveTask(Task $task, ?string $statusValue): void
+    private function moveTask(Activity $task, ?string $statusValue): void
     {
-        $status = TaskStatus::tryFrom($statusValue ?? '');
+        $status = ActivityStatus::tryFrom($statusValue ?? '');
 
         if (! $status) {
             Flux::toast(variant: 'warning', heading: 'Status inválido', text: 'Use: inbox, backlog, todo, doing, done');
@@ -215,7 +218,7 @@ new class extends Component
             return;
         }
 
-        if ($status === TaskStatus::Done) {
+        if ($status === ActivityStatus::Done) {
             $task->markAsDone();
         } else {
             $task->update(['status' => $status, 'completed_at' => null]);
@@ -228,10 +231,10 @@ new class extends Component
     /**
      * Toggle the timer for a task.
      */
-    private function toggleTimer(Task $task): void
+    private function toggleTimer(Activity $task): void
     {
         $running = TimeEntry::query()
-            ->where('task_id', $task->id)
+            ->where('activity_id', $task->id)
             ->running()
             ->first();
 
@@ -249,7 +252,7 @@ new class extends Component
     /**
      * Delete a task.
      */
-    private function deleteTask(Task $task): void
+    private function deleteTask(Activity $task): void
     {
         $title = $task->title;
         $task->delete();
@@ -261,7 +264,7 @@ new class extends Component
     /**
      * Assign a task to a project by slug.
      */
-    private function assignProject(Task $task, ?string $projectSlug): void
+    private function assignProject(Activity $task, ?string $projectSlug): void
     {
         if (! $projectSlug) {
             Flux::toast(variant: 'warning', heading: 'Projeto não informado', text: 'Informe o slug do projeto.');
@@ -286,9 +289,9 @@ new class extends Component
     /**
      * Change the priority of a task.
      */
-    private function changePriority(Task $task, ?string $priorityValue): void
+    private function changePriority(Activity $task, ?string $priorityValue): void
     {
-        $priority = TaskPriority::tryFrom($priorityValue ?? '');
+        $priority = ActivityPriority::tryFrom($priorityValue ?? '');
 
         if (! $priority) {
             Flux::toast(variant: 'warning', heading: 'Prioridade inválida', text: 'Use: urgent, high, medium, low');
@@ -305,17 +308,17 @@ new class extends Component
     /**
      * Add a task to today's daily plan.
      */
-    private function planTask(Task $task): void
+    private function planTask(Activity $task): void
     {
         $plan = DailyPlan::getOrCreateForDate(Carbon::today());
 
-        if ($plan->tasks()->where('task_id', $task->id)->exists()) {
+        if ($plan->tasks()->where('activity_id', $task->id)->exists()) {
             Flux::toast(variant: 'warning', heading: 'Já planejada', text: "{$task->title} já está no plano de hoje.");
 
             return;
         }
 
-        $maxOrder = $plan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+        $maxOrder = $plan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
         $plan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
 
         $this->dispatch('task-updated');

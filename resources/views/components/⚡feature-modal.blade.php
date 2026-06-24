@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\FeaturePriority;
-use App\Enums\FeatureStatus;
-use App\Enums\TaskStatus;
-use App\Models\Feature;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
+use App\Models\Activity;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Support\Markdown;
@@ -43,13 +43,13 @@ new class extends Component
     }
 
     #[Computed]
-    public function feature(): ?Feature
+    public function feature(): ?Activity
     {
         if (! $this->featureId) {
             return null;
         }
 
-        return Feature::with(['project', 'tasks.timeEntries', 'timeEntries'])->find($this->featureId);
+        return Activity::with(['project', 'children.timeEntries', 'timeEntries'])->find($this->featureId);
     }
 
     #[On('open-feature-modal')]
@@ -59,7 +59,7 @@ new class extends Component
         $this->featureId = $featureId;
 
         if ($featureId) {
-            $feature = Feature::find($featureId);
+            $feature = Activity::find($featureId);
 
             if ($feature) {
                 $this->title = $feature->title;
@@ -68,7 +68,7 @@ new class extends Component
                 $this->priority = $feature->priority?->value ?? 'medium';
                 $this->dueDate = $feature->due_date?->format('Y-m-d');
 
-                $this->editingSpec = $feature->status === FeatureStatus::Done
+                $this->editingSpec = $feature->status === ActivityStatus::Done
                     ? false
                     : empty($this->spec);
             }
@@ -97,18 +97,18 @@ new class extends Component
             'title' => $this->title,
             'spec' => $this->spec ?: null,
             'project_id' => $this->projectId ?: null,
-            'priority' => FeaturePriority::from($this->priority),
+            'priority' => ActivityPriority::from($this->priority),
             'due_date' => $this->dueDate ?: null,
         ];
 
         if ($this->featureId) {
-            $feature = Feature::findOrFail($this->featureId);
+            $feature = Activity::findOrFail($this->featureId);
             $feature->update($data);
 
             Flux::toast(variant: 'success', heading: 'Feature atualizada', text: $feature->title);
             $this->dispatch('feature-updated');
         } else {
-            $feature = Feature::create($data);
+            $feature = Activity::create(array_merge($data, ['type' => ActivityType::Epic]));
 
             Flux::toast(variant: 'success', heading: 'Feature criada', text: $feature->title);
             $this->dispatch('feature-created');
@@ -163,11 +163,11 @@ new class extends Component
             return;
         }
 
-        $feature = Feature::findOrFail($this->featureId);
+        $feature = Activity::findOrFail($this->featureId);
         $title = $feature->title;
 
-        // Unlink tasks from feature (don't delete them)
-        $feature->tasks()->update(['feature_id' => null]);
+        // Unlink children from feature (don't delete them)
+        $feature->children()->update(['parent_id' => null]);
 
         // Delete time entries and feature
         $feature->timeEntries()->delete();
@@ -250,7 +250,7 @@ new class extends Component
         <div class="grid grid-cols-2 gap-4">
             {{-- Priority --}}
             <flux:select wire:model="priority" label="Prioridade">
-                @foreach (FeaturePriority::cases() as $p)
+                @foreach (ActivityPriority::cases() as $p)
                     <option value="{{ $p->value }}">{{ $p->label() }}</option>
                 @endforeach
             </flux:select>
@@ -267,7 +267,7 @@ new class extends Component
         <flux:field>
             <div class="flex items-center justify-between">
                 <flux:label>Especificação</flux:label>
-                @if (! ($this->feature && $this->feature->status === FeatureStatus::Done))
+                @if (! ($this->feature && $this->feature->status === ActivityStatus::Done))
                     <flux:button
                         wire:click="toggleSpec"
                         variant="ghost"
@@ -277,7 +277,7 @@ new class extends Component
                 @endif
             </div>
 
-            @if ($editingSpec && ! ($this->feature && $this->feature->status === FeatureStatus::Done))
+            @if ($editingSpec && ! ($this->feature && $this->feature->status === ActivityStatus::Done))
                 {{-- Modo Edição --}}
                 <flux:editor
                     wire:model="spec"
@@ -356,12 +356,12 @@ new class extends Component
                 @endif
             </div>
 
-            {{-- Tasks List --}}
-            @if ($this->feature->tasks->isNotEmpty())
+            {{-- Tasks List (children of this epic) --}}
+            @if ($this->feature->children->isNotEmpty())
                 <div>
                     <flux:heading size="sm" class="mb-2">Tasks</flux:heading>
                     <div class="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-800/50 p-2">
-                        @foreach ($this->feature->tasks->sortBy('sort_order') as $task)
+                        @foreach ($this->feature->children->sortBy('sort_order') as $task)
                             <button
                                 type="button"
                                 wire:click="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"

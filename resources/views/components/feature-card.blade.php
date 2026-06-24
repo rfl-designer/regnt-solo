@@ -153,7 +153,7 @@
             @if ($expanded)
                 <div id="tasks-list-{{ $feature->id }}" class="border-t border-zinc-700/50 bg-zinc-800/50 px-3 py-2">
                     <ul class="space-y-1.5">
-                        @foreach ($feature->tasks->sortBy('sort_order') as $task)
+                        @foreach ($feature->children->sortBy('sort_order') as $task)
                             <li
                                 wire:click.stop="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
                                 class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs transition hover:bg-zinc-700"

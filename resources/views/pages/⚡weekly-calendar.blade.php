@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityType;
+use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
-use App\Models\Task;
 use Carbon\Carbon;
 use Flux\Flux;
 use Illuminate\Support\Collection;
@@ -95,14 +95,15 @@ new class extends Component
     /**
      * Get tasks not planned for any day in the current week.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, Task>
+     * @return \Illuminate\Database\Eloquent\Collection<int, Activity>
      */
     #[Computed]
     public function availableTasks(): \Illuminate\Database\Eloquent\Collection
     {
         $plannedTaskIds = $this->days->flatMap(fn (array $day): array => $day['plan']?->tasks->pluck('id')->toArray() ?? [])->unique()->toArray();
 
-        return Task::active()
+        return Activity::active()
+            ->whereIn('type', [ActivityType::Issue, ActivityType::Task])
             ->whereNotIn('id', $plannedTaskIds)
             ->with('project')
             ->orderBy('sort_order')
@@ -181,7 +182,7 @@ new class extends Component
 
         // If dropped back to pool, remove from all plans in the week
         if ($groupId === 'pool') {
-            $task = Task::findOrFail($taskId);
+            $task = Activity::findOrFail($taskId);
 
             foreach ($this->days as $day) {
                 if ($day['plan']?->tasks->contains('id', $taskId)) {
@@ -205,7 +206,7 @@ new class extends Component
             return;
         }
 
-        $task = Task::findOrFail($taskId);
+        $task = Activity::findOrFail($taskId);
         $targetPlan = DailyPlan::getOrCreateForDate($targetDate);
 
         // Find which plan currently has this task
@@ -223,7 +224,7 @@ new class extends Component
         }
 
         // Add or update in target plan
-        if ($targetPlan->tasks()->where('task_id', $taskId)->exists()) {
+        if ($targetPlan->tasks()->where('activity_id', $taskId)->exists()) {
             $targetPlan->tasks()->updateExistingPivot($taskId, ['sort_order' => $position]);
         } else {
             $targetPlan->tasks()->attach($taskId, ['sort_order' => $position]);
@@ -245,9 +246,9 @@ new class extends Component
             return;
         }
 
-        $task = Task::active()->findOrFail($taskId);
+        $task = Activity::active()->findOrFail($taskId);
         $plan = DailyPlan::getOrCreateForDate($date);
-        $maxOrder = $plan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+        $maxOrder = $plan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
 
         $plan->tasks()->syncWithoutDetaching([
             $taskId => ['sort_order' => $maxOrder + 1],
@@ -269,7 +270,7 @@ new class extends Component
             return;
         }
 
-        $task = Task::findOrFail($taskId);
+        $task = Activity::findOrFail($taskId);
         $plan = DailyPlan::query()->whereDate('date', $date->toDateString())->first();
 
         if ($plan) {

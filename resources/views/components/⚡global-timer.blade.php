@@ -8,26 +8,26 @@ use Livewire\Component;
 new class extends Component
 {
     /**
-     * Get the currently running time entry with its task or feature.
+     * Get the currently running time entry with its activity.
      */
     #[Computed]
     public function activeEntry(): ?TimeEntry
     {
-        return TimeEntry::with(['task', 'feature'])->running()->first();
+        return TimeEntry::with(['activity'])->running()->first();
     }
 
     /**
-     * Check if the active entry is for a feature.
+     * Check if the active entry is for an epic (feature).
      */
     public function isFeatureTimer(): bool
     {
         $entry = $this->activeEntry;
 
-        return $entry !== null && $entry->feature_id !== null;
+        return $entry !== null && $entry->activity !== null && $entry->activity->type->value === 'epic';
     }
 
     /**
-     * Get the timer title (task or feature name).
+     * Get the timer title (activity name).
      */
     public function getTimerTitle(): string
     {
@@ -37,11 +37,7 @@ new class extends Component
             return '';
         }
 
-        if ($entry->feature_id !== null && $entry->feature !== null) {
-            return $entry->feature->title;
-        }
-
-        return $entry->task->title ?? '';
+        return $entry->activity?->title ?? '';
     }
 
     /**
@@ -148,9 +144,9 @@ new class extends Component
                 type="button"
                 class="text-sm font-medium truncate max-w-32 {{ $this->activeEntry->is_focus_session ? 'text-amber-400 hover:text-amber-300' : ($isFeature ? 'text-violet-400 hover:text-violet-300' : 'text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100') }}"
                 @if ($isFeature)
-                    wire:click="$dispatch('open-feature-modal', { featureId: {{ $this->activeEntry->feature_id }} })"
+                    wire:click="$dispatch('open-feature-modal', { featureId: {{ $this->activeEntry->activity_id }} })"
                 @else
-                    wire:click="$dispatch('open-task-modal', { taskId: {{ $this->activeEntry->task_id }} })"
+                    wire:click="$dispatch('open-task-modal', { taskId: {{ $this->activeEntry->activity_id }} })"
                 @endif
             >
                 {{ $timerTitle }}

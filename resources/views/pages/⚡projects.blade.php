@@ -1,7 +1,7 @@
 <?php
 
+use App\Enums\ActivityStatus;
 use App\Enums\ProjectStatus;
-use App\Enums\TaskStatus;
 use App\Models\Project;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
@@ -35,7 +35,7 @@ new class extends Component
         return Project::query()
             ->where('status', $status)
             ->withCount(['tasks as active_tasks_count' => function ($query): void {
-                $query->where('status', '!=', TaskStatus::Done);
+                $query->where('status', '!=', ActivityStatus::Done);
             }])
             ->ordered()
             ->get();

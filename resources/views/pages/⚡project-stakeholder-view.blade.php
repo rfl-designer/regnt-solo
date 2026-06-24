@@ -1,10 +1,9 @@
 <?php
 
-use App\Enums\FeatureStatus;
+use App\Enums\ActivityStatus;
 use App\Enums\StakeholderIssueStatus;
-use App\Enums\TaskStatus;
+use App\Models\Activity;
 use App\Models\Document;
-use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Stakeholder;
 use App\Models\StakeholderIssue;
@@ -21,10 +20,10 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
 
     public string $tab = 'board';
 
-    /** @var list<FeatureStatus> */
+    /** @var list<ActivityStatus> */
     public array $featureStatuses = [];
 
-    /** @var list<TaskStatus> */
+    /** @var list<ActivityStatus> */
     public array $drillTaskStatuses = [];
 
     /** @var array<string, int> */
@@ -70,17 +69,17 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
         $stakeholder->update(['last_accessed_at' => now()]);
 
         $this->featureStatuses = [
-            FeatureStatus::Backlog,
-            FeatureStatus::Todo,
-            FeatureStatus::Doing,
-            FeatureStatus::Done,
+            ActivityStatus::Backlog,
+            ActivityStatus::Todo,
+            ActivityStatus::Doing,
+            ActivityStatus::Done,
         ];
 
         $this->drillTaskStatuses = [
-            TaskStatus::Backlog,
-            TaskStatus::Todo,
-            TaskStatus::Doing,
-            TaskStatus::Done,
+            ActivityStatus::Backlog,
+            ActivityStatus::Todo,
+            ActivityStatus::Doing,
+            ActivityStatus::Done,
         ];
     }
 
@@ -110,20 +109,21 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
     {
         return StakeholderIssue::query()
             ->where('stakeholder_id', $this->stakeholder->id)
-            ->with(['feature', 'stakeholder'])
+            ->with(['activity', 'stakeholder'])
             ->latest('created_at')
             ->get();
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, Feature>
+     * @return \Illuminate\Support\Collection<int, Activity>
      */
     #[Computed]
     public function features(): \Illuminate\Support\Collection
     {
-        return Feature::query()
+        return Activity::query()
+            ->epics()
             ->forProject($this->project->id)
-            ->with(['tasks', 'timeEntries'])
+            ->with(['children', 'timeEntries'])
             ->ordered()
             ->get();
     }
@@ -158,7 +158,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
     }
 
     #[Computed]
-    public function selectedFeature(): ?Feature
+    public function selectedFeature(): ?Activity
     {
         if (! $this->selectedFeatureId) {
             return null;
@@ -177,7 +177,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
     }
 
     #[Computed]
-    public function drillFeature(): ?Feature
+    public function drillFeature(): ?Activity
     {
         if (! $this->drillFeatureId) {
             return null;
@@ -207,20 +207,20 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, Feature>
+     * @return \Illuminate\Support\Collection<int, Activity>
      */
-    public function getColumnFeatures(FeatureStatus $status): \Illuminate\Support\Collection
+    public function getColumnFeatures(ActivityStatus $status): \Illuminate\Support\Collection
     {
         return $this->features
-            ->filter(fn (Feature $feature): bool => $feature->status === $status)
+            ->filter(fn (Activity $feature): bool => $feature->status === $status)
             ->take($this->featureLimits[$status->value])
             ->values();
     }
 
-    public function getColumnTotal(FeatureStatus $status): int
+    public function getColumnTotal(ActivityStatus $status): int
     {
         return $this->features
-            ->filter(fn (Feature $feature): bool => $feature->status === $status)
+            ->filter(fn (Activity $feature): bool => $feature->status === $status)
             ->count();
     }
 
@@ -234,9 +234,9 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, \App\Models\Task>
+     * @return \Illuminate\Support\Collection<int, Activity>
      */
-    public function getDrillColumnTasks(TaskStatus $status): \Illuminate\Support\Collection
+    public function getDrillColumnTasks(ActivityStatus $status): \Illuminate\Support\Collection
     {
         $feature = $this->drillFeature;
 
@@ -244,10 +244,10 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
             return collect();
         }
 
-        $tasks = $feature->tasks
+        $tasks = $feature->children
             ->filter(fn ($task): bool => $task->status === $status);
 
-        if ($status === TaskStatus::Done) {
+        if ($status === ActivityStatus::Done) {
             $tasks = $tasks->filter(fn ($task): bool => $task->completed_at?->between(
                 Carbon::now()->startOfWeek(),
                 Carbon::now()->endOfWeek(),
@@ -263,7 +263,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
             ->values();
     }
 
-    public function getDrillColumnTotal(TaskStatus $status): int
+    public function getDrillColumnTotal(ActivityStatus $status): int
     {
         $feature = $this->drillFeature;
 
@@ -271,10 +271,10 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
             return 0;
         }
 
-        $tasks = $feature->tasks
+        $tasks = $feature->children
             ->filter(fn ($task): bool => $task->status === $status);
 
-        if ($status === TaskStatus::Done) {
+        if ($status === ActivityStatus::Done) {
             $tasks = $tasks->filter(fn ($task): bool => $task->completed_at?->between(
                 Carbon::now()->startOfWeek(),
                 Carbon::now()->endOfWeek(),
@@ -325,10 +325,10 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
     {
         $tasks = $this->project->tasks;
         $total = $tasks->count();
-        $doneCount = $tasks->where('status', TaskStatus::Done)->count();
+        $doneCount = $tasks->where('status', ActivityStatus::Done)->count();
 
         $byStatus = [];
-        foreach (TaskStatus::cases() as $status) {
+        foreach (ActivityStatus::cases() as $status) {
             $byStatus[$status->value] = $tasks->where('status', $status)->count();
         }
 
@@ -342,12 +342,12 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
         $totalFilesChanged = $tasks->sum(fn ($task) => $task->commits->sum('files_changed'));
 
         $featureCount = $this->features->count();
-        $doneFeatures = $this->features->filter(fn (Feature $feature): bool => $feature->status === FeatureStatus::Done)->count();
+        $doneFeatures = $this->features->filter(fn (Activity $feature): bool => $feature->status === ActivityStatus::Done)->count();
 
         $featuresByStatus = [];
-        foreach (FeatureStatus::cases() as $featureStatus) {
+        foreach (ActivityStatus::cases() as $featureStatus) {
             $featuresByStatus[$featureStatus->value] = $this->features
-                ->filter(fn (Feature $feature): bool => $feature->status === $featureStatus)
+                ->filter(fn (Activity $feature): bool => $feature->status === $featureStatus)
                 ->count();
         }
 
@@ -479,7 +479,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                             </flux:select>
 
                             @php
-                                $mobileTaskStatusEnum = TaskStatus::from($mobileTaskStatus);
+                                $mobileTaskStatusEnum = ActivityStatus::from($mobileTaskStatus);
                                 $tasks = $this->getDrillColumnTasks($mobileTaskStatusEnum);
                                 $total = $this->getDrillColumnTotal($mobileTaskStatusEnum);
                                 $limit = $drillLimits[$mobileTaskStatus];
@@ -639,7 +639,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                             </flux:select>
 
                             @php
-                                $mobileFeatureStatusEnum = FeatureStatus::from($mobileFeatureStatus);
+                                $mobileFeatureStatusEnum = ActivityStatus::from($mobileFeatureStatus);
                                 $features = $this->getColumnFeatures($mobileFeatureStatusEnum);
                                 $total = $this->getColumnTotal($mobileFeatureStatusEnum);
                                 $limit = $featureLimits[$mobileFeatureStatus];
@@ -1231,7 +1231,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                     <flux:heading size="sm" class="mb-3">Features por Status</flux:heading>
 
                     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                        @foreach (FeatureStatus::cases() as $featureStatus)
+                        @foreach (ActivityStatus::cases() as $featureStatus)
                             @php
                                 $featureCount = $metrics['features_by_status'][$featureStatus->value] ?? 0;
                             @endphp
@@ -1251,7 +1251,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                     <flux:heading size="sm" class="mb-3">Tasks por Status</flux:heading>
 
                     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                        @foreach (TaskStatus::cases() as $status)
+                        @foreach (ActivityStatus::cases() as $status)
                             @php
                                 $count = $metrics['by_status'][$status->value] ?? 0;
                             @endphp
@@ -1301,9 +1301,9 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                                     <span>{{ $issue->stakeholder?->email ?? $this->stakeholder->email }}</span>
                                 </div>
 
-                                @if ($issue->feature)
+                                @if ($issue->activity)
                                     <div class="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-200">
-                                        Feature vinculada: #F-{{ $issue->feature->id }} {{ $issue->feature->title }}
+                                        Feature vinculada: #F-{{ $issue->activity->id }} {{ $issue->activity->title }}
                                     </div>
                                 @endif
                             </div>

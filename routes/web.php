@@ -16,6 +16,10 @@ Route::livewire('inbox', 'pages::inbox')
     ->middleware(['auth'])
     ->name('inbox');
 
+Route::livewire('tasks', 'pages::tasks')
+    ->middleware(['auth'])
+    ->name('tasks');
+
 Route::livewire('kanban', 'pages::kanban')
     ->middleware(['auth'])
     ->name('kanban');

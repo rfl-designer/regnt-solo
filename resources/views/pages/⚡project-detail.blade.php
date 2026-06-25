@@ -102,6 +102,22 @@ new class extends Component
     }
 
     /**
+     * Personal tasks (type=Task) attached to this project.
+     *
+     * @return \Illuminate\Support\Collection<int, Activity>
+     */
+    #[Computed]
+    public function projectTasks(): \Illuminate\Support\Collection
+    {
+        return Activity::query()
+            ->tasks()
+            ->forProject($this->project->id)
+            ->with('parent')
+            ->ordered()
+            ->get();
+    }
+
+    /**
      * @return \Illuminate\Support\Collection<int, StakeholderIssue>
      */
     #[Computed]
@@ -557,7 +573,7 @@ new class extends Component
     #[On('document-saved')]
     public function refreshProject(): void
     {
-        unset($this->project, $this->features, $this->featuresByStatus, $this->metrics, $this->projectDocuments, $this->selectedDocument, $this->selectedFeature, $this->drillFeature, $this->stakeholderIssues);
+        unset($this->project, $this->features, $this->featuresByStatus, $this->metrics, $this->projectDocuments, $this->selectedDocument, $this->selectedFeature, $this->drillFeature, $this->stakeholderIssues, $this->projectTasks);
     }
 }
 
@@ -882,7 +898,9 @@ new class extends Component
                 </div>
 
                 @else
-                {{-- Normal: Feature Kanban Board --}}
+                {{-- Normal: Feature Kanban Board + Tasks side panel --}}
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start">
+                <div class="flex min-w-0 flex-1 flex-col gap-4">
                 <div class="flex items-center justify-between">
                     <flux:badge size="sm" color="zinc">{{ $this->features->count() }} features</flux:badge>
                     <flux:button
@@ -1029,6 +1047,62 @@ new class extends Component
                             </div>
                         </div>
                     @endforeach
+                </div>
+                </div>
+
+                {{-- Tasks side panel --}}
+                <aside class="flex w-full shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50 lg:w-72">
+                    <div class="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            <flux:icon name="check-circle" class="size-5 text-emerald-400" />
+                            <flux:heading size="sm">Tarefas</flux:heading>
+                            <flux:badge size="sm" color="zinc">{{ $this->projectTasks->count() }}</flux:badge>
+                        </div>
+                        <flux:button
+                            wire:click="$dispatch('open-quick-add-with-project', { projectId: {{ $this->project->id }} })"
+                            variant="ghost"
+                            size="sm"
+                            icon="plus"
+                            class="!p-1"
+                            title="Nova task"
+                        />
+                    </div>
+
+                    <div class="flex flex-col gap-2 overflow-y-auto p-2">
+                        @forelse ($this->projectTasks as $task)
+                            <button
+                                type="button"
+                                wire:key="project-task-{{ $task->id }}"
+                                wire:click="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
+                                class="group flex flex-col gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-left transition hover:border-zinc-500"
+                            >
+                                <span class="line-clamp-2 text-sm font-medium text-zinc-200 {{ $task->status === ActivityStatus::Done ? 'text-zinc-500 line-through' : '' }}">
+                                    {{ $task->title }}
+                                </span>
+                                <div class="flex flex-wrap items-center gap-1.5">
+                                    <flux:badge size="sm" color="{{ $task->status->color() }}" icon="{{ $task->status->icon() }}">
+                                        {{ $task->status->label() }}
+                                    </flux:badge>
+                                    @if ($task->priority)
+                                        <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
+                                            {{ $task->priority->label() }}
+                                        </flux:badge>
+                                    @endif
+                                    @if ($task->isOverdue())
+                                        <flux:badge size="sm" color="red" icon="exclamation-triangle">
+                                            {{ $task->due_date->diffForHumans() }}
+                                        </flux:badge>
+                                    @endif
+                                </div>
+                            </button>
+                        @empty
+                            <div class="px-2 py-8 text-center">
+                                <flux:icon name="check-circle" class="mx-auto mb-2 size-8 text-zinc-600" />
+                                <flux:text class="text-xs text-zinc-500">Nenhuma task neste projeto.</flux:text>
+                            </div>
+                        @endforelse
+                    </div>
+                </aside>
                 </div>
                 @endif
             </div>

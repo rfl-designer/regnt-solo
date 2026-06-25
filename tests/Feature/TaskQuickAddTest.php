@@ -2,6 +2,7 @@
 
 use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
 use App\Models\Activity;
 use App\Models\Project;
 use App\Models\User;
@@ -27,6 +28,7 @@ test('can create a task with a simple title', function () {
     $task = Activity::first();
     expect($task)
         ->title->toBe('Minha nova tarefa')
+        ->type->toBe(ActivityType::Task)
         ->status->toBe(ActivityStatus::Inbox)
         ->priority->toBe(ActivityPriority::Medium)
         ->project_id->toBeNull()

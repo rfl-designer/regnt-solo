@@ -42,6 +42,18 @@ new class extends Component
         Flux::modal('quick-add')->show();
     }
 
+    #[On('open-quick-add-with-project')]
+    public function openWithProject(int $projectId): void
+    {
+        $project = Project::find($projectId);
+
+        if ($project) {
+            $this->rawInput = '#'.$project->slug.' ';
+        }
+
+        Flux::modal('quick-add')->show();
+    }
+
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Project>
      */

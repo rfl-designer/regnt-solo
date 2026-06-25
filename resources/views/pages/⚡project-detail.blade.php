@@ -359,7 +359,7 @@ new class extends Component
             return null;
         }
 
-        return Activity::with(['children.project', 'children.timeEntries', 'project'])->find($this->drillFeatureId);
+        return Activity::with(['children.project', 'children.parent', 'children.timeEntries', 'project'])->find($this->drillFeatureId);
     }
 
     public function enterDrill(int $featureId): void
@@ -396,7 +396,7 @@ new class extends Component
         }
 
         $tasks = $feature->children
-            ->filter(fn (Activity $t): bool => $t->status === $status);
+            ->filter(fn (Activity $t): bool => $t->type === ActivityType::Issue && $t->status === $status);
 
         if ($status === ActivityStatus::Done) {
             $tasks = $tasks->filter(fn (Activity $t): bool => $t->completed_at?->between(
@@ -423,7 +423,7 @@ new class extends Component
         }
 
         $tasks = $feature->children
-            ->filter(fn (Activity $t): bool => $t->status === $status);
+            ->filter(fn (Activity $t): bool => $t->type === ActivityType::Issue && $t->status === $status);
 
         if ($status === ActivityStatus::Done) {
             $tasks = $tasks->filter(fn (Activity $t): bool => $t->completed_at?->between(
@@ -812,6 +812,10 @@ new class extends Component
 
                                                 {{-- Badges Row --}}
                                                 <div class="mt-2 flex flex-wrap items-center gap-1.5" wire:sort:ignore>
+                                                    <flux:badge size="sm" color="{{ $task->type->color() }}" icon="{{ $task->type->icon() }}">
+                                                        {{ $task->derivedLabel() }}
+                                                    </flux:badge>
+
                                                     @if ($task->priority)
                                                         <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
                                                             {{ $task->priority->label() }}

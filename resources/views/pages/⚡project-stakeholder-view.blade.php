@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
 use App\Enums\StakeholderIssueStatus;
 use App\Models\Activity;
 use App\Models\Document;
@@ -123,7 +124,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
         return Activity::query()
             ->epics()
             ->forProject($this->project->id)
-            ->with(['children', 'timeEntries'])
+            ->with(['children.parent', 'timeEntries'])
             ->ordered()
             ->get();
     }
@@ -245,7 +246,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
         }
 
         $tasks = $feature->children
-            ->filter(fn ($task): bool => $task->status === $status);
+            ->filter(fn ($task): bool => $task->type === ActivityType::Issue && $task->status === $status);
 
         if ($status === ActivityStatus::Done) {
             $tasks = $tasks->filter(fn ($task): bool => $task->completed_at?->between(
@@ -272,7 +273,7 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
         }
 
         $tasks = $feature->children
-            ->filter(fn ($task): bool => $task->status === $status);
+            ->filter(fn ($task): bool => $task->type === ActivityType::Issue && $task->status === $status);
 
         if ($status === ActivityStatus::Done) {
             $tasks = $tasks->filter(fn ($task): bool => $task->completed_at?->between(
@@ -504,6 +505,10 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                                             <span class="line-clamp-2 text-sm font-medium text-zinc-200">{{ $task->title }}</span>
 
                                             <div class="mt-1.5 flex flex-wrap items-center gap-1">
+                                                <flux:badge size="sm" color="{{ $task->type->color() }}" icon="{{ $task->type->icon() }}">
+                                                    {{ $task->derivedLabel() }}
+                                                </flux:badge>
+
                                                 @if ($task->priority)
                                                     <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
                                                         {{ $task->priority->label() }}
@@ -577,6 +582,10 @@ new #[Layout('layouts.public')] #[Title('Acompanhamento de Projeto')] class exte
                                                 <span class="line-clamp-2 text-sm font-medium text-zinc-200">{{ $task->title }}</span>
 
                                                 <div class="mt-1.5 flex flex-wrap items-center gap-1">
+                                                    <flux:badge size="sm" color="{{ $task->type->color() }}" icon="{{ $task->type->icon() }}">
+                                                        {{ $task->derivedLabel() }}
+                                                    </flux:badge>
+
                                                     @if ($task->priority)
                                                         <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
                                                             {{ $task->priority->label() }}

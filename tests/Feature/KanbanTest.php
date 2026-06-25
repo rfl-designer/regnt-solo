@@ -33,10 +33,10 @@ test('kanban component renders successfully', function () {
 });
 
 test('kanban shows tasks in their respective columns', function () {
-    $backlogTask = Activity::factory()->backlog()->create(['title' => 'Backlog task']);
-    $todoTask = Activity::factory()->todo()->create(['title' => 'Todo task']);
-    $doingTask = Activity::factory()->doing()->create(['title' => 'Doing task']);
-    $doneTask = Activity::factory()->done()->create(['title' => 'Done task']);
+    $backlogTask = Activity::factory()->issue()->backlog()->create(['title' => 'Backlog task']);
+    $todoTask = Activity::factory()->issue()->todo()->create(['title' => 'Todo task']);
+    $doingTask = Activity::factory()->issue()->doing()->create(['title' => 'Doing task']);
+    $doneTask = Activity::factory()->issue()->done()->create(['title' => 'Done task']);
 
     Livewire::test('pages::kanban')
         ->assertSee('Backlog task')
@@ -52,13 +52,29 @@ test('kanban does not show inbox tasks', function () {
         ->assertDontSee('Inbox task');
 });
 
+test('kanban only shows actionable leaf items', function () {
+    $issue = Activity::factory()->issue()->backlog()->create(['title' => 'Leaf issue']);
+    $atomicEpic = Activity::factory()->epic()->backlog()->create(['title' => 'Atomic epic']);
+
+    $epicContainer = Activity::factory()->epic()->backlog()->create(['title' => 'Epic container']);
+    Activity::factory()->issue()->backlog()->create(['parent_id' => $epicContainer->id]);
+
+    $personalTask = Activity::factory()->task()->backlog()->create(['title' => 'Personal task']);
+
+    Livewire::test('pages::kanban')
+        ->assertSee('Leaf issue')
+        ->assertSee('Atomic epic')
+        ->assertDontSee('Epic container')
+        ->assertDontSee('Personal task');
+});
+
 test('kanban done column only shows tasks completed this week', function () {
-    $thisWeekTask = Activity::factory()->done()->create([
+    $thisWeekTask = Activity::factory()->issue()->done()->create([
         'title' => 'Done this week',
         'completed_at' => Carbon::now(),
     ]);
 
-    $lastWeekTask = Activity::factory()->done()->create([
+    $lastWeekTask = Activity::factory()->issue()->done()->create([
         'title' => 'Done last week',
         'completed_at' => Carbon::now()->subWeek(),
     ]);
@@ -70,11 +86,11 @@ test('kanban done column only shows tasks completed this week', function () {
 
 test('kanban filters by project', function () {
     $project = Project::factory()->create();
-    $projectTask = Activity::factory()->backlog()->create([
+    $projectTask = Activity::factory()->issue()->backlog()->create([
         'title' => 'Project task',
         'project_id' => $project->id,
     ]);
-    $otherTask = Activity::factory()->backlog()->create(['title' => 'Other task']);
+    $otherTask = Activity::factory()->issue()->backlog()->create(['title' => 'Other task']);
 
     Livewire::test('pages::kanban')
         ->set('filterProject', (string) $project->id)
@@ -83,8 +99,8 @@ test('kanban filters by project', function () {
 });
 
 test('kanban filters by priority', function () {
-    Activity::factory()->backlog()->urgent()->create(['title' => 'Urgent task']);
-    Activity::factory()->backlog()->create([
+    Activity::factory()->issue()->backlog()->urgent()->create(['title' => 'Urgent task']);
+    Activity::factory()->issue()->backlog()->create([
         'title' => 'Low task',
         'priority' => ActivityPriority::Low,
     ]);
@@ -96,8 +112,8 @@ test('kanban filters by priority', function () {
 });
 
 test('kanban filters overdue tasks', function () {
-    Activity::factory()->overdue()->create(['title' => 'Overdue task']);
-    Activity::factory()->todo()->create(['title' => 'Normal task']);
+    Activity::factory()->issue()->overdue()->create(['title' => 'Overdue task']);
+    Activity::factory()->issue()->todo()->create(['title' => 'Normal task']);
 
     Livewire::test('pages::kanban')
         ->set('filterOverdue', true)
@@ -176,21 +192,21 @@ test('kanban shows priority badges', function () {
 });
 
 test('kanban shows estimate badges', function () {
-    Activity::factory()->backlog()->withEstimate(90)->create();
+    Activity::factory()->issue()->backlog()->withEstimate(90)->create();
 
     Livewire::test('pages::kanban')
         ->assertSee('90m');
 });
 
 test('kanban shows overdue badge for overdue tasks', function () {
-    $task = Activity::factory()->overdue()->create();
+    $task = Activity::factory()->issue()->overdue()->create();
 
     Livewire::test('pages::kanban')
         ->assertSee($task->due_date->diffForHumans());
 });
 
 test('kanban shows unassigned tasks section', function () {
-    Activity::factory()->backlog()->create([
+    Activity::factory()->issue()->backlog()->create([
         'title' => 'Unassigned task',
         'project_id' => null,
     ]);

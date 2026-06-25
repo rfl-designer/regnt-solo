@@ -13,11 +13,11 @@ beforeEach(function (): void {
 });
 
 test('kanban column displays total estimate for tasks', function (): void {
-    Activity::factory()->create([
+    Activity::factory()->issue()->create([
         'status' => ActivityStatus::Todo,
         'estimated_minutes' => 60,
     ]);
-    Activity::factory()->create([
+    Activity::factory()->issue()->create([
         'status' => ActivityStatus::Todo,
         'estimated_minutes' => 90,
     ]);
@@ -27,7 +27,7 @@ test('kanban column displays total estimate for tasks', function (): void {
 });
 
 test('kanban column shows hours only when no remaining minutes', function (): void {
-    Activity::factory()->create([
+    Activity::factory()->issue()->create([
         'status' => ActivityStatus::Doing,
         'estimated_minutes' => 120, // exactly 2 hours
     ]);
@@ -37,7 +37,7 @@ test('kanban column shows hours only when no remaining minutes', function (): vo
 });
 
 test('kanban column shows minutes only when less than an hour', function (): void {
-    Activity::factory()->create([
+    Activity::factory()->issue()->create([
         'status' => ActivityStatus::Backlog,
         'estimated_minutes' => 45,
     ]);
@@ -47,7 +47,7 @@ test('kanban column shows minutes only when less than an hour', function (): voi
 });
 
 test('kanban column hides estimate badge when no tasks have estimates', function (): void {
-    Activity::factory()->create([
+    Activity::factory()->issue()->create([
         'status' => ActivityStatus::Backlog,
         'estimated_minutes' => null,
     ]);
@@ -60,15 +60,15 @@ test('kanban column hides estimate badge when no tasks have estimates', function
 });
 
 test('getColumnEstimate returns sum of estimated_minutes', function (): void {
-    Activity::factory()->create([
+    Activity::factory()->issue()->create([
         'status' => ActivityStatus::Todo,
         'estimated_minutes' => 30,
     ]);
-    Activity::factory()->create([
+    Activity::factory()->issue()->create([
         'status' => ActivityStatus::Todo,
         'estimated_minutes' => 45,
     ]);
-    Activity::factory()->create([
+    Activity::factory()->issue()->create([
         'status' => ActivityStatus::Todo,
         'estimated_minutes' => null, // should be ignored
     ]);

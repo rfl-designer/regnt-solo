@@ -9,7 +9,7 @@ beforeEach(function () {
 });
 
 test('kanban cards have drag affordance classes', function () {
-    Activity::factory()->backlog()->create(['title' => 'Test task']);
+    Activity::factory()->issue()->backlog()->create(['title' => 'Test task']);
 
     Livewire::test('pages::kanban')
         ->assertSeeHtml('class="kanban-card"')
@@ -24,7 +24,7 @@ test('kanban drop zones have transition classes', function () {
 });
 
 test('kanban cards have hover states', function () {
-    Activity::factory()->backlog()->create();
+    Activity::factory()->issue()->backlog()->create();
 
     Livewire::test('pages::kanban')
         ->assertSeeHtml('hover:border-zinc-500')

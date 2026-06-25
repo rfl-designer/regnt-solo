@@ -65,6 +65,29 @@ it('renders stakeholder view with project detail tabs and feature board', functi
         ->assertSee('Ver tasks');
 });
 
+it('drill shows slices but never personal tasks parented to the epic', function () {
+    $this->withoutVite();
+
+    $feature = Activity::factory()->epic()->create([
+        'project_id' => $this->project->id,
+        'status' => ActivityStatus::Doing,
+    ]);
+
+    Activity::factory()->forParent($feature)->issue()->doing()->create([
+        'title' => 'Fatia visivel do epico',
+    ]);
+
+    Activity::factory()->forParent($feature)->task()->doing()->create([
+        'title' => 'Recado pessoal do dev',
+    ]);
+
+    Livewire::test('pages::project-stakeholder-view', ['token' => $this->stakeholder->access_token])
+        ->call('enterDrill', $feature->id)
+        ->assertSee('Fatia visivel do epico')
+        ->assertSee('Fatia')
+        ->assertDontSee('Recado pessoal do dev');
+});
+
 it('allows stakeholder to add an issue comment from the sidebar', function () {
     Livewire::test('pages::project-stakeholder-view', ['token' => $this->stakeholder->access_token])
         ->set('newIssueComment', 'Precisamos de um relatório com filtros por período e cliente.')

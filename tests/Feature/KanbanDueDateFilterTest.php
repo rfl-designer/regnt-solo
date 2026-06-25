@@ -14,15 +14,15 @@ test('kanban due date filter defaults to empty string', function () {
 });
 
 test('kanban filters tasks due today', function () {
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Due today task',
         'due_date' => today(),
     ]);
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Due tomorrow task',
         'due_date' => today()->addDay(),
     ]);
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'No due date task',
         'due_date' => null,
     ]);
@@ -35,11 +35,11 @@ test('kanban filters tasks due today', function () {
 });
 
 test('kanban filters tasks due this week', function () {
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Due this week task',
         'due_date' => today()->endOfWeek(),
     ]);
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Due next week task',
         'due_date' => today()->addWeeks(2),
     ]);
@@ -51,11 +51,11 @@ test('kanban filters tasks due this week', function () {
 });
 
 test('kanban filters tasks due in next 7 days', function () {
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Due in 5 days',
         'due_date' => today()->addDays(5),
     ]);
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Due in 15 days',
         'due_date' => today()->addDays(15),
     ]);
@@ -67,11 +67,11 @@ test('kanban filters tasks due in next 7 days', function () {
 });
 
 test('kanban filters tasks due in next 30 days', function () {
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Due in 20 days',
         'due_date' => today()->addDays(20),
     ]);
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Due in 60 days',
         'due_date' => today()->addDays(60),
     ]);
@@ -85,12 +85,12 @@ test('kanban filters tasks due in next 30 days', function () {
 test('kanban due date filter works with project filter', function () {
     $project = \App\Models\Project::factory()->create();
 
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Project task due today',
         'due_date' => today(),
         'project_id' => $project->id,
     ]);
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Other task due today',
         'due_date' => today(),
         'project_id' => null,
@@ -104,11 +104,11 @@ test('kanban due date filter works with project filter', function () {
 });
 
 test('kanban due date filter works with priority filter', function () {
-    Activity::factory()->todo()->urgent()->create([
+    Activity::factory()->issue()->todo()->urgent()->create([
         'title' => 'Urgent due today',
         'due_date' => today(),
     ]);
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Low due today',
         'due_date' => today(),
         'priority' => \App\Enums\ActivityPriority::Low,
@@ -122,10 +122,10 @@ test('kanban due date filter works with priority filter', function () {
 });
 
 test('kanban due date filter works with overdue filter', function () {
-    Activity::factory()->overdue()->create([
+    Activity::factory()->issue()->overdue()->create([
         'title' => 'Overdue task',
     ]);
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Due today task',
         'due_date' => today(),
     ]);
@@ -144,7 +144,7 @@ test('kanban due date filter is persisted in url', function () {
 });
 
 test('kanban due date filter excludes tasks without due date', function () {
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'No due date',
         'due_date' => null,
     ]);
@@ -155,11 +155,11 @@ test('kanban due date filter excludes tasks without due date', function () {
 });
 
 test('kanban shows all tasks when due date filter is empty', function () {
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Task with date',
         'due_date' => today(),
     ]);
-    Activity::factory()->todo()->create([
+    Activity::factory()->issue()->todo()->create([
         'title' => 'Task without date',
         'due_date' => null,
     ]);

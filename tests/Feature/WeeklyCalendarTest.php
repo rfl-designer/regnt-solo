@@ -271,6 +271,24 @@ test('weekly calendar excludes planned tasks from available list', function () {
         ->and($availableTasks->pluck('id')->toArray())->not->toContain($plannedTask->id);
 });
 
+test('weekly calendar only offers schedulable leaf activities', function () {
+    $atomicEpic = Activity::factory()->epic()->todo()->create();
+
+    $epicContainer = Activity::factory()->epic()->todo()->create();
+    Activity::factory()->issue()->todo()->create(['parent_id' => $epicContainer->id]);
+
+    $draft = Activity::factory()->draft()->create();
+
+    $available = Livewire::test('pages::weekly-calendar')
+        ->get('availableTasks')
+        ->pluck('id')
+        ->toArray();
+
+    expect($available)->toContain($atomicEpic->id)
+        ->and($available)->not->toContain($epicContainer->id)
+        ->and($available)->not->toContain($draft->id);
+});
+
 test('weekly calendar shows completed tasks with different styling', function () {
     $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
     $plan = DailyPlan::factory()->create(['date' => $monday]);

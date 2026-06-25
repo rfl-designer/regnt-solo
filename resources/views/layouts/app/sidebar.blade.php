@@ -20,9 +20,6 @@
 
                 {{-- Planejamento --}}
                 <flux:sidebar.group heading="Planejamento" class="grid">
-                    <flux:sidebar.item icon="briefcase" :href="route('work')" :current="request()->routeIs('work')" wire:navigate>
-                        Work
-                    </flux:sidebar.item>
                     <flux:sidebar.item icon="calendar-days" :href="route('daily')" :current="request()->routeIs('daily')" wire:navigate>
                         Hoje
                     </flux:sidebar.item>

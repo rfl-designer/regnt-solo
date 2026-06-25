@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\ActivityType;
 use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
@@ -103,7 +102,7 @@ new class extends Component
         $plannedTaskIds = $this->days->flatMap(fn (array $day): array => $day['plan']?->tasks->pluck('id')->toArray() ?? [])->unique()->toArray();
 
         return Activity::active()
-            ->whereIn('type', [ActivityType::Issue, ActivityType::Task])
+            ->schedulable()
             ->whereNotIn('id', $plannedTaskIds)
             ->with('project')
             ->orderBy('sort_order')

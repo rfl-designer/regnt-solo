@@ -329,6 +329,20 @@ class Activity extends Model
     }
 
     /**
+     * Scope to schedulable leaf items: issues, personal tasks plus atomic epics.
+     */
+    public function scopeSchedulable(Builder $query): void
+    {
+        $query->where(function (Builder $q): void {
+            $q->whereIn('type', [ActivityType::Issue, ActivityType::Task])
+                ->orWhere(function (Builder $epic): void {
+                    $epic->where('type', ActivityType::Epic)
+                        ->whereDoesntHave('children');
+                });
+        });
+    }
+
+    /**
      * Scope to only inbox activities.
      */
     public function scopeInbox(Builder $query): void

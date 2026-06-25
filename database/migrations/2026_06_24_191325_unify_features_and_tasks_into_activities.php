@@ -35,19 +35,31 @@ return new class extends Migration
         // Carry the legacy feature link into parent_id, then retire feature_id.
         DB::statement('UPDATE activities SET parent_id = feature_id');
 
-        Schema::table('activities', function (Blueprint $table): void {
-            $table->dropForeign(['feature_id']);
-        });
+        // Retire the legacy feature_id FK. Because the table was renamed from
+        // `tasks`, its constraint/index still carry the `tasks_*` names on
+        // engines that don't rename them (Postgres). SQLite rebuilds the table
+        // so it can drop by column and needs its leftover index cleaned first.
+        $connection = Schema::getConnection();
 
-        // Drop any single-column index still referencing feature_id (its name
-        // varies with how the legacy schema was built) so SQLite can drop the column.
-        foreach (DB::select("PRAGMA index_list('activities')") as $index) {
-            $columns = DB::select('PRAGMA index_info("'.$index->name.'")');
-            if (count($columns) === 1 && $columns[0]->name === 'feature_id') {
-                Schema::table('activities', fn (Blueprint $table) => $table->dropIndex($index->name));
+        if ($connection->getDriverName() === 'sqlite') {
+            Schema::table('activities', function (Blueprint $table): void {
+                $table->dropForeign(['feature_id']);
+            });
+
+            // Drop any single-column index still referencing feature_id (its name
+            // varies with how the legacy schema was built) so SQLite can drop the column.
+            foreach (DB::select("PRAGMA index_list('activities')") as $index) {
+                $columns = DB::select('PRAGMA index_info("'.$index->name.'")');
+                if (count($columns) === 1 && $columns[0]->name === 'feature_id') {
+                    Schema::table('activities', fn (Blueprint $table) => $table->dropIndex($index->name));
+                }
             }
+        } else {
+            $prefix = $connection->getTablePrefix();
+            DB::statement('ALTER TABLE '.$prefix.'activities DROP CONSTRAINT IF EXISTS '.$prefix.'tasks_feature_id_foreign');
         }
 
+        // Dropping the column also removes its backing index on Postgres.
         Schema::table('activities', function (Blueprint $table): void {
             $table->dropColumn('feature_id');
         });

@@ -108,6 +108,24 @@ test('daily planner shows available tasks not in the plan', function () {
         ->and($availableTasks->pluck('id')->toArray())->not->toContain($inPlan->id);
 });
 
+test('daily planner only offers schedulable leaf activities', function () {
+    $atomicEpic = Activity::factory()->epic()->todo()->create();
+
+    $epicContainer = Activity::factory()->epic()->todo()->create();
+    Activity::factory()->issue()->todo()->create(['parent_id' => $epicContainer->id]);
+
+    $draft = Activity::factory()->draft()->create();
+
+    $available = Livewire::test('pages::daily-planner')
+        ->get('availableTasks')
+        ->pluck('id')
+        ->toArray();
+
+    expect($available)->toContain($atomicEpic->id)
+        ->and($available)->not->toContain($epicContainer->id)
+        ->and($available)->not->toContain($draft->id);
+});
+
 test('daily planner does not show done tasks in available list', function () {
     $doneTask = Activity::factory()->done()->create(['title' => 'Task concluída']);
 

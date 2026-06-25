@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\ActivityStatus;
-use App\Enums\ActivityType;
 use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
@@ -169,8 +168,8 @@ new class extends Component
     private function buildColumnQuery(ActivityStatus $status): \Illuminate\Database\Eloquent\Builder
     {
         $query = Activity::query()
-            ->whereIn('type', [ActivityType::Issue, ActivityType::Task])
-            ->with('project', 'timeEntries')
+            ->leaf()
+            ->with('project', 'parent', 'timeEntries')
             ->withCount('commits')
             ->where('status', $status);
 
@@ -215,7 +214,7 @@ new class extends Component
     private function reorderColumn(ActivityStatus $status, int $movedId, int $position): void
     {
         $query = Activity::query()
-            ->whereIn('type', [ActivityType::Issue, ActivityType::Task])
+            ->leaf()
             ->where('status', $status)
             ->where('id', '!=', $movedId);
 
@@ -428,6 +427,11 @@ new class extends Component
 
                                     {{-- Badges Row --}}
                                     <div class="mt-2 flex flex-wrap items-center gap-1.5" wire:sort:ignore>
+                                        {{-- Derived Label Badge --}}
+                                        <flux:badge size="sm" color="{{ $task->type->color() }}" icon="{{ $task->type->icon() }}">
+                                            {{ $task->derivedLabel() }}
+                                        </flux:badge>
+
                                         {{-- Priority Badge --}}
                                         @if ($task->priority)
                                             <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">

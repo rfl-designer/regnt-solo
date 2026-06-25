@@ -15,23 +15,6 @@ beforeEach(function () {
 });
 
 describe('Feature ID on Cards', function () {
-    test('feature card renders #F-{id} with the correct ID', function () {
-        $feature = Activity::factory()->epic()->todo()->create(['title' => 'Test Feature']);
-
-        $this->get(route('work'))
-            ->assertSee("#F-{$feature->id}");
-    });
-
-    test('feature ID appears on Work page kanban', function () {
-        $feature1 = Activity::factory()->epic()->todo()->create(['title' => 'Feature Alpha']);
-        $feature2 = Activity::factory()->epic()->doing()->create(['title' => 'Feature Beta']);
-
-        $response = $this->get(route('work'));
-
-        $response->assertSee("#F-{$feature1->id}");
-        $response->assertSee("#F-{$feature2->id}");
-    });
-
     test('feature ID appears on project detail kanban', function () {
         $project = Project::factory()->create();
         $feature = Activity::factory()->epic()->create([

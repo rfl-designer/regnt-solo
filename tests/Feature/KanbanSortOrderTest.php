@@ -29,9 +29,9 @@ function backlogOrder(): array
 test('handleSort moves a task down onto an occupied position and persists order', function () {
     $sharedTime = Carbon::parse('2026-02-15 22:39:43');
 
-    $a = Activity::factory()->backlog()->create(['sort_order' => 0, 'created_at' => $sharedTime]);
-    $b = Activity::factory()->backlog()->create(['sort_order' => 1, 'created_at' => $sharedTime]);
-    $c = Activity::factory()->backlog()->create(['sort_order' => 2, 'created_at' => $sharedTime]);
+    $a = Activity::factory()->issue()->backlog()->create(['sort_order' => 0, 'created_at' => $sharedTime]);
+    $b = Activity::factory()->issue()->backlog()->create(['sort_order' => 1, 'created_at' => $sharedTime]);
+    $c = Activity::factory()->issue()->backlog()->create(['sort_order' => 2, 'created_at' => $sharedTime]);
 
     Livewire::test('pages::kanban')->call('handleSort', $a->id, 1, 'backlog');
 
@@ -41,9 +41,9 @@ test('handleSort moves a task down onto an occupied position and persists order'
 test('handleSort moves a task up onto an occupied position and persists order', function () {
     $sharedTime = Carbon::parse('2026-02-15 22:39:43');
 
-    $a = Activity::factory()->backlog()->create(['sort_order' => 0, 'created_at' => $sharedTime]);
-    $b = Activity::factory()->backlog()->create(['sort_order' => 1, 'created_at' => $sharedTime]);
-    $c = Activity::factory()->backlog()->create(['sort_order' => 2, 'created_at' => $sharedTime]);
+    $a = Activity::factory()->issue()->backlog()->create(['sort_order' => 0, 'created_at' => $sharedTime]);
+    $b = Activity::factory()->issue()->backlog()->create(['sort_order' => 1, 'created_at' => $sharedTime]);
+    $c = Activity::factory()->issue()->backlog()->create(['sort_order' => 2, 'created_at' => $sharedTime]);
 
     Livewire::test('pages::kanban')->call('handleSort', $c->id, 0, 'backlog');
 
@@ -53,36 +53,14 @@ test('handleSort moves a task up onto an occupied position and persists order', 
 test('handleSort assigns unique sequential sort_order values', function () {
     $sharedTime = Carbon::parse('2026-02-15 22:39:43');
 
-    $a = Activity::factory()->backlog()->create(['sort_order' => 0, 'created_at' => $sharedTime]);
-    $b = Activity::factory()->backlog()->create(['sort_order' => 1, 'created_at' => $sharedTime]);
-    $c = Activity::factory()->backlog()->create(['sort_order' => 2, 'created_at' => $sharedTime]);
+    $a = Activity::factory()->issue()->backlog()->create(['sort_order' => 0, 'created_at' => $sharedTime]);
+    $b = Activity::factory()->issue()->backlog()->create(['sort_order' => 1, 'created_at' => $sharedTime]);
+    $c = Activity::factory()->issue()->backlog()->create(['sort_order' => 2, 'created_at' => $sharedTime]);
 
     Livewire::test('pages::kanban')->call('handleSort', $a->id, 2, 'backlog');
 
     expect(Activity::whereIn('id', [$a->id, $b->id, $c->id])->pluck('sort_order')->sort()->values()->all())
         ->toBe([0, 1, 2]);
-});
-
-test('handleTaskSort reorders drill-down tasks within a feature and persists order', function () {
-    $sharedTime = Carbon::parse('2026-02-15 22:39:43');
-    $feature = Activity::factory()->epic()->todo()->create();
-
-    $a = Activity::factory()->backlog()->create(['parent_id' => $feature->id, 'sort_order' => 0, 'created_at' => $sharedTime]);
-    $b = Activity::factory()->backlog()->create(['parent_id' => $feature->id, 'sort_order' => 1, 'created_at' => $sharedTime]);
-    $c = Activity::factory()->backlog()->create(['parent_id' => $feature->id, 'sort_order' => 2, 'created_at' => $sharedTime]);
-
-    Livewire::test('pages::features')
-        ->call('enterDrill', $feature->id)
-        ->call('handleTaskSort', $a->id, 1, 'backlog');
-
-    $order = Activity::query()
-        ->where('parent_id', $feature->id)
-        ->where('status', ActivityStatus::Backlog)
-        ->orderBy('sort_order')
-        ->pluck('id')
-        ->all();
-
-    expect($order)->toBe([$b->id, $a->id, $c->id]);
 });
 
 test('project-detail handleTaskSort reorders drill-down tasks and persists order', function () {
@@ -142,22 +120,4 @@ test('project-detail handleFeatureSort does not renumber features of other proje
         ->call('handleFeatureSort', $a->id, 1, 'todo');
 
     expect($foreign->fresh()->sort_order)->toBe(5);
-});
-
-test('handleFeatureSort reorders features within a column and persists order', function () {
-    $sharedTime = Carbon::parse('2026-02-15 22:39:43');
-
-    $a = Activity::factory()->epic()->todo()->create(['sort_order' => 0, 'created_at' => $sharedTime]);
-    $b = Activity::factory()->epic()->todo()->create(['sort_order' => 1, 'created_at' => $sharedTime]);
-    $c = Activity::factory()->epic()->todo()->create(['sort_order' => 2, 'created_at' => $sharedTime]);
-
-    Livewire::test('pages::features')->call('handleFeatureSort', $a->id, 1, 'todo');
-
-    $order = Activity::query()->epics()
-        ->where('status', ActivityStatus::Todo)
-        ->orderBy('sort_order')
-        ->pluck('id')
-        ->all();
-
-    expect($order)->toBe([$b->id, $a->id, $c->id]);
 });

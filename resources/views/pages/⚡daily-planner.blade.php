@@ -70,6 +70,7 @@ new class extends Component
         $planTaskIds = $this->plan->tasks->pluck('id')->toArray();
 
         return Activity::active()
+            ->schedulable()
             ->whereNotIn('id', $planTaskIds)
             ->when($this->filterProjectId, fn ($q) => $q->where('project_id', $this->filterProjectId))
             ->with('project')

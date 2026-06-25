@@ -160,3 +160,16 @@ it('never shows personal tasks on the stakeholder board', function () {
         ->assertDontSee('Recado pessoal secreto')
         ->assertDontSee('Task aninhada secreta');
 });
+
+it('never shows drafts on the stakeholder board', function () {
+    $this->withoutVite();
+
+    Activity::factory()->draft()->create([
+        'project_id' => $this->project->id,
+        'title' => 'Ideia secreta do dev',
+    ]);
+
+    $this->get($this->stakeholder->public_url)
+        ->assertSuccessful()
+        ->assertDontSee('Ideia secreta do dev');
+});

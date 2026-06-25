@@ -3,7 +3,10 @@
 use App\Enums\ActivityType;
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\CreateDraftTool;
+use App\Mcp\Tools\DeleteIssueTool;
 use App\Mcp\Tools\ListDraftsTool;
+use App\Mcp\Tools\ListEpicsTool;
+use App\Mcp\Tools\ListIssuesTool;
 use App\Mcp\Tools\PromoteDraftTool;
 use App\Models\Activity;
 
@@ -130,5 +133,28 @@ test('promote-draft requires a valid target', function () {
     ]);
 
     $response->assertHasErrors();
+    $this->assertDatabaseHas('activities', ['id' => $draft->id]);
+});
+
+// Sync isolation: the roadmap tools the sync relies on never touch drafts
+test('list-issues and list-epics never return drafts', function () {
+    Activity::factory()->draft()->create(['title' => 'Hidden Draft']);
+
+    SoloBoardServer::tool(ListIssuesTool::class, [])
+        ->assertOk()
+        ->assertDontSee('Hidden Draft');
+
+    SoloBoardServer::tool(ListEpicsTool::class, [])
+        ->assertOk()
+        ->assertDontSee('Hidden Draft');
+});
+
+test('sync reconciliation (delete-issue) never deletes a draft', function () {
+    $draft = Activity::factory()->draft()->create(['title' => 'Survivor Draft']);
+
+    expect(fn () => SoloBoardServer::tool(DeleteIssueTool::class, [
+        'issue_id' => $draft->id,
+    ]))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
     $this->assertDatabaseHas('activities', ['id' => $draft->id]);
 });

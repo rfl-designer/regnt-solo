@@ -20,6 +20,10 @@ Route::livewire('tasks', 'pages::tasks')
     ->middleware(['auth'])
     ->name('tasks');
 
+Route::livewire('ideas', 'pages::ideas')
+    ->middleware(['auth'])
+    ->name('ideas');
+
 Route::livewire('kanban', 'pages::kanban')
     ->middleware(['auth'])
     ->name('kanban');

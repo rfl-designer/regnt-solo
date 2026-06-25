@@ -20,12 +20,6 @@ Route::livewire('kanban', 'pages::kanban')
     ->middleware(['auth'])
     ->name('kanban');
 
-Route::livewire('work', 'pages::features')
-    ->middleware(['auth'])
-    ->name('work');
-
-Route::redirect('/features', '/work');
-
 Route::livewire('daily', 'pages::daily-planner')
     ->middleware(['auth'])
     ->name('daily');

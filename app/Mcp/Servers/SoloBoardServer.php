@@ -24,7 +24,7 @@ class SoloBoardServer extends Server
     /**
      * The MCP server's instructions for the LLM.
      */
-    protected string $instructions = 'SoloBoard is a personal productivity app for solo developers. It manages a roadmap mirrored one-way from GitHub plus a personal layer, projects, stakeholder issues, time tracking, and daily planning. The roadmap has two types: Epics (top-level, mirror GitHub type:prd issues) and Issues (mirror other GitHub issues; their client-facing label Fatia/Follow-up/Avulsa is derived from the parent). Use list-epics, create-epic, update-epic to manage epics; the epic status is manual (create-epic never sets it). Use list-issues, create-issue, update-issue, delete-issue to manage issues; create/update accept project_id, parent_id and status, and setting status to done marks the issue done. Both epics and issues upsert by github_issue_number for idempotent syncs; delete-issue cascades time entries and is used for reconciliation. Statuses are inbox, backlog, todo, doing, done; priorities are urgent, high, medium, low. Stakeholder issues track external feedback. Projects have slugs and ids for identification. Timers are time entries linked to an activity — only one timer can run at a time. Documents are markdown pages (PRDs, specs, decisions, notes) that belong to projects. Use list-stakeholder-issues and promote-stakeholder-issue for feedback triage. Use get-project-context for full project overview.';
+    protected string $instructions = 'SoloBoard is a personal productivity app for solo developers. It manages a roadmap mirrored one-way from GitHub plus a personal layer, projects, stakeholder issues, time tracking, and daily planning. The roadmap has two types: Epics (top-level, mirror GitHub type:prd issues) and Issues (mirror other GitHub issues; their client-facing label Fatia/Follow-up/Avulsa is derived from the parent). Use list-epics, create-epic, update-epic to manage epics; the epic status is manual (create-epic never sets it). Use list-issues, create-issue, update-issue, delete-issue to manage issues; create/update accept project_id, parent_id and status, and setting status to done marks the issue done. Both epics and issues upsert by github_issue_number for idempotent syncs; delete-issue cascades time entries and is used for reconciliation. Use list-drafts, create-draft to manage drafts (type=Draft) — immature ideas of just a title and a note that live outside any status board and have no GitHub mirror; promote one with promote-draft, which hands off its content to /to-prd or /to-issues (the issue is born on GitHub, not by a local mutation) and removes the local draft. Statuses are inbox, backlog, todo, doing, done; priorities are urgent, high, medium, low. Stakeholder issues track external feedback. Projects have slugs and ids for identification. Timers are time entries linked to an activity — only one timer can run at a time. Documents are markdown pages (PRDs, specs, decisions, notes) that belong to projects. Use list-stakeholder-issues and promote-stakeholder-issue for feedback triage. Use get-project-context for full project overview.';
 
     /**
      * The tools registered with this MCP server.
@@ -61,6 +61,9 @@ class SoloBoardServer extends Server
         \App\Mcp\Tools\DeleteIssueTool::class,
         \App\Mcp\Tools\ListTasksTool::class,
         \App\Mcp\Tools\CreateTaskTool::class,
+        \App\Mcp\Tools\ListDraftsTool::class,
+        \App\Mcp\Tools\CreateDraftTool::class,
+        \App\Mcp\Tools\PromoteDraftTool::class,
         \App\Mcp\Tools\RalphExportTool::class,
         \App\Mcp\Tools\ListStakeholderIssuesTool::class,
         \App\Mcp\Tools\PromoteStakeholderIssueToFeatureTool::class,

@@ -136,3 +136,27 @@ it('returns 404 for invalid stakeholder token', function () {
 
     $this->get('/projects/shared/token-invalido')->assertNotFound();
 });
+
+it('never shows personal tasks on the stakeholder board', function () {
+    $this->withoutVite();
+
+    Activity::factory()->task()->create([
+        'project_id' => $this->project->id,
+        'title' => 'Recado pessoal secreto',
+    ]);
+
+    $feature = Activity::factory()->epic()->create([
+        'project_id' => $this->project->id,
+        'status' => ActivityStatus::Doing,
+    ]);
+    Activity::factory()->task()->create([
+        'project_id' => $this->project->id,
+        'parent_id' => $feature->id,
+        'title' => 'Task aninhada secreta',
+    ]);
+
+    $this->get($this->stakeholder->public_url)
+        ->assertSuccessful()
+        ->assertDontSee('Recado pessoal secreto')
+        ->assertDontSee('Task aninhada secreta');
+});

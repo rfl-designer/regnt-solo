@@ -27,6 +27,9 @@
                         Semana
                         <livewire:weekly-badge />
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="check-circle" :href="route('tasks')" :current="request()->routeIs('tasks')" wire:navigate>
+                        Tarefas
+                    </flux:sidebar.item>
                 </flux:sidebar.group>
 
                 {{-- Acompanhamento --}}

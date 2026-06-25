@@ -59,6 +59,8 @@ class SoloBoardServer extends Server
         \App\Mcp\Tools\CreateIssueTool::class,
         \App\Mcp\Tools\UpdateIssueTool::class,
         \App\Mcp\Tools\DeleteIssueTool::class,
+        \App\Mcp\Tools\ListTasksTool::class,
+        \App\Mcp\Tools\CreateTaskTool::class,
         \App\Mcp\Tools\RalphExportTool::class,
         \App\Mcp\Tools\ListStakeholderIssuesTool::class,
         \App\Mcp\Tools\PromoteStakeholderIssueToFeatureTool::class,

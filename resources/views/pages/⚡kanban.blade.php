@@ -1,9 +1,10 @@
 <?php
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
+use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
-use App\Models\Task;
 use Carbon\Carbon;
 use Flux\Flux;
 use Illuminate\Support\Facades\DB;
@@ -34,16 +35,16 @@ new class extends Component
         'done' => 20,
     ];
 
-    /** @var list<TaskStatus> */
+    /** @var list<ActivityStatus> */
     public array $kanbanStatuses = [];
 
     public function mount(): void
     {
         $this->kanbanStatuses = [
-            TaskStatus::Backlog,
-            TaskStatus::Todo,
-            TaskStatus::Doing,
-            TaskStatus::Done,
+            ActivityStatus::Backlog,
+            ActivityStatus::Todo,
+            ActivityStatus::Doing,
+            ActivityStatus::Done,
         ];
     }
 
@@ -59,9 +60,9 @@ new class extends Component
     /**
      * Get tasks for a specific column, optionally only those with a project.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, Task>
+     * @return \Illuminate\Database\Eloquent\Collection<int, Activity>
      */
-    public function getColumnTasks(TaskStatus $status, bool $withProject = true): \Illuminate\Database\Eloquent\Collection
+    public function getColumnTasks(ActivityStatus $status, bool $withProject = true): \Illuminate\Database\Eloquent\Collection
     {
         $query = $this->buildColumnQuery($status);
 
@@ -80,7 +81,7 @@ new class extends Component
     /**
      * Get total count for a column (for "load more" button).
      */
-    public function getColumnTotal(TaskStatus $status): int
+    public function getColumnTotal(ActivityStatus $status): int
     {
         return $this->buildColumnQuery($status)->count();
     }
@@ -88,7 +89,7 @@ new class extends Component
     /**
      * Get total estimated minutes for a column.
      */
-    public function getColumnEstimate(TaskStatus $status): int
+    public function getColumnEstimate(ActivityStatus $status): int
     {
         return (int) $this->buildColumnQuery($status)->sum('estimated_minutes');
     }
@@ -119,7 +120,7 @@ new class extends Component
     /**
      * Check if a column has unassigned tasks.
      */
-    public function hasUnassignedTasks(TaskStatus $status): bool
+    public function hasUnassignedTasks(ActivityStatus $status): bool
     {
         return $this->buildColumnQuery($status)->whereNull('project_id')->exists();
     }
@@ -131,16 +132,16 @@ new class extends Component
 
     public function handleSort(int|string $id, int $position, string $groupId): void
     {
-        $task = Task::findOrFail((int) $id);
-        $newStatus = TaskStatus::from($groupId);
+        $task = Activity::findOrFail((int) $id);
+        $newStatus = ActivityStatus::from($groupId);
 
         DB::transaction(function () use ($task, $newStatus, $position): void {
-            if ($newStatus === TaskStatus::Done && $task->status !== TaskStatus::Done) {
+            if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
                 // Add to daily plan if not already there (Observer syncs completed_at)
                 $dailyPlan = DailyPlan::getOrCreateForDate(Carbon::today());
 
-                if (! $dailyPlan->tasks()->where('task_id', $task->id)->exists()) {
-                    $maxOrder = $dailyPlan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+                if (! $dailyPlan->tasks()->where('activity_id', $task->id)->exists()) {
+                    $maxOrder = $dailyPlan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
                     $dailyPlan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
                 }
 
@@ -165,14 +166,15 @@ new class extends Component
     /**
      * Build the base query for a column with filters applied.
      */
-    private function buildColumnQuery(TaskStatus $status): \Illuminate\Database\Eloquent\Builder
+    private function buildColumnQuery(ActivityStatus $status): \Illuminate\Database\Eloquent\Builder
     {
-        $query = Task::query()
+        $query = Activity::query()
+            ->whereIn('type', [ActivityType::Issue, ActivityType::Task])
             ->with('project', 'timeEntries')
             ->withCount('commits')
             ->where('status', $status);
 
-        if ($status === TaskStatus::Done) {
+        if ($status === ActivityStatus::Done) {
             $query->whereBetween('completed_at', [
                 Carbon::now()->startOfWeek(),
                 Carbon::now()->endOfWeek(),
@@ -210,13 +212,14 @@ new class extends Component
      * Insert the moved task at the given position within its column and
      * renumber every task in that column to a unique, sequential sort_order.
      */
-    private function reorderColumn(TaskStatus $status, int $movedId, int $position): void
+    private function reorderColumn(ActivityStatus $status, int $movedId, int $position): void
     {
-        $query = Task::query()
+        $query = Activity::query()
+            ->whereIn('type', [ActivityType::Issue, ActivityType::Task])
             ->where('status', $status)
             ->where('id', '!=', $movedId);
 
-        if ($status === TaskStatus::Done) {
+        if ($status === ActivityStatus::Done) {
             $query->whereBetween('completed_at', [
                 Carbon::now()->startOfWeek(),
                 Carbon::now()->endOfWeek(),
@@ -229,7 +232,7 @@ new class extends Component
         array_splice($ids, $position, 0, [$movedId]);
 
         foreach ($ids as $index => $id) {
-            Task::query()->where('id', $id)->update(['sort_order' => $index]);
+            Activity::query()->where('id', $id)->update(['sort_order' => $index]);
         }
     }
 }
@@ -253,7 +256,7 @@ new class extends Component
             {{-- Priority filter --}}
             <flux:select wire:model.live="filterPriority" size="sm" class="w-32">
                 <option value="">Prioridades</option>
-                @foreach (App\Enums\TaskPriority::cases() as $priority)
+                @foreach (App\Enums\ActivityPriority::cases() as $priority)
                     <option value="{{ $priority->value }}">{{ $priority->label() }}</option>
                 @endforeach
             </flux:select>
@@ -308,7 +311,7 @@ new class extends Component
             @endphp
 
             @php
-                $isDone = $status === \App\Enums\TaskStatus::Done;
+                $isDone = $status === \App\Enums\ActivityStatus::Done;
             @endphp
 
             <div

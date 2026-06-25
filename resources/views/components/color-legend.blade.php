@@ -8,26 +8,26 @@
     <flux:menu class="min-w-72">
         @if ($type === 'status' || $type === 'all')
             <flux:menu.group heading="Status">
-                @foreach (\App\Enums\TaskStatus::cases() as $status)
+                @foreach (\App\Enums\ActivityStatus::cases() as $status)
                     <div class="flex items-center gap-3 px-3 py-1.5">
                         <flux:badge size="sm" color="{{ $status->color() }}" icon="{{ $status->icon() }}" class="w-32 shrink-0 justify-center">
                             {{ $status->label() }}
                         </flux:badge>
                         <flux:text size="xs" class="whitespace-nowrap text-zinc-500">
                             @switch($status)
-                                @case(\App\Enums\TaskStatus::Inbox)
+                                @case(\App\Enums\ActivityStatus::Inbox)
                                     Não triada
                                     @break
-                                @case(\App\Enums\TaskStatus::Backlog)
+                                @case(\App\Enums\ActivityStatus::Backlog)
                                     Para depois
                                     @break
-                                @case(\App\Enums\TaskStatus::Todo)
+                                @case(\App\Enums\ActivityStatus::Todo)
                                     Pronta para fazer
                                     @break
-                                @case(\App\Enums\TaskStatus::Doing)
+                                @case(\App\Enums\ActivityStatus::Doing)
                                     Em progresso
                                     @break
-                                @case(\App\Enums\TaskStatus::Done)
+                                @case(\App\Enums\ActivityStatus::Done)
                                     Concluída
                                     @break
                             @endswitch
@@ -43,23 +43,23 @@
             @endif
 
             <flux:menu.group heading="Prioridade">
-                @foreach (\App\Enums\TaskPriority::cases() as $priority)
+                @foreach (\App\Enums\ActivityPriority::cases() as $priority)
                     <div class="flex items-center gap-3 px-3 py-1.5">
                         <flux:badge size="sm" color="{{ $priority->color() }}" icon="{{ $priority->icon() }}" class="w-32 shrink-0 justify-center">
                             {{ $priority->label() }}
                         </flux:badge>
                         <flux:text size="xs" class="whitespace-nowrap text-zinc-500">
                             @switch($priority)
-                                @case(\App\Enums\TaskPriority::Urgent)
+                                @case(\App\Enums\ActivityPriority::Urgent)
                                     Crítico
                                     @break
-                                @case(\App\Enums\TaskPriority::High)
+                                @case(\App\Enums\ActivityPriority::High)
                                     Alta prioridade
                                     @break
-                                @case(\App\Enums\TaskPriority::Medium)
+                                @case(\App\Enums\ActivityPriority::Medium)
                                     Prioridade padrão
                                     @break
-                                @case(\App\Enums\TaskPriority::Low)
+                                @case(\App\Enums\ActivityPriority::Low)
                                     Pode esperar
                                     @break
                             @endswitch

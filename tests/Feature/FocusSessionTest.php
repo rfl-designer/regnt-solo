@@ -2,21 +2,21 @@
 
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\StartTimerTool;
-use App\Models\Task;
+use App\Models\Activity;
 use App\Models\TimeEntry;
 use Carbon\Carbon;
 
 test('focus session creates time entry with is_focus_session true', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     TimeEntry::create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now(),
         'is_focus_session' => true,
     ]);
 
     $this->assertDatabaseHas('time_entries', [
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'is_focus_session' => true,
     ]);
 });
@@ -91,15 +91,15 @@ test('focusDurationMinutes returns total focus minutes', function () {
 });
 
 test('task totalFocusMinutes returns focus minutes for task', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     TimeEntry::factory()->focus()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subHours(2),
         'stopped_at' => now()->subHour(),
     ]);
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subHours(4),
         'stopped_at' => now()->subHours(3),
     ]);
@@ -108,7 +108,7 @@ test('task totalFocusMinutes returns focus minutes for task', function () {
 });
 
 test('MCP start-timer supports focus parameter', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     $response = SoloBoardServer::tool(StartTimerTool::class, [
         'task_id' => $task->id,
@@ -120,13 +120,13 @@ test('MCP start-timer supports focus parameter', function () {
     $response->assertSee('Focus session started');
 
     $this->assertDatabaseHas('time_entries', [
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'is_focus_session' => true,
     ]);
 });
 
 test('MCP start-timer defaults to non-focus', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     $response = SoloBoardServer::tool(StartTimerTool::class, [
         'task_id' => $task->id,
@@ -136,7 +136,7 @@ test('MCP start-timer defaults to non-focus', function () {
     $response->assertSee('"is_focus_session": false');
 
     $this->assertDatabaseHas('time_entries', [
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'is_focus_session' => false,
     ]);
 });

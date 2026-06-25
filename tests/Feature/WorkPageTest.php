@@ -1,11 +1,9 @@
 <?php
 
-use App\Enums\FeaturePriority;
-use App\Enums\FeatureStatus;
-use App\Enums\TaskStatus;
-use App\Models\Feature;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -83,8 +81,8 @@ describe('Work Page View Mode Toggle', function () {
     });
 
     test('kanban view shows kanban board', function () {
-        $feature = Feature::factory()->create(['title' => 'Kanban Test Feature', 'status' => FeatureStatus::Todo]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
+        $feature = Activity::factory()->epic()->create(['title' => 'Kanban Test Feature', 'status' => ActivityStatus::Todo]);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('pages::features')
             ->assertSet('viewMode', 'kanban')
@@ -92,8 +90,8 @@ describe('Work Page View Mode Toggle', function () {
     });
 
     test('table view shows table with features', function () {
-        $feature = Feature::factory()->create(['title' => 'Table Test Feature']);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
+        $feature = Activity::factory()->epic()->create(['title' => 'Table Test Feature']);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('pages::features')
             ->set('viewMode', 'table')
@@ -103,7 +101,7 @@ describe('Work Page View Mode Toggle', function () {
 
 describe('Work Page Table View Columns', function () {
     test('table view renders column headers', function () {
-        Feature::factory()->create();
+        Activity::factory()->epic()->create();
 
         Livewire::test('pages::features')
             ->set('viewMode', 'table')
@@ -117,8 +115,8 @@ describe('Work Page Table View Columns', function () {
     });
 
     test('table view renders feature ID with #F- prefix', function () {
-        $feature = Feature::factory()->create(['title' => 'ID Feature']);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
+        $feature = Activity::factory()->epic()->create(['title' => 'ID Feature']);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('pages::features')
             ->set('viewMode', 'table')
@@ -126,8 +124,8 @@ describe('Work Page Table View Columns', function () {
     });
 
     test('table view renders feature status badge', function () {
-        $feature = Feature::factory()->create(['status' => FeatureStatus::Todo]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
+        $feature = Activity::factory()->epic()->create(['status' => ActivityStatus::Todo]);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('pages::features')
             ->set('viewMode', 'table')
@@ -135,8 +133,8 @@ describe('Work Page Table View Columns', function () {
     });
 
     test('table view renders feature priority', function () {
-        $feature = Feature::factory()->create(['priority' => FeaturePriority::High]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
+        $feature = Activity::factory()->epic()->create(['priority' => ActivityPriority::High]);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('pages::features')
             ->set('viewMode', 'table')
@@ -145,8 +143,8 @@ describe('Work Page Table View Columns', function () {
 
     test('table view renders project name', function () {
         $project = Project::factory()->create(['name' => 'Table Project', 'emoji' => '🎯']);
-        $feature = Feature::factory()->create(['project_id' => $project->id]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
+        $feature = Activity::factory()->epic()->create(['project_id' => $project->id]);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('pages::features')
             ->set('viewMode', 'table')
@@ -154,9 +152,9 @@ describe('Work Page Table View Columns', function () {
     });
 
     test('table view renders progress', function () {
-        $feature = Feature::factory()->create();
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Done]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
+        $feature = Activity::factory()->epic()->create();
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Done]);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('pages::features')
             ->set('viewMode', 'table')
@@ -164,8 +162,8 @@ describe('Work Page Table View Columns', function () {
     });
 
     test('table view renders due date', function () {
-        $feature = Feature::factory()->create(['due_date' => '2026-03-15']);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
+        $feature = Activity::factory()->epic()->create(['due_date' => '2026-03-15']);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('pages::features')
             ->set('viewMode', 'table')
@@ -214,11 +212,11 @@ describe('Work Page Filters in Both Views', function () {
         $project1 = Project::factory()->create(['name' => 'Alpha Project']);
         $project2 = Project::factory()->create(['name' => 'Beta Project']);
 
-        $feature1 = Feature::factory()->create(['title' => 'Alpha Feature', 'project_id' => $project1->id]);
-        Task::factory()->create(['feature_id' => $feature1->id, 'status' => TaskStatus::Todo]);
+        $feature1 = Activity::factory()->epic()->create(['title' => 'Alpha Feature', 'project_id' => $project1->id]);
+        Activity::factory()->create(['parent_id' => $feature1->id, 'status' => ActivityStatus::Todo]);
 
-        $feature2 = Feature::factory()->create(['title' => 'Beta Feature', 'project_id' => $project2->id]);
-        Task::factory()->create(['feature_id' => $feature2->id, 'status' => TaskStatus::Todo]);
+        $feature2 = Activity::factory()->epic()->create(['title' => 'Beta Feature', 'project_id' => $project2->id]);
+        Activity::factory()->create(['parent_id' => $feature2->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('pages::features')
             ->set('viewMode', 'table')
@@ -228,17 +226,17 @@ describe('Work Page Filters in Both Views', function () {
     });
 
     test('priority filter works in table view', function () {
-        $highFeature = Feature::factory()->create([
+        $highFeature = Activity::factory()->epic()->create([
             'title' => 'High Table Feature',
-            'priority' => FeaturePriority::High,
+            'priority' => ActivityPriority::High,
         ]);
-        Task::factory()->create(['feature_id' => $highFeature->id, 'status' => TaskStatus::Todo]);
+        Activity::factory()->create(['parent_id' => $highFeature->id, 'status' => ActivityStatus::Todo]);
 
-        $lowFeature = Feature::factory()->create([
+        $lowFeature = Activity::factory()->epic()->create([
             'title' => 'Low Table Feature',
-            'priority' => FeaturePriority::Low,
+            'priority' => ActivityPriority::Low,
         ]);
-        Task::factory()->create(['feature_id' => $lowFeature->id, 'status' => TaskStatus::Todo]);
+        Activity::factory()->create(['parent_id' => $lowFeature->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('pages::features')
             ->set('viewMode', 'table')
@@ -248,17 +246,17 @@ describe('Work Page Filters in Both Views', function () {
     });
 
     test('overdue filter works in table view', function () {
-        $overdueFeature = Feature::factory()->create([
+        $overdueFeature = Activity::factory()->epic()->create([
             'title' => 'Overdue Table Feature',
             'due_date' => now()->subDays(5),
         ]);
-        Task::factory()->create(['feature_id' => $overdueFeature->id, 'status' => TaskStatus::Todo]);
+        Activity::factory()->create(['parent_id' => $overdueFeature->id, 'status' => ActivityStatus::Todo]);
 
-        $futureFeature = Feature::factory()->create([
+        $futureFeature = Activity::factory()->epic()->create([
             'title' => 'Future Table Feature',
             'due_date' => now()->addDays(30),
         ]);
-        Task::factory()->create(['feature_id' => $futureFeature->id, 'status' => TaskStatus::Todo]);
+        Activity::factory()->create(['parent_id' => $futureFeature->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('pages::features')
             ->set('viewMode', 'table')

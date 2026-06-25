@@ -1,9 +1,10 @@
 <?php
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use Carbon\Carbon;
 use Flux\Flux;
 use Illuminate\Support\Str;
@@ -73,9 +74,9 @@ new class extends Component
                 ->values()
                 ->all(),
 
-            '!' => collect(TaskPriority::cases())
-                ->filter(fn (TaskPriority $priority) => $search === '' || str_contains($priority->value, $search))
-                ->map(fn (TaskPriority $priority) => [
+            '!' => collect(ActivityPriority::cases())
+                ->filter(fn (ActivityPriority $priority) => $search === '' || str_contains($priority->value, $search))
+                ->map(fn (ActivityPriority $priority) => [
                     'value' => $priority->value,
                     'label' => $priority->label(),
                 ])
@@ -160,20 +161,21 @@ new class extends Component
 
         $taskPriority = null;
         if ($priority !== null) {
-            $taskPriority = TaskPriority::tryFrom($priority);
+            $taskPriority = ActivityPriority::tryFrom($priority);
         }
 
         $dueDate = $this->parseDateAlias($dateAlias);
 
         $taskStatus = $this->initialStatus !== null
-            ? TaskStatus::tryFrom($this->initialStatus) ?? TaskStatus::Inbox
-            : TaskStatus::Inbox;
+            ? ActivityStatus::tryFrom($this->initialStatus) ?? ActivityStatus::Inbox
+            : ActivityStatus::Inbox;
 
-        Task::create([
+        Activity::create([
+            'type' => ActivityType::Task,
             'title' => $title,
             'project_id' => $projectId,
             'status' => $taskStatus,
-            'priority' => $taskPriority ?? TaskPriority::Medium,
+            'priority' => $taskPriority ?? ActivityPriority::Medium,
             'due_date' => $dueDate,
             'session_prompt' => $sessionPrompt,
         ]);
@@ -273,7 +275,7 @@ new class extends Component
                 <div class="flex items-center gap-2">
                     <flux:heading size="lg">Nova Task</flux:heading>
                     @if ($initialStatus)
-                        @php $statusEnum = \App\Enums\TaskStatus::tryFrom($initialStatus); @endphp
+                        @php $statusEnum = \App\Enums\ActivityStatus::tryFrom($initialStatus); @endphp
                         @if ($statusEnum)
                             <flux:badge size="sm" color="{{ $statusEnum->color() }}" icon="{{ $statusEnum->icon() }}">
                                 → {{ $statusEnum->label() }}

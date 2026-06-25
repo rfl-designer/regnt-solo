@@ -2,16 +2,18 @@
 
 namespace Database\Seeders;
 
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
 use App\Enums\ProjectPriority;
 use App\Enums\ProjectStatus;
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Models\Activity;
+use App\Models\ActivityCommit;
+use App\Models\ActivityStatusChange;
 use App\Models\DailyPlan;
 use App\Models\Document;
 use App\Models\Project;
-use App\Models\Task;
-use App\Models\TaskCommit;
-use App\Models\TaskStatusChange;
+use App\Models\Stakeholder;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Models\WeeklyReview;
@@ -128,74 +130,75 @@ class DatabaseSeeder extends Seeder
      * since we generate a realistic retroactive history separately.
      *
      * @param  array<string, Project>  $projects
-     * @return \Illuminate\Support\Collection<int, Task>
+     * @return \Illuminate\Support\Collection<int, Activity>
      */
     private function createTasks(array $projects): \Illuminate\Support\Collection
     {
-        /** @var array<int, array{title: string, project: string|null, status: TaskStatus, priority: TaskPriority, estimated_minutes: int|null, due_date: string|null, completed_at: Carbon|null}> $taskDefinitions */
+        /** @var array<int, array{title: string, project: string|null, status: ActivityStatus, priority: ActivityPriority, estimated_minutes: int|null, due_date: string|null, completed_at: Carbon|null}> $taskDefinitions */
         $taskDefinitions = [
             // API Gateway tasks
-            ['title' => 'Configurar rate limiting por endpoint', 'project' => 'api', 'status' => TaskStatus::Done, 'priority' => TaskPriority::High, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => now()->subDays(3)],
-            ['title' => 'Implementar circuit breaker pattern', 'project' => 'api', 'status' => TaskStatus::Doing, 'priority' => TaskPriority::Urgent, 'estimated_minutes' => 180, 'due_date' => now()->addDays(2)->toDateString(), 'completed_at' => null],
-            ['title' => 'Adicionar health check endpoints', 'project' => 'api', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::High, 'estimated_minutes' => 60, 'due_date' => now()->addDays(5)->toDateString(), 'completed_at' => null],
-            ['title' => 'Documentar API com OpenAPI 3.0', 'project' => 'api', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 240, 'due_date' => null, 'completed_at' => null],
-            ['title' => 'Configurar cache de respostas', 'project' => 'api', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(7)->toDateString(), 'completed_at' => null],
-            ['title' => 'Implementar autenticação JWT', 'project' => 'api', 'status' => TaskStatus::Done, 'priority' => TaskPriority::Urgent, 'estimated_minutes' => 150, 'due_date' => null, 'completed_at' => now()->subDays(5)],
+            ['title' => 'Configurar rate limiting por endpoint', 'project' => 'api', 'status' => ActivityStatus::Done, 'priority' => ActivityPriority::High, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => now()->subDays(3)],
+            ['title' => 'Implementar circuit breaker pattern', 'project' => 'api', 'status' => ActivityStatus::Doing, 'priority' => ActivityPriority::Urgent, 'estimated_minutes' => 180, 'due_date' => now()->addDays(2)->toDateString(), 'completed_at' => null],
+            ['title' => 'Adicionar health check endpoints', 'project' => 'api', 'status' => ActivityStatus::Todo, 'priority' => ActivityPriority::High, 'estimated_minutes' => 60, 'due_date' => now()->addDays(5)->toDateString(), 'completed_at' => null],
+            ['title' => 'Documentar API com OpenAPI 3.0', 'project' => 'api', 'status' => ActivityStatus::Backlog, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 240, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Configurar cache de respostas', 'project' => 'api', 'status' => ActivityStatus::Todo, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(7)->toDateString(), 'completed_at' => null],
+            ['title' => 'Implementar autenticação JWT', 'project' => 'api', 'status' => ActivityStatus::Done, 'priority' => ActivityPriority::Urgent, 'estimated_minutes' => 150, 'due_date' => null, 'completed_at' => now()->subDays(5)],
 
             // Landing Page v2 tasks
-            ['title' => 'Criar hero section com animações', 'project' => 'landing', 'status' => TaskStatus::Doing, 'priority' => TaskPriority::High, 'estimated_minutes' => 120, 'due_date' => now()->addDay()->toDateString(), 'completed_at' => null],
-            ['title' => 'Implementar seção de depoimentos', 'project' => 'landing', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(4)->toDateString(), 'completed_at' => null],
-            ['title' => 'Otimizar imagens para web', 'project' => 'landing', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Low, 'estimated_minutes' => 45, 'due_date' => null, 'completed_at' => null],
-            ['title' => 'Configurar analytics e tracking', 'project' => 'landing', 'status' => TaskStatus::Done, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 60, 'due_date' => null, 'completed_at' => now()->subDays(2)],
-            ['title' => 'Criar formulário de contato', 'project' => 'landing', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::High, 'estimated_minutes' => 75, 'due_date' => now()->addDays(3)->toDateString(), 'completed_at' => null],
+            ['title' => 'Criar hero section com animações', 'project' => 'landing', 'status' => ActivityStatus::Doing, 'priority' => ActivityPriority::High, 'estimated_minutes' => 120, 'due_date' => now()->addDay()->toDateString(), 'completed_at' => null],
+            ['title' => 'Implementar seção de depoimentos', 'project' => 'landing', 'status' => ActivityStatus::Todo, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(4)->toDateString(), 'completed_at' => null],
+            ['title' => 'Otimizar imagens para web', 'project' => 'landing', 'status' => ActivityStatus::Backlog, 'priority' => ActivityPriority::Low, 'estimated_minutes' => 45, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Configurar analytics e tracking', 'project' => 'landing', 'status' => ActivityStatus::Done, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 60, 'due_date' => null, 'completed_at' => now()->subDays(2)],
+            ['title' => 'Criar formulário de contato', 'project' => 'landing', 'status' => ActivityStatus::Todo, 'priority' => ActivityPriority::High, 'estimated_minutes' => 75, 'due_date' => now()->addDays(3)->toDateString(), 'completed_at' => null],
 
             // Mobile App tasks
-            ['title' => 'Setup projeto React Native', 'project' => 'mobile', 'status' => TaskStatus::Done, 'priority' => TaskPriority::High, 'estimated_minutes' => 180, 'due_date' => null, 'completed_at' => now()->subDays(7)],
-            ['title' => 'Implementar tela de login', 'project' => 'mobile', 'status' => TaskStatus::Doing, 'priority' => TaskPriority::High, 'estimated_minutes' => 120, 'due_date' => now()->addDays(2)->toDateString(), 'completed_at' => null],
-            ['title' => 'Criar navegação bottom tabs', 'project' => 'mobile', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(6)->toDateString(), 'completed_at' => null],
-            ['title' => 'Integrar push notifications', 'project' => 'mobile', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Low, 'estimated_minutes' => 150, 'due_date' => null, 'completed_at' => null],
-            ['title' => 'Configurar CI/CD para builds', 'project' => 'mobile', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Setup projeto React Native', 'project' => 'mobile', 'status' => ActivityStatus::Done, 'priority' => ActivityPriority::High, 'estimated_minutes' => 180, 'due_date' => null, 'completed_at' => now()->subDays(7)],
+            ['title' => 'Implementar tela de login', 'project' => 'mobile', 'status' => ActivityStatus::Doing, 'priority' => ActivityPriority::High, 'estimated_minutes' => 120, 'due_date' => now()->addDays(2)->toDateString(), 'completed_at' => null],
+            ['title' => 'Criar navegação bottom tabs', 'project' => 'mobile', 'status' => ActivityStatus::Todo, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(6)->toDateString(), 'completed_at' => null],
+            ['title' => 'Integrar push notifications', 'project' => 'mobile', 'status' => ActivityStatus::Backlog, 'priority' => ActivityPriority::Low, 'estimated_minutes' => 150, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Configurar CI/CD para builds', 'project' => 'mobile', 'status' => ActivityStatus::Backlog, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => null],
 
             // Admin Dashboard tasks
-            ['title' => 'Criar dashboard com gráficos', 'project' => 'admin', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::High, 'estimated_minutes' => 180, 'due_date' => now()->addDays(5)->toDateString(), 'completed_at' => null],
-            ['title' => 'Implementar CRUD de usuários', 'project' => 'admin', 'status' => TaskStatus::Done, 'priority' => TaskPriority::High, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => now()->subDays(4)],
-            ['title' => 'Adicionar filtros avançados na listagem', 'project' => 'admin', 'status' => TaskStatus::Doing, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(3)->toDateString(), 'completed_at' => null],
-            ['title' => 'Exportar relatórios em PDF', 'project' => 'admin', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Low, 'estimated_minutes' => 150, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Criar dashboard com gráficos', 'project' => 'admin', 'status' => ActivityStatus::Todo, 'priority' => ActivityPriority::High, 'estimated_minutes' => 180, 'due_date' => now()->addDays(5)->toDateString(), 'completed_at' => null],
+            ['title' => 'Implementar CRUD de usuários', 'project' => 'admin', 'status' => ActivityStatus::Done, 'priority' => ActivityPriority::High, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => now()->subDays(4)],
+            ['title' => 'Adicionar filtros avançados na listagem', 'project' => 'admin', 'status' => ActivityStatus::Doing, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(3)->toDateString(), 'completed_at' => null],
+            ['title' => 'Exportar relatórios em PDF', 'project' => 'admin', 'status' => ActivityStatus::Backlog, 'priority' => ActivityPriority::Low, 'estimated_minutes' => 150, 'due_date' => null, 'completed_at' => null],
 
             // Design System tasks
-            ['title' => 'Definir tokens de design (cores, tipografia)', 'project' => 'design', 'status' => TaskStatus::Done, 'priority' => TaskPriority::High, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => now()->subDays(10)],
-            ['title' => 'Criar componente Button com variantes', 'project' => 'design', 'status' => TaskStatus::Done, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 90, 'due_date' => null, 'completed_at' => now()->subDays(8)],
-            ['title' => 'Documentar componentes no Storybook', 'project' => 'design', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Low, 'estimated_minutes' => 180, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Definir tokens de design (cores, tipografia)', 'project' => 'design', 'status' => ActivityStatus::Done, 'priority' => ActivityPriority::High, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => now()->subDays(10)],
+            ['title' => 'Criar componente Button com variantes', 'project' => 'design', 'status' => ActivityStatus::Done, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 90, 'due_date' => null, 'completed_at' => now()->subDays(8)],
+            ['title' => 'Documentar componentes no Storybook', 'project' => 'design', 'status' => ActivityStatus::Backlog, 'priority' => ActivityPriority::Low, 'estimated_minutes' => 180, 'due_date' => null, 'completed_at' => null],
 
             // Blog Pessoal tasks
-            ['title' => 'Escrever artigo sobre Laravel 12', 'project' => 'blog', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 120, 'due_date' => now()->addDays(7)->toDateString(), 'completed_at' => null],
-            ['title' => 'Configurar SEO e meta tags', 'project' => 'blog', 'status' => TaskStatus::Done, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 45, 'due_date' => null, 'completed_at' => now()->subDays(6)],
-            ['title' => 'Implementar sistema de comentários', 'project' => 'blog', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Low, 'estimated_minutes' => 150, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Escrever artigo sobre Laravel 12', 'project' => 'blog', 'status' => ActivityStatus::Todo, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 120, 'due_date' => now()->addDays(7)->toDateString(), 'completed_at' => null],
+            ['title' => 'Configurar SEO e meta tags', 'project' => 'blog', 'status' => ActivityStatus::Done, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 45, 'due_date' => null, 'completed_at' => now()->subDays(6)],
+            ['title' => 'Implementar sistema de comentários', 'project' => 'blog', 'status' => ActivityStatus::Backlog, 'priority' => ActivityPriority::Low, 'estimated_minutes' => 150, 'due_date' => null, 'completed_at' => null],
 
             // Inbox tasks (no project)
-            ['title' => 'Revisar PR do colega', 'project' => null, 'status' => TaskStatus::Inbox, 'priority' => TaskPriority::High, 'estimated_minutes' => 30, 'due_date' => now()->toDateString(), 'completed_at' => null],
-            ['title' => 'Atualizar dependências do projeto', 'project' => null, 'status' => TaskStatus::Inbox, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 45, 'due_date' => null, 'completed_at' => null],
-            ['title' => 'Pesquisar sobre WebSockets', 'project' => null, 'status' => TaskStatus::Inbox, 'priority' => TaskPriority::Low, 'estimated_minutes' => null, 'due_date' => null, 'completed_at' => null],
-            ['title' => 'Responder email do cliente', 'project' => null, 'status' => TaskStatus::Inbox, 'priority' => TaskPriority::Urgent, 'estimated_minutes' => 15, 'due_date' => now()->toDateString(), 'completed_at' => null],
-            ['title' => 'Agendar reunião de sprint planning', 'project' => null, 'status' => TaskStatus::Inbox, 'priority' => TaskPriority::Medium, 'estimated_minutes' => null, 'due_date' => now()->addDays(2)->toDateString(), 'completed_at' => null],
+            ['title' => 'Revisar PR do colega', 'project' => null, 'status' => ActivityStatus::Inbox, 'priority' => ActivityPriority::High, 'estimated_minutes' => 30, 'due_date' => now()->toDateString(), 'completed_at' => null],
+            ['title' => 'Atualizar dependências do projeto', 'project' => null, 'status' => ActivityStatus::Inbox, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 45, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Pesquisar sobre WebSockets', 'project' => null, 'status' => ActivityStatus::Inbox, 'priority' => ActivityPriority::Low, 'estimated_minutes' => null, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Responder email do cliente', 'project' => null, 'status' => ActivityStatus::Inbox, 'priority' => ActivityPriority::Urgent, 'estimated_minutes' => 15, 'due_date' => now()->toDateString(), 'completed_at' => null],
+            ['title' => 'Agendar reunião de sprint planning', 'project' => null, 'status' => ActivityStatus::Inbox, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => null, 'due_date' => now()->addDays(2)->toDateString(), 'completed_at' => null],
 
             // Session tasks (AI-assisted)
-            ['title' => 'Implementar módulo de notificações push', 'project' => 'mobile', 'status' => TaskStatus::Doing, 'priority' => TaskPriority::High, 'estimated_minutes' => 180, 'due_date' => now()->addDays(3)->toDateString(), 'completed_at' => null, 'session_prompt' => 'Implementar sistema de notificações push para o app mobile. Deve suportar notificações em foreground e background, com deep linking para a tela correta. Usar Firebase Cloud Messaging.', 'session_result' => null],
-            ['title' => 'Refatorar serviço de autenticação', 'project' => 'api', 'status' => TaskStatus::Done, 'priority' => TaskPriority::High, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => now()->subDays(1), 'session_prompt' => 'Refatorar o serviço de autenticação para usar o padrão Strategy, separando JWT e OAuth2 em classes distintas. Manter compatibilidade com a API existente.', 'session_result' => 'Serviço refatorado com sucesso. Criados AuthStrategy interface, JwtStrategy e OAuth2Strategy. 12 testes atualizados, todos passando. PR #87 aberto.'],
-            ['title' => 'Criar pipeline de deploy automático', 'project' => 'admin', 'status' => TaskStatus::Doing, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 150, 'due_date' => now()->addDays(5)->toDateString(), 'completed_at' => null, 'session_prompt' => 'Configurar GitHub Actions para deploy automático do Admin Dashboard em staging ao fazer merge na branch develop. Incluir steps de lint, testes e build.', 'session_result' => null],
+            ['title' => 'Implementar módulo de notificações push', 'project' => 'mobile', 'status' => ActivityStatus::Doing, 'priority' => ActivityPriority::High, 'estimated_minutes' => 180, 'due_date' => now()->addDays(3)->toDateString(), 'completed_at' => null, 'session_prompt' => 'Implementar sistema de notificações push para o app mobile. Deve suportar notificações em foreground e background, com deep linking para a tela correta. Usar Firebase Cloud Messaging.', 'session_result' => null],
+            ['title' => 'Refatorar serviço de autenticação', 'project' => 'api', 'status' => ActivityStatus::Done, 'priority' => ActivityPriority::High, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => now()->subDays(1), 'session_prompt' => 'Refatorar o serviço de autenticação para usar o padrão Strategy, separando JWT e OAuth2 em classes distintas. Manter compatibilidade com a API existente.', 'session_result' => 'Serviço refatorado com sucesso. Criados AuthStrategy interface, JwtStrategy e OAuth2Strategy. 12 testes atualizados, todos passando. PR #87 aberto.'],
+            ['title' => 'Criar pipeline de deploy automático', 'project' => 'admin', 'status' => ActivityStatus::Doing, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 150, 'due_date' => now()->addDays(5)->toDateString(), 'completed_at' => null, 'session_prompt' => 'Configurar GitHub Actions para deploy automático do Admin Dashboard em staging ao fazer merge na branch develop. Incluir steps de lint, testes e build.', 'session_result' => null],
 
             // Extra tasks with overdue dates
-            ['title' => 'Corrigir bug no upload de arquivos', 'project' => 'api', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Urgent, 'estimated_minutes' => 60, 'due_date' => now()->subDays(2)->toDateString(), 'completed_at' => null],
-            ['title' => 'Refatorar módulo de pagamentos', 'project' => 'admin', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::High, 'estimated_minutes' => 240, 'due_date' => now()->subDay()->toDateString(), 'completed_at' => null],
-            ['title' => 'Melhorar performance da listagem', 'project' => 'mobile', 'status' => TaskStatus::Todo, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(4)->toDateString(), 'completed_at' => null],
-            ['title' => 'Configurar testes E2E com Cypress', 'project' => 'landing', 'status' => TaskStatus::Backlog, 'priority' => TaskPriority::Medium, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => null],
+            ['title' => 'Corrigir bug no upload de arquivos', 'project' => 'api', 'status' => ActivityStatus::Todo, 'priority' => ActivityPriority::Urgent, 'estimated_minutes' => 60, 'due_date' => now()->subDays(2)->toDateString(), 'completed_at' => null],
+            ['title' => 'Refatorar módulo de pagamentos', 'project' => 'admin', 'status' => ActivityStatus::Backlog, 'priority' => ActivityPriority::High, 'estimated_minutes' => 240, 'due_date' => now()->subDay()->toDateString(), 'completed_at' => null],
+            ['title' => 'Melhorar performance da listagem', 'project' => 'mobile', 'status' => ActivityStatus::Todo, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 90, 'due_date' => now()->addDays(4)->toDateString(), 'completed_at' => null],
+            ['title' => 'Configurar testes E2E com Cypress', 'project' => 'landing', 'status' => ActivityStatus::Backlog, 'priority' => ActivityPriority::Medium, 'estimated_minutes' => 120, 'due_date' => null, 'completed_at' => null],
         ];
 
-        return Task::withoutEvents(function () use ($taskDefinitions, $projects) {
+        return Activity::withoutEvents(function () use ($taskDefinitions, $projects) {
             $allTasks = collect();
 
             foreach ($taskDefinitions as $index => $def) {
-                $task = Task::create([
+                $task = Activity::create([
+                    'type' => ActivityType::Task,
                     'title' => $def['title'],
                     'project_id' => $def['project'] !== null ? $projects[$def['project']]->id : null,
                     'status' => $def['status'],
@@ -220,17 +223,17 @@ class DatabaseSeeder extends Seeder
      *
      * Generates a realistic timeline of status transitions based on each task's current status.
      *
-     * @param  \Illuminate\Support\Collection<int, Task>  $tasks
+     * @param  \Illuminate\Support\Collection<int, Activity>  $tasks
      */
     private function createStatusChangeHistory(\Illuminate\Support\Collection $tasks): void
     {
-        /** @var array<string, list<TaskStatus>> $statusPaths */
+        /** @var array<string, list<ActivityStatus>> $statusPaths */
         $statusPaths = [
-            TaskStatus::Inbox->value => [TaskStatus::Inbox],
-            TaskStatus::Backlog->value => [TaskStatus::Inbox, TaskStatus::Backlog],
-            TaskStatus::Todo->value => [TaskStatus::Inbox, TaskStatus::Backlog, TaskStatus::Todo],
-            TaskStatus::Doing->value => [TaskStatus::Inbox, TaskStatus::Backlog, TaskStatus::Todo, TaskStatus::Doing],
-            TaskStatus::Done->value => [TaskStatus::Inbox, TaskStatus::Backlog, TaskStatus::Todo, TaskStatus::Doing, TaskStatus::Done],
+            ActivityStatus::Inbox->value => [ActivityStatus::Inbox],
+            ActivityStatus::Backlog->value => [ActivityStatus::Inbox, ActivityStatus::Backlog],
+            ActivityStatus::Todo->value => [ActivityStatus::Inbox, ActivityStatus::Backlog, ActivityStatus::Todo],
+            ActivityStatus::Doing->value => [ActivityStatus::Inbox, ActivityStatus::Backlog, ActivityStatus::Todo, ActivityStatus::Doing],
+            ActivityStatus::Done->value => [ActivityStatus::Inbox, ActivityStatus::Backlog, ActivityStatus::Todo, ActivityStatus::Doing, ActivityStatus::Done],
         ];
 
         foreach ($tasks as $task) {
@@ -252,8 +255,8 @@ class DatabaseSeeder extends Seeder
                     $changedAt = Carbon::now()->subMinutes(rand(1, 60 * ($stepsCount - $stepIndex)));
                 }
 
-                TaskStatusChange::create([
-                    'task_id' => $task->id,
+                ActivityStatusChange::create([
+                    'activity_id' => $task->id,
                     'from_status' => $previousStatus,
                     'to_status' => $status,
                     'changed_at' => $changedAt,
@@ -269,11 +272,11 @@ class DatabaseSeeder extends Seeder
      *
      * Distributes 1-5 hours per day with ~40% of days having focus sessions.
      *
-     * @param  \Illuminate\Support\Collection<int, Task>  $tasks
+     * @param  \Illuminate\Support\Collection<int, Activity>  $tasks
      */
     private function createTimeEntries(\Illuminate\Support\Collection $tasks): void
     {
-        $workTasks = $tasks->filter(fn(Task $t) => $t->status !== TaskStatus::Inbox);
+        $workTasks = $tasks->filter(fn (Activity $t) => $t->status !== ActivityStatus::Inbox);
 
         for ($day = 29; $day >= 0; $day--) {
             $date = Carbon::today()->subDays($day);
@@ -306,7 +309,7 @@ class DatabaseSeeder extends Seeder
                 }
 
                 TimeEntry::create([
-                    'task_id' => $task->id,
+                    'activity_id' => $task->id,
                     'started_at' => $startedAt,
                     'stopped_at' => $stoppedAt,
                     'notes' => fake()->optional(0.4)->sentence(),
@@ -322,7 +325,7 @@ class DatabaseSeeder extends Seeder
     /**
      * Create a daily plan for today with 5 tasks.
      *
-     * @param  \Illuminate\Support\Collection<int, Task>  $tasks
+     * @param  \Illuminate\Support\Collection<int, Activity>  $tasks
      */
     private function createDailyPlan(\Illuminate\Support\Collection $tasks): void
     {
@@ -332,7 +335,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $planTasks = $tasks
-            ->filter(fn(Task $t) => in_array($t->status, [TaskStatus::Doing, TaskStatus::Todo], true))
+            ->filter(fn (Activity $t) => in_array($t->status, [ActivityStatus::Doing, ActivityStatus::Todo], true))
             ->take(5);
 
         foreach ($planTasks->values() as $index => $task) {
@@ -346,15 +349,15 @@ class DatabaseSeeder extends Seeder
     /**
      * Create a running timer on a "doing" task.
      *
-     * @param  \Illuminate\Support\Collection<int, Task>  $tasks
+     * @param  \Illuminate\Support\Collection<int, Activity>  $tasks
      */
     private function createRunningTimer(\Illuminate\Support\Collection $tasks): void
     {
-        $doingTask = $tasks->first(fn(Task $t) => $t->status === TaskStatus::Doing);
+        $doingTask = $tasks->first(fn (Activity $t) => $t->status === ActivityStatus::Doing);
 
         if ($doingTask) {
             TimeEntry::create([
-                'task_id' => $doingTask->id,
+                'activity_id' => $doingTask->id,
                 'started_at' => now()->subMinutes(rand(15, 45)),
                 'stopped_at' => null,
             ]);
@@ -364,11 +367,11 @@ class DatabaseSeeder extends Seeder
     /**
      * Create task commits for done tasks.
      *
-     * @param  \Illuminate\Support\Collection<int, Task>  $tasks
+     * @param  \Illuminate\Support\Collection<int, Activity>  $tasks
      */
     private function createTaskCommits(\Illuminate\Support\Collection $tasks): void
     {
-        $doneTasks = $tasks->filter(fn(Task $t) => $t->status === TaskStatus::Done);
+        $doneTasks = $tasks->filter(fn (Activity $t) => $t->status === ActivityStatus::Done);
 
         foreach ($doneTasks as $task) {
             $commitCount = rand(1, 4);
@@ -378,15 +381,15 @@ class DatabaseSeeder extends Seeder
                     ? $task->completed_at->copy()->subMinutes(rand(10, 120 * ($commitCount - $i)))
                     : now()->subDays(rand(1, 14));
 
-                TaskCommit::create([
-                    'task_id' => $task->id,
+                ActivityCommit::create([
+                    'activity_id' => $task->id,
                     'hash' => fake()->sha1(),
                     'message' => fake()->randomElement([
-                        'feat: implement ' . fake()->words(3, true),
-                        'fix: resolve ' . fake()->words(2, true) . ' issue',
-                        'refactor: improve ' . fake()->words(2, true),
-                        'test: add tests for ' . fake()->words(2, true),
-                        'chore: update ' . fake()->words(2, true),
+                        'feat: implement '.fake()->words(3, true),
+                        'fix: resolve '.fake()->words(2, true).' issue',
+                        'refactor: improve '.fake()->words(2, true),
+                        'test: add tests for '.fake()->words(2, true),
+                        'chore: update '.fake()->words(2, true),
                     ]),
                     'files_changed' => rand(1, 15),
                     'insertions' => rand(5, 300),

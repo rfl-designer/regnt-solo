@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\TaskStatus;
-use App\Models\Task;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -10,55 +10,55 @@ beforeEach(function () {
 });
 
 test('move to status changes task to backlog', function () {
-    $task = Task::factory()->create(['title' => 'Task para backlog']);
+    $task = Activity::factory()->create(['title' => 'Task para backlog']);
 
     Livewire::test('pages::inbox')
         ->call('moveToStatus', $task->id, 'backlog')
         ->assertDispatched('task-moved');
 
     expect($task->fresh())
-        ->status->toBe(TaskStatus::Backlog)
+        ->status->toBe(ActivityStatus::Backlog)
         ->completed_at->toBeNull();
 });
 
 test('move to status changes task to todo', function () {
-    $task = Task::factory()->create(['title' => 'Task para todo']);
+    $task = Activity::factory()->create(['title' => 'Task para todo']);
 
     Livewire::test('pages::inbox')
         ->call('moveToStatus', $task->id, 'todo')
         ->assertDispatched('task-moved');
 
     expect($task->fresh())
-        ->status->toBe(TaskStatus::Todo)
+        ->status->toBe(ActivityStatus::Todo)
         ->completed_at->toBeNull();
 });
 
 test('move to status changes task to doing', function () {
-    $task = Task::factory()->create(['title' => 'Task para doing']);
+    $task = Activity::factory()->create(['title' => 'Task para doing']);
 
     Livewire::test('pages::inbox')
         ->call('moveToStatus', $task->id, 'doing')
         ->assertDispatched('task-moved');
 
     expect($task->fresh())
-        ->status->toBe(TaskStatus::Doing)
+        ->status->toBe(ActivityStatus::Doing)
         ->completed_at->toBeNull();
 });
 
 test('move to status changes task to done and sets completed_at', function () {
-    $task = Task::factory()->create(['title' => 'Task para done']);
+    $task = Activity::factory()->create(['title' => 'Task para done']);
 
     Livewire::test('pages::inbox')
         ->call('moveToStatus', $task->id, 'done')
         ->assertDispatched('task-moved');
 
     expect($task->fresh())
-        ->status->toBe(TaskStatus::Done)
+        ->status->toBe(ActivityStatus::Done)
         ->completed_at->not->toBeNull();
 });
 
 test('move to status only works for inbox tasks', function () {
-    $task = Task::factory()->backlog()->create();
+    $task = Activity::factory()->backlog()->create();
 
     $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
 
@@ -67,7 +67,7 @@ test('move to status only works for inbox tasks', function () {
 });
 
 test('move to status removes task from inbox list', function () {
-    $task = Task::factory()->create(['title' => 'Task que vai sumir']);
+    $task = Activity::factory()->create(['title' => 'Task que vai sumir']);
 
     $component = Livewire::test('pages::inbox')
         ->assertSee('Task que vai sumir')
@@ -83,15 +83,15 @@ test('available statuses returns all statuses except inbox', function () {
 
     expect($statuses)
         ->toHaveCount(4)
-        ->toContain(TaskStatus::Backlog)
-        ->toContain(TaskStatus::Todo)
-        ->toContain(TaskStatus::Doing)
-        ->toContain(TaskStatus::Done)
-        ->not->toContain(TaskStatus::Inbox);
+        ->toContain(ActivityStatus::Backlog)
+        ->toContain(ActivityStatus::Todo)
+        ->toContain(ActivityStatus::Doing)
+        ->toContain(ActivityStatus::Done)
+        ->not->toContain(ActivityStatus::Inbox);
 });
 
 test('inbox page shows move dropdown for each task', function () {
-    Task::factory()->create(['title' => 'Task com dropdown']);
+    Activity::factory()->create(['title' => 'Task com dropdown']);
 
     Livewire::test('pages::inbox')
         ->assertSee('Mover');

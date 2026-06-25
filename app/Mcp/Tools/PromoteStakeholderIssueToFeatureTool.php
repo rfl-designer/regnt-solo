@@ -2,9 +2,10 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\FeaturePriority;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityType;
 use App\Enums\StakeholderIssueStatus;
-use App\Models\Feature;
+use App\Models\Activity;
 use App\Models\StakeholderIssue;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Str;
@@ -30,7 +31,7 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
             'issue_id' => 'required|integer|exists:stakeholder_issues,id',
             'title' => 'nullable|string|max:255',
             'spec' => 'nullable|string',
-            'priority' => ['nullable', 'string', Rule::enum(FeaturePriority::class)],
+            'priority' => ['nullable', 'string', Rule::enum(ActivityPriority::class)],
             'due_date' => 'nullable|date',
         ], [
             'issue_id.required' => 'You must provide the issue_id to promote.',
@@ -39,18 +40,18 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
         ]);
 
         $issue = StakeholderIssue::query()
-            ->with(['project', 'stakeholder', 'feature'])
+            ->with(['project', 'stakeholder', 'activity'])
             ->findOrFail($validated['issue_id']);
 
-        if ($issue->feature) {
+        if ($issue->activity) {
             $issue->update([
                 'status' => StakeholderIssueStatus::Feature,
             ]);
 
             return Response::text(json_encode([
                 'issue_id' => $issue->id,
-                'feature_id' => $issue->feature->id,
-                'feature_title' => $issue->feature->title,
+                'feature_id' => $issue->activity->id,
+                'feature_title' => $issue->activity->title,
                 'project' => $issue->project?->name,
                 'created_feature' => false,
                 'status' => StakeholderIssueStatus::Feature->value,
@@ -60,16 +61,17 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
         $title = $validated['title'] ?? $this->generateTitleFromIssue($issue->comment, $issue->id);
         $spec = $validated['spec'] ?? $this->generateFeatureSpec($issue);
 
-        $feature = Feature::query()->create([
+        $feature = Activity::query()->create([
+            'type' => ActivityType::Epic,
             'project_id' => $issue->project_id,
             'title' => $title,
             'spec' => $spec,
-            'priority' => $validated['priority'] ?? FeaturePriority::Medium,
+            'priority' => $validated['priority'] ?? ActivityPriority::Medium,
             'due_date' => $validated['due_date'] ?? null,
         ]);
 
         $issue->update([
-            'feature_id' => $feature->id,
+            'activity_id' => $feature->id,
             'status' => StakeholderIssueStatus::Feature,
             'converted_at' => now(),
         ]);

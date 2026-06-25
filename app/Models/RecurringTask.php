@@ -2,9 +2,10 @@
 
 namespace App\Models;
 
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
 use App\Enums\RecurrenceFrequency;
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -45,7 +46,7 @@ class RecurringTask extends Model
     {
         return [
             'frequency' => RecurrenceFrequency::class,
-            'priority' => TaskPriority::class,
+            'priority' => ActivityPriority::class,
             'next_run' => 'date',
             'last_run' => 'date',
             'is_active' => 'boolean',
@@ -61,11 +62,11 @@ class RecurringTask extends Model
     }
 
     /**
-     * Get the tasks created from this recurring task.
+     * Get the activities created from this recurring task.
      */
     public function tasks(): HasMany
     {
-        return $this->hasMany(Task::class);
+        return $this->hasMany(Activity::class);
     }
 
     /**
@@ -93,16 +94,17 @@ class RecurringTask extends Model
     }
 
     /**
-     * Create a task from this recurring task.
+     * Create an activity from this recurring task.
      */
-    public function createTask(): Task
+    public function createTask(): Activity
     {
-        return Task::create([
+        return Activity::create([
+            'type' => ActivityType::Task,
             'project_id' => $this->project_id,
             'recurring_task_id' => $this->id,
             'title' => $this->title,
             'description' => $this->description,
-            'status' => TaskStatus::Todo,
+            'status' => ActivityStatus::Todo,
             'priority' => $this->priority,
             'due_date' => Carbon::today(),
             'estimated_minutes' => $this->estimated_minutes,
@@ -128,7 +130,7 @@ class RecurringTask extends Model
     /**
      * Process this recurring task: create task and update next_run.
      */
-    public function process(): Task
+    public function process(): Activity
     {
         $task = $this->createTask();
 

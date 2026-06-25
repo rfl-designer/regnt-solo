@@ -20,8 +20,7 @@ class TimeEntry extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'feature_id',
-        'task_id',
+        'activity_id',
         'started_at',
         'stopped_at',
         'notes',
@@ -45,19 +44,11 @@ class TimeEntry extends Model
     }
 
     /**
-     * Get the feature this time entry belongs to.
+     * Get the activity this time entry belongs to.
      */
-    public function feature(): BelongsTo
+    public function activity(): BelongsTo
     {
-        return $this->belongsTo(Feature::class);
-    }
-
-    /**
-     * Get the task this time entry belongs to.
-     */
-    public function task(): BelongsTo
-    {
-        return $this->belongsTo(Task::class);
+        return $this->belongsTo(Activity::class);
     }
 
     /**

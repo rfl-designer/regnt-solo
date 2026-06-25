@@ -2,9 +2,9 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\DailyPlan;
-use App\Models\Task;
 use Carbon\Carbon;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -25,12 +25,12 @@ class SuggestTasksTool extends Tool
     public function handle(Request $request): Response
     {
         $plan = DailyPlan::getOrCreateForDate(Carbon::today());
-        $existingTaskIds = $plan->tasks()->pluck('tasks.id')->all();
+        $existingTaskIds = $plan->tasks()->pluck('activities.id')->all();
 
         $suggestions = collect();
 
         // 1. Overdue tasks first
-        $overdue = Task::query()
+        $overdue = Activity::query()
             ->with('project')
             ->overdue()
             ->whereNotIn('id', $existingTaskIds)
@@ -40,9 +40,9 @@ class SuggestTasksTool extends Tool
 
         // 2. Doing tasks
         if ($suggestions->count() < 10) {
-            $doing = Task::query()
+            $doing = Activity::query()
                 ->with('project')
-                ->byStatus(TaskStatus::Doing)
+                ->byStatus(ActivityStatus::Doing)
                 ->whereNotIn('id', $existingTaskIds)
                 ->whereNotIn('id', $suggestions->pluck('id'))
                 ->orderByRaw("CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END")
@@ -53,9 +53,9 @@ class SuggestTasksTool extends Tool
         // 3. Todo tasks ordered by priority
         if ($suggestions->count() < 10) {
             $remaining = 10 - $suggestions->count();
-            $todo = Task::query()
+            $todo = Activity::query()
                 ->with('project')
-                ->byStatus(TaskStatus::Todo)
+                ->byStatus(ActivityStatus::Todo)
                 ->whereNotIn('id', $existingTaskIds)
                 ->whereNotIn('id', $suggestions->pluck('id'))
                 ->orderByRaw("CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END")
@@ -64,7 +64,7 @@ class SuggestTasksTool extends Tool
             $suggestions = $suggestions->merge($todo);
         }
 
-        $data = $suggestions->take(10)->map(fn (Task $task) => [
+        $data = $suggestions->take(10)->map(fn (Activity $task) => [
             'id' => $task->id,
             'title' => $task->title,
             'status' => $task->status->value,

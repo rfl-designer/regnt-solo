@@ -2,7 +2,7 @@
 
 namespace App\Enums;
 
-enum FeaturePriority: string
+enum ActivityPriority: string
 {
     case Urgent = 'urgent';
     case High = 'high';

@@ -91,12 +91,12 @@ new class extends Component
                 $this->range->end()->endOfDay(),
             ])
             ->when($this->project !== '', function ($query): void {
-                $query->whereRelation('task', 'project_id', (int) $this->project);
+                $query->whereRelation('activity', 'project_id', (int) $this->project);
             })
             ->when($this->focusOnly, function ($query): void {
                 $query->where('is_focus_session', true);
             })
-            ->with('task.project')
+            ->with('activity.project')
             ->orderBy('started_at', 'desc')
             ->get();
     }
@@ -164,8 +164,8 @@ new class extends Component
             $dateFormatted = Carbon::parse($date)->format('d/m/Y');
 
             foreach ($entries as $entry) {
-                $task = $entry->task?->title ?? '-';
-                $project = $entry->task?->project?->name ?? '-';
+                $task = $entry->activity?->title ?? '-';
+                $project = $entry->activity?->project?->name ?? '-';
                 $duration = $this->formatDuration($entry->duration_minutes);
                 $focus = $entry->is_focus_session ? '🎯' : '';
                 $notes = $entry->notes ?? '-';
@@ -319,14 +319,14 @@ new class extends Component
                             </flux:table.cell>
 
                             <flux:table.cell>
-                                {{ $entry->task?->title ?? '-' }}
+                                {{ $entry->activity?->title ?? '-' }}
                             </flux:table.cell>
 
                             <flux:table.cell>
-                                @if ($entry->task?->project)
-                                    <div class="flex items-center gap-1 border-l-2 pl-1.5" style="border-color: {{ $entry->task->project->color }}">
-                                        <span class="text-xs">{{ $entry->task->project->emoji }}</span>
-                                        <span class="truncate text-xs text-zinc-400">{{ $entry->task->project->name }}</span>
+                                @if ($entry->activity?->project)
+                                    <div class="flex items-center gap-1 border-l-2 pl-1.5" style="border-color: {{ $entry->activity->project->color }}">
+                                        <span class="text-xs">{{ $entry->activity->project->emoji }}</span>
+                                        <span class="truncate text-xs text-zinc-400">{{ $entry->activity->project->name }}</span>
                                     </div>
                                 @else
                                     <flux:text class="text-xs text-zinc-500">-</flux:text>

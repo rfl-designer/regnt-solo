@@ -5,9 +5,9 @@ use App\Mcp\Tools\AddToPlanTool;
 use App\Mcp\Tools\ListProjectsTool;
 use App\Mcp\Tools\SuggestTasksTool;
 use App\Mcp\Tools\TodayPlanTool;
+use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
-use App\Models\Task;
 
 // TodayPlanTool tests
 test('today-plan creates plan if not exists', function () {
@@ -23,7 +23,7 @@ test('today-plan creates plan if not exists', function () {
 
 test('today-plan returns existing plan with tasks', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     $plan->tasks()->attach($task->id, ['sort_order' => 1]);
 
     $response = SoloBoardServer::tool(TodayPlanTool::class, []);
@@ -35,8 +35,8 @@ test('today-plan returns existing plan with tasks', function () {
 
 // SuggestTasksTool tests
 test('suggest-tasks prioritizes overdue tasks', function () {
-    $overdue = Task::factory()->overdue()->create(['title' => 'Overdue Task']);
-    $todo = Task::factory()->todo()->create(['title' => 'Todo Task']);
+    $overdue = Activity::factory()->overdue()->create(['title' => 'Overdue Task']);
+    $todo = Activity::factory()->todo()->create(['title' => 'Todo Task']);
 
     $response = SoloBoardServer::tool(SuggestTasksTool::class, []);
 
@@ -47,8 +47,8 @@ test('suggest-tasks prioritizes overdue tasks', function () {
 
 test('suggest-tasks excludes tasks already in plan', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $inPlan = Task::factory()->todo()->create(['title' => 'Already Planned']);
-    $notInPlan = Task::factory()->todo()->create(['title' => 'Not Planned']);
+    $inPlan = Activity::factory()->todo()->create(['title' => 'Already Planned']);
+    $notInPlan = Activity::factory()->todo()->create(['title' => 'Not Planned']);
     $plan->tasks()->attach($inPlan->id, ['sort_order' => 1]);
 
     $response = SoloBoardServer::tool(SuggestTasksTool::class, []);
@@ -59,7 +59,7 @@ test('suggest-tasks excludes tasks already in plan', function () {
 });
 
 test('suggest-tasks returns max 10 suggestions', function () {
-    Task::factory()->todo()->count(15)->create();
+    Activity::factory()->todo()->count(15)->create();
 
     $response = SoloBoardServer::tool(SuggestTasksTool::class, []);
 
@@ -69,7 +69,7 @@ test('suggest-tasks returns max 10 suggestions', function () {
 
 // AddToPlanTool tests
 test('add-to-plan adds task to today plan', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     $response = SoloBoardServer::tool(AddToPlanTool::class, [
         'task_id' => $task->id,
@@ -79,14 +79,14 @@ test('add-to-plan adds task to today plan', function () {
     $response->assertSee('"added": true');
     $response->assertSee($task->title);
 
-    $this->assertDatabaseHas('daily_plan_task', [
-        'task_id' => $task->id,
+    $this->assertDatabaseHas('daily_plan_activity', [
+        'activity_id' => $task->id,
     ]);
 });
 
 test('add-to-plan prevents duplicate additions', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     $plan->tasks()->attach($task->id, ['sort_order' => 1]);
 
     $response = SoloBoardServer::tool(AddToPlanTool::class, [
@@ -133,8 +133,8 @@ test('list-projects filters by status', function () {
 
 test('list-projects includes active task count', function () {
     $project = Project::factory()->create();
-    Task::factory()->count(3)->create(['project_id' => $project->id, 'status' => 'todo']);
-    Task::factory()->done()->create(['project_id' => $project->id]);
+    Activity::factory()->count(3)->create(['project_id' => $project->id, 'status' => 'todo']);
+    Activity::factory()->done()->create(['project_id' => $project->id]);
 
     $response = SoloBoardServer::tool(ListProjectsTool::class, []);
 

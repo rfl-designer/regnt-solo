@@ -40,7 +40,7 @@ class DailyPlan extends Model
      */
     public function tasks(): BelongsToMany
     {
-        return $this->belongsToMany(Task::class)
+        return $this->belongsToMany(Activity::class, 'daily_plan_activity', 'daily_plan_id', 'activity_id')
             ->withPivot('sort_order', 'completed_at')
             ->withTimestamps();
     }
@@ -68,7 +68,7 @@ class DailyPlan extends Model
                 return 0.0;
             }
 
-            $completed = $this->tasks->filter(fn (Task $t): bool => $t->pivot->completed_at !== null)->count();
+            $completed = $this->tasks->filter(fn (Activity $t): bool => $t->pivot->completed_at !== null)->count();
 
             return round(($completed / $total) * 100, 2);
         }
@@ -88,13 +88,13 @@ class DailyPlan extends Model
      * Get the incomplete tasks for this daily plan.
      * Excludes tasks that have status Done (even if not marked complete in the plan).
      *
-     * @return Collection<int, Task>
+     * @return Collection<int, Activity>
      */
     public function incompleteTasks(): Collection
     {
         return $this->tasks()
             ->wherePivotNull('completed_at')
-            ->where('status', '!=', \App\Enums\TaskStatus::Done)
+            ->where('status', '!=', \App\Enums\ActivityStatus::Done)
             ->get();
     }
 }

@@ -2,8 +2,8 @@
 
 namespace App\Mcp\Tools;
 
-use App\Models\Task;
-use App\Models\TaskCommit;
+use App\Models\Activity;
+use App\Models\ActivityCommit;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -21,7 +21,7 @@ class LogCommitsTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'task_id' => 'required|integer|exists:tasks,id',
+            'task_id' => 'required|integer|exists:activities,id',
             'commits' => 'required|array|min:1',
             'commits.*.hash' => 'required|string|max:40',
             'commits.*.message' => 'required|string',
@@ -38,7 +38,7 @@ class LogCommitsTool extends Tool
             'commits.*.message.required' => 'Each commit must have a message.',
         ]);
 
-        $task = Task::findOrFail($validated['task_id']);
+        $task = Activity::findOrFail($validated['task_id']);
 
         // Update PR URL if provided
         if (! empty($validated['pr_url'])) {
@@ -48,10 +48,10 @@ class LogCommitsTool extends Tool
         // Upsert commits — duplicates by hash are updated (commit may be reassigned between tasks)
         $commitsLogged = 0;
         foreach ($validated['commits'] as $commitData) {
-            TaskCommit::updateOrCreate(
+            ActivityCommit::updateOrCreate(
                 ['hash' => $commitData['hash']],
                 [
-                    'task_id' => $task->id,
+                    'activity_id' => $task->id,
                     'message' => $commitData['message'],
                     'files_changed' => $commitData['files_changed'] ?? 0,
                     'insertions' => $commitData['insertions'] ?? 0,
@@ -70,7 +70,7 @@ class LogCommitsTool extends Tool
             'pr_url' => $task->pr_url,
             'commits_logged' => $commitsLogged,
             'total_commits' => $task->commits->count(),
-            'commits' => $task->commits->sortByDesc('committed_at')->values()->map(fn (TaskCommit $c) => [
+            'commits' => $task->commits->sortByDesc('committed_at')->values()->map(fn (ActivityCommit $c) => [
                 'hash' => $c->hash,
                 'message' => $c->message,
                 'files_changed' => $c->files_changed,

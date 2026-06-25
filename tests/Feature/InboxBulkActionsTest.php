@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\TaskStatus;
-use App\Models\Task;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -9,15 +9,15 @@ beforeEach(function () {
 });
 
 test('can select all tasks', function () {
-    Task::factory()->count(3)->create();
+    Activity::factory()->count(3)->create();
 
     Livewire::test('pages::inbox')
         ->call('selectAll')
-        ->assertSet('selectedTasks', Task::inbox()->pluck('id')->map(fn ($id) => (int) $id)->all());
+        ->assertSet('selectedTasks', Activity::inbox()->pluck('id')->map(fn ($id) => (int) $id)->all());
 });
 
 test('can deselect all tasks', function () {
-    $tasks = Task::factory()->count(3)->create();
+    $tasks = Activity::factory()->count(3)->create();
 
     Livewire::test('pages::inbox')
         ->set('selectedTasks', $tasks->pluck('id')->all())
@@ -26,57 +26,57 @@ test('can deselect all tasks', function () {
 });
 
 test('bulk move to status moves selected tasks', function () {
-    $task1 = Task::factory()->create(['title' => 'Task 1']);
-    $task2 = Task::factory()->create(['title' => 'Task 2']);
-    $task3 = Task::factory()->create(['title' => 'Task 3']);
+    $task1 = Activity::factory()->create(['title' => 'Task 1']);
+    $task2 = Activity::factory()->create(['title' => 'Task 2']);
+    $task3 = Activity::factory()->create(['title' => 'Task 3']);
 
     Livewire::test('pages::inbox')
         ->set('selectedTasks', [$task1->id, $task2->id])
-        ->call('bulkMoveToStatus', TaskStatus::Backlog->value);
+        ->call('bulkMoveToStatus', ActivityStatus::Backlog->value);
 
-    expect($task1->fresh()->status)->toBe(TaskStatus::Backlog)
-        ->and($task2->fresh()->status)->toBe(TaskStatus::Backlog)
-        ->and($task3->fresh()->status)->toBe(TaskStatus::Inbox);
+    expect($task1->fresh()->status)->toBe(ActivityStatus::Backlog)
+        ->and($task2->fresh()->status)->toBe(ActivityStatus::Backlog)
+        ->and($task3->fresh()->status)->toBe(ActivityStatus::Inbox);
 });
 
 test('bulk move to done sets completed_at', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('pages::inbox')
         ->set('selectedTasks', [$task->id])
-        ->call('bulkMoveToStatus', TaskStatus::Done->value);
+        ->call('bulkMoveToStatus', ActivityStatus::Done->value);
 
     $task->refresh();
 
-    expect($task->status)->toBe(TaskStatus::Done)
+    expect($task->status)->toBe(ActivityStatus::Done)
         ->and($task->completed_at)->not->toBeNull();
 });
 
 test('bulk move clears selection after action', function () {
-    $tasks = Task::factory()->count(2)->create();
+    $tasks = Activity::factory()->count(2)->create();
 
     Livewire::test('pages::inbox')
         ->set('selectedTasks', $tasks->pluck('id')->all())
-        ->call('bulkMoveToStatus', TaskStatus::Todo->value)
+        ->call('bulkMoveToStatus', ActivityStatus::Todo->value)
         ->assertSet('selectedTasks', []);
 });
 
 test('bulk delete removes selected tasks', function () {
-    $task1 = Task::factory()->create(['title' => 'Task 1']);
-    $task2 = Task::factory()->create(['title' => 'Task 2']);
-    $task3 = Task::factory()->create(['title' => 'Task 3']);
+    $task1 = Activity::factory()->create(['title' => 'Task 1']);
+    $task2 = Activity::factory()->create(['title' => 'Task 2']);
+    $task3 = Activity::factory()->create(['title' => 'Task 3']);
 
     Livewire::test('pages::inbox')
         ->set('selectedTasks', [$task1->id, $task2->id])
         ->call('bulkDelete');
 
-    expect(Task::find($task1->id))->toBeNull()
-        ->and(Task::find($task2->id))->toBeNull()
-        ->and(Task::find($task3->id))->not->toBeNull();
+    expect(Activity::find($task1->id))->toBeNull()
+        ->and(Activity::find($task2->id))->toBeNull()
+        ->and(Activity::find($task3->id))->not->toBeNull();
 });
 
 test('bulk delete clears selection after action', function () {
-    $tasks = Task::factory()->count(2)->create();
+    $tasks = Activity::factory()->count(2)->create();
 
     Livewire::test('pages::inbox')
         ->set('selectedTasks', $tasks->pluck('id')->all())
@@ -86,7 +86,7 @@ test('bulk delete clears selection after action', function () {
 });
 
 test('confirm bulk delete opens modal', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('pages::inbox')
         ->set('selectedTasks', [$task->id])
@@ -95,19 +95,19 @@ test('confirm bulk delete opens modal', function () {
 });
 
 test('bulk actions only affect inbox tasks', function () {
-    $inboxTask = Task::factory()->create();
-    $backlogTask = Task::factory()->backlog()->create();
+    $inboxTask = Activity::factory()->create();
+    $backlogTask = Activity::factory()->backlog()->create();
 
     Livewire::test('pages::inbox')
         ->set('selectedTasks', [$inboxTask->id, $backlogTask->id])
-        ->call('bulkMoveToStatus', TaskStatus::Todo->value);
+        ->call('bulkMoveToStatus', ActivityStatus::Todo->value);
 
-    expect($inboxTask->fresh()->status)->toBe(TaskStatus::Todo)
-        ->and($backlogTask->fresh()->status)->toBe(TaskStatus::Backlog);
+    expect($inboxTask->fresh()->status)->toBe(ActivityStatus::Todo)
+        ->and($backlogTask->fresh()->status)->toBe(ActivityStatus::Backlog);
 });
 
 test('bulk actions bar shows when tasks are selected', function () {
-    $task = Task::factory()->create(['title' => 'Task selecionada']);
+    $task = Activity::factory()->create(['title' => 'Task selecionada']);
 
     Livewire::test('pages::inbox')
         ->set('selectedTasks', [$task->id])
@@ -117,7 +117,7 @@ test('bulk actions bar shows when tasks are selected', function () {
 });
 
 test('bulk actions bar shows plural when multiple tasks selected', function () {
-    $tasks = Task::factory()->count(3)->create();
+    $tasks = Activity::factory()->count(3)->create();
 
     Livewire::test('pages::inbox')
         ->set('selectedTasks', $tasks->pluck('id')->all())
@@ -125,7 +125,7 @@ test('bulk actions bar shows plural when multiple tasks selected', function () {
 });
 
 test('checkbox select all header is rendered', function () {
-    Task::factory()->create();
+    Activity::factory()->create();
 
     Livewire::test('pages::inbox')
         ->assertSee('selectAll');

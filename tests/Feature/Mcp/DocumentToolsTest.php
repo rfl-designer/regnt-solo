@@ -1,7 +1,7 @@
 <?php
 
+use App\Enums\ActivityStatus;
 use App\Enums\DocumentType;
-use App\Enums\TaskStatus;
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\CreateDocumentTool;
 use App\Mcp\Tools\DeleteDocumentTool;
@@ -9,9 +9,9 @@ use App\Mcp\Tools\GetDocumentTool;
 use App\Mcp\Tools\GetProjectContextTool;
 use App\Mcp\Tools\ListDocumentsTool;
 use App\Mcp\Tools\UpdateDocumentTool;
+use App\Models\Activity;
 use App\Models\Document;
 use App\Models\Project;
-use App\Models\Task;
 
 // ListDocumentsTool tests
 test('list-documents returns all documents', function () {
@@ -383,8 +383,8 @@ test('delete-document fails for non-existent document', function () {
 test('get-project-context returns full context', function () {
     $project = Project::factory()->create(['slug' => 'test-project', 'name' => 'Test Project']);
     Document::factory()->create(['project_id' => $project->id, 'title' => 'Project PRD']);
-    Task::factory()->create(['project_id' => $project->id, 'status' => TaskStatus::Todo, 'title' => 'Active Task']);
-    Task::factory()->create(['project_id' => $project->id, 'status' => TaskStatus::Done, 'title' => 'Done Task']);
+    Activity::factory()->create(['project_id' => $project->id, 'status' => ActivityStatus::Todo, 'title' => 'Active Task']);
+    Activity::factory()->create(['project_id' => $project->id, 'status' => ActivityStatus::Done, 'title' => 'Done Task']);
 
     $response = SoloBoardServer::tool(GetProjectContextTool::class, [
         'project_slug' => 'test-project',
@@ -416,9 +416,9 @@ test('get-project-context returns documents with content', function () {
 
 test('get-project-context returns metrics', function () {
     $project = Project::factory()->create(['slug' => 'metrics-project']);
-    Task::factory()->create(['project_id' => $project->id, 'status' => TaskStatus::Inbox]);
-    Task::factory()->create(['project_id' => $project->id, 'status' => TaskStatus::Todo]);
-    Task::factory()->create(['project_id' => $project->id, 'status' => TaskStatus::Done]);
+    Activity::factory()->create(['project_id' => $project->id, 'status' => ActivityStatus::Inbox]);
+    Activity::factory()->create(['project_id' => $project->id, 'status' => ActivityStatus::Todo]);
+    Activity::factory()->create(['project_id' => $project->id, 'status' => ActivityStatus::Done]);
 
     $response = SoloBoardServer::tool(GetProjectContextTool::class, [
         'project_slug' => 'metrics-project',
@@ -433,9 +433,9 @@ test('get-project-context returns metrics', function () {
 
 test('get-project-context returns active tasks with session prompt', function () {
     $project = Project::factory()->create(['slug' => 'session-project']);
-    Task::factory()->session()->create([
+    Activity::factory()->session()->create([
         'project_id' => $project->id,
-        'status' => TaskStatus::Doing,
+        'status' => ActivityStatus::Doing,
         'title' => 'Session Task',
     ]);
 

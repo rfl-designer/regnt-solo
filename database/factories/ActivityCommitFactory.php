@@ -2,14 +2,14 @@
 
 namespace Database\Factories;
 
-use App\Models\Task;
-use App\Models\TaskCommit;
+use App\Models\Activity;
+use App\Models\ActivityCommit;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<TaskCommit>
+ * @extends Factory<ActivityCommit>
  */
-class TaskCommitFactory extends Factory
+class ActivityCommitFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -19,7 +19,7 @@ class TaskCommitFactory extends Factory
     public function definition(): array
     {
         return [
-            'task_id' => Task::factory(),
+            'activity_id' => Activity::factory(),
             'hash' => fake()->sha1(),
             'message' => fake()->sentence(),
             'files_changed' => fake()->numberBetween(1, 20),

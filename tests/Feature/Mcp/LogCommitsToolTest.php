@@ -2,11 +2,11 @@
 
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\LogCommitsTool;
-use App\Models\Task;
-use App\Models\TaskCommit;
+use App\Models\Activity;
+use App\Models\ActivityCommit;
 
 test('log-commits registers commits for a task', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     $response = SoloBoardServer::tool(LogCommitsTool::class, [
         'task_id' => $task->id,
@@ -34,18 +34,18 @@ test('log-commits registers commits for a task', function () {
     $response->assertSee('"commits_logged": 2');
     $response->assertSee('"total_commits": 2');
 
-    $this->assertDatabaseCount('task_commits', 2);
-    $this->assertDatabaseHas('task_commits', [
-        'task_id' => $task->id,
+    $this->assertDatabaseCount('activity_commits', 2);
+    $this->assertDatabaseHas('activity_commits', [
+        'activity_id' => $task->id,
         'hash' => 'abc1234567890',
         'message' => 'feat: add user model',
     ]);
 });
 
 test('log-commits ignores duplicate commits by hash', function () {
-    $task = Task::factory()->create();
-    TaskCommit::factory()->create([
-        'task_id' => $task->id,
+    $task = Activity::factory()->create();
+    ActivityCommit::factory()->create([
+        'activity_id' => $task->id,
         'hash' => 'existing_hash_123',
         'message' => 'old message',
     ]);
@@ -69,16 +69,16 @@ test('log-commits ignores duplicate commits by hash', function () {
 
     $response->assertOk();
 
-    $this->assertDatabaseCount('task_commits', 2);
+    $this->assertDatabaseCount('activity_commits', 2);
     // The existing commit should be updated (upsert behavior)
-    $this->assertDatabaseHas('task_commits', [
+    $this->assertDatabaseHas('activity_commits', [
         'hash' => 'existing_hash_123',
         'message' => 'updated message',
     ]);
 });
 
 test('log-commits updates pr_url when provided', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     $response = SoloBoardServer::tool(LogCommitsTool::class, [
         'task_id' => $task->id,
@@ -94,7 +94,7 @@ test('log-commits updates pr_url when provided', function () {
     $response->assertOk();
     $response->assertSee('https:\/\/github.com\/user\/repo\/pull\/42');
 
-    $this->assertDatabaseHas('tasks', [
+    $this->assertDatabaseHas('activities', [
         'id' => $task->id,
         'pr_url' => 'https://github.com/user/repo/pull/42',
     ]);
@@ -112,7 +112,7 @@ test('log-commits fails for non-existent task', function () {
 });
 
 test('log-commits fails without commits', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     $response = SoloBoardServer::tool(LogCommitsTool::class, [
         'task_id' => $task->id,
@@ -123,27 +123,27 @@ test('log-commits fails without commits', function () {
 });
 
 test('cascade delete removes commits when task is deleted', function () {
-    $task = Task::factory()->create();
-    TaskCommit::factory()->count(3)->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    ActivityCommit::factory()->count(3)->create(['activity_id' => $task->id]);
 
-    $this->assertDatabaseCount('task_commits', 3);
+    $this->assertDatabaseCount('activity_commits', 3);
 
     $task->delete();
 
-    $this->assertDatabaseCount('task_commits', 0);
+    $this->assertDatabaseCount('activity_commits', 0);
 });
 
 test('task commitCount returns correct count', function () {
-    $task = Task::factory()->create();
-    TaskCommit::factory()->count(5)->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    ActivityCommit::factory()->count(5)->create(['activity_id' => $task->id]);
 
     expect($task->commitCount())->toBe(5);
 });
 
 test('task totalFilesChanged returns correct sum', function () {
-    $task = Task::factory()->create();
-    TaskCommit::factory()->create(['task_id' => $task->id, 'files_changed' => 3]);
-    TaskCommit::factory()->create(['task_id' => $task->id, 'files_changed' => 7]);
+    $task = Activity::factory()->create();
+    ActivityCommit::factory()->create(['activity_id' => $task->id, 'files_changed' => 3]);
+    ActivityCommit::factory()->create(['activity_id' => $task->id, 'files_changed' => 7]);
 
     expect($task->totalFilesChanged())->toBe(10);
 });

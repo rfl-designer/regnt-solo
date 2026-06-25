@@ -3,7 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Console\Commands\RalphExportCommand;
-use App\Models\Feature;
+use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -23,15 +23,15 @@ class RalphExportTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'feature_id' => 'required|integer|exists:features,id',
+            'feature_id' => 'required|integer|exists:activities,id',
             'max_iterations' => 'integer|min:1|max:100',
         ], [
             'feature_id.required' => 'You must provide a feature_id. Use list-features to find available feature IDs.',
             'feature_id.exists' => 'Feature not found. Use list-features to find available feature IDs.',
         ]);
 
-        $feature = Feature::query()
-            ->with(['project', 'tasks.project'])
+        $feature = Activity::query()->epics()
+            ->with(['project', 'children.project'])
             ->findOrFail($validated['feature_id']);
 
         $maxIterations = $validated['max_iterations'] ?? 10;

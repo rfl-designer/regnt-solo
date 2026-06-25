@@ -7,9 +7,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class TaskCommit extends Model
+class ActivityCommit extends Model
 {
-    /** @use HasFactory<\Database\Factories\TaskCommitFactory> */
+    /** @use HasFactory<\Database\Factories\ActivityCommitFactory> */
     use HasFactory;
 
     /**
@@ -18,7 +18,7 @@ class TaskCommit extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'task_id',
+        'activity_id',
         'hash',
         'message',
         'files_changed',
@@ -43,19 +43,19 @@ class TaskCommit extends Model
     }
 
     /**
-     * Get the task this commit belongs to.
+     * Get the activity this commit belongs to.
      */
-    public function task(): BelongsTo
+    public function activity(): BelongsTo
     {
-        return $this->belongsTo(Task::class);
+        return $this->belongsTo(Activity::class);
     }
 
     /**
-     * Scope to filter commits by task.
+     * Scope to filter commits by activity.
      */
-    public function scopeForTask(Builder $query, int $taskId): void
+    public function scopeForActivity(Builder $query, int $activityId): void
     {
-        $query->where('task_id', $taskId);
+        $query->where('activity_id', $activityId);
     }
 
     /**

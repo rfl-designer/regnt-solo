@@ -1,6 +1,6 @@
 <?php
 
-use App\Enums\FeaturePriority;
+use App\Enums\ActivityPriority;
 use App\Mcp\Prompts\FeaturePlanningPrompt;
 use App\Mcp\Resources\ProjectOverviewResource;
 use App\Mcp\Servers\SoloBoardServer;
@@ -10,16 +10,15 @@ use App\Mcp\Tools\DeleteFeatureTool;
 use App\Mcp\Tools\GetFeatureTool;
 use App\Mcp\Tools\ListFeaturesTool;
 use App\Mcp\Tools\UpdateFeatureTool;
-use App\Models\Feature;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TimeEntry;
 
 // ListFeaturesTool tests
 test('list-features returns all features', function () {
-    $feature1 = Feature::factory()->create(['title' => 'Feature Alpha']);
-    $feature2 = Feature::factory()->create(['title' => 'Feature Beta']);
-    $feature3 = Feature::factory()->create(['title' => 'Feature Gamma']);
+    $feature1 = Activity::factory()->epic()->create(['title' => 'Feature Alpha']);
+    $feature2 = Activity::factory()->epic()->create(['title' => 'Feature Beta']);
+    $feature3 = Activity::factory()->epic()->create(['title' => 'Feature Gamma']);
 
     $response = SoloBoardServer::tool(ListFeaturesTool::class, []);
 
@@ -31,8 +30,8 @@ test('list-features returns all features', function () {
 
 test('list-features filters by project slug', function () {
     $project = Project::factory()->create();
-    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Project Feature']);
-    Feature::factory()->create(['project_id' => null, 'title' => 'Unassigned Feature']);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'title' => 'Project Feature']);
+    Activity::factory()->epic()->create(['project_id' => null, 'title' => 'Unassigned Feature']);
 
     $response = SoloBoardServer::tool(ListFeaturesTool::class, [
         'project_slug' => $project->slug,
@@ -45,9 +44,10 @@ test('list-features filters by project slug', function () {
 
 test('list-features filters by status', function () {
     // Status is now a persisted column, set explicitly
-    Feature::factory()->create(['title' => 'Draft Feature', 'status' => 'draft']);
-    Feature::factory()->create(['title' => 'Doing Feature', 'status' => 'doing']);
-    Feature::factory()->create(['title' => 'Done Feature', 'status' => 'done']);
+    // ADR: 'draft' status retired, backlog is the default initial status for epics
+    Activity::factory()->epic()->create(['title' => 'Backlog Feature', 'status' => 'backlog']);
+    Activity::factory()->epic()->create(['title' => 'Doing Feature', 'status' => 'doing']);
+    Activity::factory()->epic()->create(['title' => 'Done Feature', 'status' => 'done']);
 
     $response = SoloBoardServer::tool(ListFeaturesTool::class, [
         'status' => 'doing',
@@ -55,14 +55,14 @@ test('list-features filters by status', function () {
 
     $response->assertOk();
     $response->assertSee('Doing Feature');
-    $response->assertDontSee('Draft Feature');
+    $response->assertDontSee('Backlog Feature');
     $response->assertDontSee('Done Feature');
 });
 
 test('list-features returns progress and counts', function () {
-    $feature = Feature::factory()->create(['title' => 'Progress Feature']);
-    Task::factory()->count(3)->done()->create(['feature_id' => $feature->id]);
-    Task::factory()->count(2)->todo()->create(['feature_id' => $feature->id]);
+    $feature = Activity::factory()->epic()->create(['title' => 'Progress Feature']);
+    Activity::factory()->count(3)->done()->create(['parent_id' => $feature->id]);
+    Activity::factory()->count(2)->todo()->create(['parent_id' => $feature->id]);
 
     $response = SoloBoardServer::tool(ListFeaturesTool::class, []);
 
@@ -83,12 +83,12 @@ test('list-features fails with invalid project slug', function () {
 // GetFeatureTool tests
 test('get-feature returns feature with full details', function () {
     $project = Project::factory()->create();
-    $feature = Feature::factory()->create([
+    $feature = Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'spec' => '## Feature Spec Content',
     ]);
-    Task::factory()->count(2)->create(['feature_id' => $feature->id]);
-    TimeEntry::factory()->create(['feature_id' => $feature->id, 'task_id' => null]);
+    Activity::factory()->count(2)->create(['parent_id' => $feature->id]);
+    TimeEntry::factory()->create(['activity_id' => $feature->id]);
 
     $response = SoloBoardServer::tool(GetFeatureTool::class, [
         'feature_id' => $feature->id,
@@ -120,9 +120,10 @@ test('create-feature creates a new feature', function () {
 
     $response->assertOk();
     $response->assertSee('User Authentication');
-    $response->assertSee('"status": "draft"');
+    // ADR: 'draft' status retired; create-feature now defaults to 'backlog'
+    $response->assertSee('"status": "backlog"');
 
-    $this->assertDatabaseHas('features', [
+    $this->assertDatabaseHas('activities', [
         'title' => 'User Authentication',
         'priority' => 'high',
     ]);
@@ -138,7 +139,7 @@ test('create-feature assigns to project by slug', function () {
 
     $response->assertOk();
 
-    $this->assertDatabaseHas('features', [
+    $this->assertDatabaseHas('activities', [
         'title' => 'Dashboard Widgets',
         'project_id' => $project->id,
     ]);
@@ -151,9 +152,9 @@ test('create-feature uses default priority', function () {
 
     $response->assertOk();
 
-    $this->assertDatabaseHas('features', [
+    $this->assertDatabaseHas('activities', [
         'title' => 'Simple Feature',
-        'priority' => FeaturePriority::Medium->value,
+        'priority' => ActivityPriority::Medium->value,
     ]);
 });
 
@@ -174,7 +175,7 @@ test('create-feature fails without title', function () {
 
 // UpdateFeatureTool tests
 test('update-feature updates title and spec', function () {
-    $feature = Feature::factory()->create([
+    $feature = Activity::factory()->epic()->create([
         'title' => 'Original Title',
         'spec' => 'Original spec',
     ]);
@@ -196,7 +197,7 @@ test('update-feature updates title and spec', function () {
 test('update-feature changes project', function () {
     $oldProject = Project::factory()->create();
     $newProject = Project::factory()->create();
-    $feature = Feature::factory()->create(['project_id' => $oldProject->id]);
+    $feature = Activity::factory()->epic()->create(['project_id' => $oldProject->id]);
 
     $response = SoloBoardServer::tool(UpdateFeatureTool::class, [
         'feature_id' => $feature->id,
@@ -210,7 +211,7 @@ test('update-feature changes project', function () {
 });
 
 test('update-feature changes priority', function () {
-    $feature = Feature::factory()->create(['priority' => FeaturePriority::Low]);
+    $feature = Activity::factory()->epic()->create(['priority' => ActivityPriority::Low]);
 
     $response = SoloBoardServer::tool(UpdateFeatureTool::class, [
         'feature_id' => $feature->id,
@@ -220,11 +221,11 @@ test('update-feature changes priority', function () {
     $response->assertOk();
 
     $feature->refresh();
-    expect($feature->priority)->toBe(FeaturePriority::Urgent);
+    expect($feature->priority)->toBe(ActivityPriority::Urgent);
 });
 
 test('update-feature persists status column', function () {
-    $feature = Feature::factory()->create(['status' => 'backlog']);
+    $feature = Activity::factory()->epic()->create(['status' => 'backlog']);
 
     $response = SoloBoardServer::tool(UpdateFeatureTool::class, [
         'feature_id' => $feature->id,
@@ -234,14 +235,14 @@ test('update-feature persists status column', function () {
     $response->assertOk();
     $response->assertSee('"status": "doing"');
 
-    $this->assertDatabaseHas('features', [
+    $this->assertDatabaseHas('activities', [
         'id' => $feature->id,
         'status' => 'doing',
     ]);
 });
 
 test('update-feature rejects invalid status', function () {
-    $feature = Feature::factory()->create();
+    $feature = Activity::factory()->epic()->create();
 
     $response = SoloBoardServer::tool(UpdateFeatureTool::class, [
         'feature_id' => $feature->id,
@@ -271,7 +272,7 @@ test('create-feature persists github_issue_number and github_synced_hash', funct
     $response->assertOk();
     $response->assertSee('"github_issue_number": 42');
 
-    $this->assertDatabaseHas('features', [
+    $this->assertDatabaseHas('activities', [
         'title' => 'Mirrored Feature',
         'github_issue_number' => 42,
         'github_synced_hash' => 'hash-abc',
@@ -293,9 +294,9 @@ test('create-feature upserts by github_issue_number without duplicating', functi
 
     $response->assertOk();
 
-    expect(Feature::query()->where('github_issue_number', 100)->count())->toBe(1);
+    expect(Activity::query()->epics()->where('github_issue_number', 100)->count())->toBe(1);
 
-    $this->assertDatabaseHas('features', [
+    $this->assertDatabaseHas('activities', [
         'github_issue_number' => 100,
         'title' => 'Rewritten Title',
         'github_synced_hash' => 'hash-2',
@@ -303,7 +304,7 @@ test('create-feature upserts by github_issue_number without duplicating', functi
 });
 
 test('update-feature persists github_issue_number and github_synced_hash', function () {
-    $feature = Feature::factory()->create();
+    $feature = Activity::factory()->epic()->create();
 
     $response = SoloBoardServer::tool(UpdateFeatureTool::class, [
         'feature_id' => $feature->id,
@@ -314,7 +315,7 @@ test('update-feature persists github_issue_number and github_synced_hash', funct
     $response->assertOk();
     $response->assertSee('"github_issue_number": 7');
 
-    $this->assertDatabaseHas('features', [
+    $this->assertDatabaseHas('activities', [
         'id' => $feature->id,
         'github_issue_number' => 7,
         'github_synced_hash' => 'hash-xyz',
@@ -322,7 +323,7 @@ test('update-feature persists github_issue_number and github_synced_hash', funct
 });
 
 test('mirroring a feature via update-feature without status does not change a defined status', function () {
-    $feature = Feature::factory()->create([
+    $feature = Activity::factory()->epic()->create([
         'status' => 'doing',
         'github_issue_number' => 55,
     ]);
@@ -342,7 +343,7 @@ test('mirroring a feature via update-feature without status does not change a de
 });
 
 test('list-features and get-feature expose github fields', function () {
-    $feature = Feature::factory()->create([
+    $feature = Activity::factory()->epic()->create([
         'github_issue_number' => 321,
         'github_synced_hash' => 'list-hash',
     ]);
@@ -360,9 +361,9 @@ test('list-features and get-feature expose github fields', function () {
 
 // DeleteFeatureTool tests
 test('delete-feature removes feature and unlinks tasks', function () {
-    $feature = Feature::factory()->create();
-    $tasks = Task::factory()->count(3)->create(['feature_id' => $feature->id]);
-    TimeEntry::factory()->count(2)->create(['feature_id' => $feature->id, 'task_id' => null]);
+    $feature = Activity::factory()->epic()->create();
+    $tasks = Activity::factory()->count(3)->create(['parent_id' => $feature->id]);
+    TimeEntry::factory()->count(2)->create(['activity_id' => $feature->id]);
 
     $response = SoloBoardServer::tool(DeleteFeatureTool::class, [
         'feature_id' => $feature->id,
@@ -373,14 +374,14 @@ test('delete-feature removes feature and unlinks tasks', function () {
     $response->assertSee('"tasks_unlinked": 3');
     $response->assertSee('"time_entries_deleted": 2');
 
-    $this->assertDatabaseMissing('features', ['id' => $feature->id]);
-    $this->assertDatabaseMissing('time_entries', ['feature_id' => $feature->id]);
+    $this->assertDatabaseMissing('activities', ['id' => $feature->id]);
+    $this->assertDatabaseMissing('time_entries', ['activity_id' => $feature->id]);
 
-    // Tasks should still exist but with null feature_id
+    // Tasks should still exist but with null parent_id
     foreach ($tasks as $task) {
-        $this->assertDatabaseHas('tasks', [
+        $this->assertDatabaseHas('activities', [
             'id' => $task->id,
-            'feature_id' => null,
+            'parent_id' => null,
         ]);
     }
 });
@@ -395,8 +396,8 @@ test('delete-feature fails for non-existent feature', function () {
 
 // AddTaskToFeatureTool tests
 test('add-task-to-feature links task to feature', function () {
-    $task = Task::factory()->create(['feature_id' => null]);
-    $feature = Feature::factory()->create();
+    $task = Activity::factory()->create(['parent_id' => null]);
+    $feature = Activity::factory()->epic()->create();
 
     $response = SoloBoardServer::tool(AddTaskToFeatureTool::class, [
         'task_id' => $task->id,
@@ -407,13 +408,13 @@ test('add-task-to-feature links task to feature', function () {
     $response->assertSee('linked to feature');
 
     $task->refresh();
-    expect($task->feature_id)->toBe($feature->id);
+    expect($task->parent_id)->toBe($feature->id);
 });
 
 test('add-task-to-feature inherits project from feature', function () {
     $project = Project::factory()->create();
-    $feature = Feature::factory()->create(['project_id' => $project->id]);
-    $task = Task::factory()->create(['feature_id' => null, 'project_id' => null]);
+    $feature = Activity::factory()->epic()->create(['project_id' => $project->id]);
+    $task = Activity::factory()->create(['parent_id' => null, 'project_id' => null]);
 
     $response = SoloBoardServer::tool(AddTaskToFeatureTool::class, [
         'task_id' => $task->id,
@@ -423,15 +424,15 @@ test('add-task-to-feature inherits project from feature', function () {
     $response->assertOk();
 
     $task->refresh();
-    expect($task->feature_id)->toBe($feature->id);
+    expect($task->parent_id)->toBe($feature->id);
     expect($task->project_id)->toBe($project->id);
 });
 
 test('add-task-to-feature does not override existing project', function () {
     $taskProject = Project::factory()->create();
     $featureProject = Project::factory()->create();
-    $feature = Feature::factory()->create(['project_id' => $featureProject->id]);
-    $task = Task::factory()->create(['feature_id' => null, 'project_id' => $taskProject->id]);
+    $feature = Activity::factory()->epic()->create(['project_id' => $featureProject->id]);
+    $task = Activity::factory()->create(['parent_id' => null, 'project_id' => $taskProject->id]);
 
     $response = SoloBoardServer::tool(AddTaskToFeatureTool::class, [
         'task_id' => $task->id,
@@ -441,12 +442,12 @@ test('add-task-to-feature does not override existing project', function () {
     $response->assertOk();
 
     $task->refresh();
-    expect($task->feature_id)->toBe($feature->id);
+    expect($task->parent_id)->toBe($feature->id);
     expect($task->project_id)->toBe($taskProject->id);
 });
 
 test('add-task-to-feature fails for non-existent task', function () {
-    $feature = Feature::factory()->create();
+    $feature = Activity::factory()->epic()->create();
 
     $response = SoloBoardServer::tool(AddTaskToFeatureTool::class, [
         'task_id' => 999,
@@ -457,7 +458,7 @@ test('add-task-to-feature fails for non-existent task', function () {
 });
 
 test('add-task-to-feature fails for non-existent feature', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     $response = SoloBoardServer::tool(AddTaskToFeatureTool::class, [
         'task_id' => $task->id,
@@ -470,8 +471,8 @@ test('add-task-to-feature fails for non-existent feature', function () {
 // ProjectOverviewResource tests (features section)
 test('overview resource includes active features', function () {
     // Status is now a persisted column, set explicitly
-    Feature::factory()->create(['title' => 'Active Feature', 'status' => 'doing']);
-    Feature::factory()->create(['title' => 'Completed Feature', 'status' => 'done']);
+    Activity::factory()->epic()->create(['title' => 'Active Feature', 'status' => 'doing']);
+    Activity::factory()->epic()->create(['title' => 'Completed Feature', 'status' => 'done']);
 
     $response = SoloBoardServer::resource(ProjectOverviewResource::class);
 
@@ -485,12 +486,12 @@ test('overview resource includes active features', function () {
 // FeaturePlanningPrompt tests
 test('feature-planning prompt returns planning context', function () {
     $project = Project::factory()->create(['description' => 'Project description']);
-    $feature = Feature::factory()->create([
+    $feature = Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'spec' => '## Feature Spec\n- Item 1\n- Item 2',
     ]);
-    Task::factory()->doing()->create(['feature_id' => $feature->id, 'title' => 'Task In Progress']);
-    Task::factory()->done()->create(['feature_id' => $feature->id, 'title' => 'Completed Task']);
+    Activity::factory()->doing()->create(['parent_id' => $feature->id, 'title' => 'Task In Progress']);
+    Activity::factory()->done()->create(['parent_id' => $feature->id, 'title' => 'Completed Task']);
 
     $response = SoloBoardServer::prompt(FeaturePlanningPrompt::class, [
         'feature_id' => $feature->id,

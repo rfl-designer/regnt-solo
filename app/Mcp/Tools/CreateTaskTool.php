@@ -2,10 +2,11 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
@@ -27,12 +28,12 @@ class CreateTaskTool extends Tool
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'project_slug' => 'nullable|string|exists:projects,slug',
-            'status' => ['nullable', 'string', Rule::enum(TaskStatus::class)],
-            'priority' => ['nullable', 'string', Rule::enum(TaskPriority::class)],
+            'status' => ['nullable', 'string', Rule::enum(ActivityStatus::class)],
+            'priority' => ['nullable', 'string', Rule::enum(ActivityPriority::class)],
             'due_date' => 'nullable|date',
             'estimated_minutes' => 'nullable|integer|min:1',
             'session_prompt' => 'nullable|string',
-            'feature_id' => 'nullable|integer|exists:features,id',
+            'feature_id' => 'nullable|integer|exists:activities,id',
             'github_issue_number' => 'nullable|integer',
             'github_synced_hash' => 'nullable|string',
         ], [
@@ -49,18 +50,19 @@ class CreateTaskTool extends Tool
         }
 
         $payload = [
+            'type' => ActivityType::Task,
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'project_id' => $projectId,
-            'status' => $validated['status'] ?? TaskStatus::Inbox,
-            'priority' => $validated['priority'] ?? TaskPriority::Medium,
+            'status' => $validated['status'] ?? ActivityStatus::Inbox,
+            'priority' => $validated['priority'] ?? ActivityPriority::Medium,
             'due_date' => $validated['due_date'] ?? null,
             'estimated_minutes' => $validated['estimated_minutes'] ?? null,
             'session_prompt' => $validated['session_prompt'] ?? null,
         ];
 
         if (array_key_exists('feature_id', $validated)) {
-            $payload['feature_id'] = $validated['feature_id'];
+            $payload['parent_id'] = $validated['feature_id'];
         }
 
         if (array_key_exists('github_synced_hash', $validated)) {
@@ -68,15 +70,15 @@ class CreateTaskTool extends Tool
         }
 
         if (! empty($validated['github_issue_number'])) {
-            $task = Task::updateOrCreate(
+            $task = Activity::updateOrCreate(
                 ['github_issue_number' => $validated['github_issue_number']],
                 $payload,
             );
         } else {
-            $task = Task::create($payload);
+            $task = Activity::create($payload);
         }
 
-        if ($task->status === TaskStatus::Done && $task->completed_at === null) {
+        if ($task->status === ActivityStatus::Done && $task->completed_at === null) {
             $task->markAsDone();
             $task->refresh();
         }
@@ -89,7 +91,7 @@ class CreateTaskTool extends Tool
             'status' => $task->status->value,
             'priority' => $task->priority->value,
             'project' => $task->project?->name,
-            'feature_id' => $task->feature_id,
+            'feature_id' => $task->parent_id,
             'due_date' => $task->due_date?->toDateString(),
             'estimated_minutes' => $task->estimated_minutes,
             'is_session_task' => $task->isSessionTask(),

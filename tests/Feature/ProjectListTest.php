@@ -1,8 +1,8 @@
 <?php
 
 use App\Enums\ProjectStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -71,8 +71,8 @@ test('projects shows project card with emoji, name, and status badge', function 
 
 test('projects shows active tasks count', function () {
     $project = Project::factory()->create();
-    Task::factory()->todo()->count(3)->create(['project_id' => $project->id]);
-    Task::factory()->done()->count(2)->create(['project_id' => $project->id]);
+    Activity::factory()->todo()->count(3)->create(['project_id' => $project->id]);
+    Activity::factory()->done()->count(2)->create(['project_id' => $project->id]);
 
     Livewire::test('pages::projects')
         ->assertSee('3 tasks');
@@ -112,7 +112,7 @@ test('projects shows novo projeto button', function () {
 
 test('projects shows single active task label correctly', function () {
     $project = Project::factory()->create();
-    Task::factory()->todo()->create(['project_id' => $project->id]);
+    Activity::factory()->todo()->create(['project_id' => $project->id]);
 
     Livewire::test('pages::projects')
         ->assertSee('1 task');

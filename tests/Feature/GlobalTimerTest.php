@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Task;
+use App\Models\Activity;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Livewire\Livewire;
@@ -21,16 +21,16 @@ test('does not show anything when no timer is active', function () {
 });
 
 test('shows task title when timer is active', function () {
-    $task = Task::factory()->create(['title' => 'My Active Task']);
-    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create(['title' => 'My Active Task']);
+    TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('global-timer')
         ->assertSee('My Active Task');
 });
 
 test('stop dispatches open-timer-notes and timer-updated', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('global-timer')
         ->call('stop')
@@ -49,32 +49,32 @@ test('refreshes state on timer-updated event', function () {
     $component = Livewire::test('global-timer')
         ->assertSet('activeEntry', null);
 
-    $task = Task::factory()->create();
-    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     $component->dispatch('timer-updated')
-        ->assertSet('activeEntry.task_id', $task->id);
+        ->assertSet('activeEntry.activity_id', $task->id);
 });
 
 test('renders elapsed time display when timer is active', function () {
-    $task = Task::factory()->create();
-    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('global-timer')
         ->assertSeeHtml('x-text="elapsed"');
 });
 
 test('renders stop button when timer is active', function () {
-    $task = Task::factory()->create();
-    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('global-timer')
         ->assertSeeHtml('data-flux-button');
 });
 
 test('shows focus emoji when running a focus session', function () {
-    $task = Task::factory()->create(['title' => 'Focus Task']);
-    TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create(['title' => 'Focus Task']);
+    TimeEntry::factory()->running()->focus()->create(['activity_id' => $task->id]);
 
     Livewire::test('global-timer')
         ->assertSee('🎯')
@@ -82,8 +82,8 @@ test('shows focus emoji when running a focus session', function () {
 });
 
 test('shows timer emoji when running a normal session', function () {
-    $task = Task::factory()->create(['title' => 'Normal Task']);
-    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create(['title' => 'Normal Task']);
+    TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('global-timer')
         ->assertSee('⏱')
@@ -91,16 +91,16 @@ test('shows timer emoji when running a normal session', function () {
 });
 
 test('applies amber styling for focus session task title', function () {
-    $task = Task::factory()->create();
-    TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    TimeEntry::factory()->running()->focus()->create(['activity_id' => $task->id]);
 
     Livewire::test('global-timer')
         ->assertSeeHtml('text-amber-400');
 });
 
 test('does not apply amber styling for normal session', function () {
-    $task = Task::factory()->create();
-    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('global-timer')
         ->assertDontSeeHtml('text-amber-400');

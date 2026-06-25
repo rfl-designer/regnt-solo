@@ -2,8 +2,8 @@
 
 namespace App\Mcp\Tools;
 
+use App\Enums\ActivityPriority;
 use App\Enums\RecurrenceFrequency;
-use App\Enums\TaskPriority;
 use App\Models\Project;
 use App\Models\RecurringTask;
 use Carbon\Carbon;
@@ -35,7 +35,7 @@ class CreateRecurringTaskTool extends Tool
         ]);
 
         $frequency = RecurrenceFrequency::from($validated['frequency']);
-        $priority = TaskPriority::from($validated['priority'] ?? 'medium');
+        $priority = ActivityPriority::from($validated['priority'] ?? 'medium');
 
         $projectId = null;
         if (! empty($validated['project_slug'])) {

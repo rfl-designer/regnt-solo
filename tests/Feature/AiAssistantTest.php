@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Task;
+use App\Models\Activity;
 use App\Services\AiAssistantService;
 use Illuminate\Support\Facades\Http;
 
@@ -8,7 +8,7 @@ test('AI service returns empty when disabled', function () {
     config(['soloboard.ai_enabled' => false]);
 
     $service = app(AiAssistantService::class);
-    $tasks = Task::factory()->count(3)->create();
+    $tasks = Activity::factory()->count(3)->create();
 
     expect($service->suggestDailyPlan($tasks->fresh()))->toBe([])
         ->and($service->analyzeBacklog($tasks->fresh()))->toBe([])
@@ -24,7 +24,7 @@ test('AI service returns empty when api key is missing', function () {
     ]);
 
     $service = app(AiAssistantService::class);
-    $tasks = Task::factory()->count(2)->create();
+    $tasks = Activity::factory()->count(2)->create();
 
     expect($service->suggestDailyPlan($tasks->fresh()))->toBe([]);
 
@@ -38,7 +38,7 @@ test('suggestDailyPlan returns suggestions with mocked API', function () {
         'soloboard.ai_model' => 'claude-sonnet-4-20250514',
     ]);
 
-    $tasks = Task::factory()->count(2)->create();
+    $tasks = Activity::factory()->count(2)->create();
 
     $suggestions = [
         ['task_id' => $tasks[0]->id, 'reason' => 'High priority and due soon', 'priority_score' => 90],
@@ -72,7 +72,7 @@ test('analyzeBacklog returns analysis with mocked API', function () {
         'soloboard.ai_model' => 'claude-sonnet-4-20250514',
     ]);
 
-    $tasks = Task::factory()->count(2)->create();
+    $tasks = Activity::factory()->count(2)->create();
 
     $analysis = [
         [
@@ -169,7 +169,7 @@ test('service handles API errors gracefully', function () {
     ]);
 
     $service = app(AiAssistantService::class);
-    $tasks = Task::factory()->count(2)->create();
+    $tasks = Activity::factory()->count(2)->create();
 
     $result = $service->suggestDailyPlan($tasks->fresh());
 
@@ -192,7 +192,7 @@ test('service handles invalid JSON response gracefully', function () {
     ]);
 
     $service = app(AiAssistantService::class);
-    $tasks = Task::factory()->count(2)->create();
+    $tasks = Activity::factory()->count(2)->create();
 
     $result = $service->suggestDailyPlan($tasks->fresh());
 
@@ -211,7 +211,7 @@ test('service handles connection exception gracefully', function () {
     ]);
 
     $service = app(AiAssistantService::class);
-    $tasks = Task::factory()->count(2)->create();
+    $tasks = Activity::factory()->count(2)->create();
 
     $result = $service->analyzeBacklog($tasks->fresh());
 
@@ -234,7 +234,7 @@ test('service sends correct headers to Anthropic API', function () {
     ]);
 
     $service = app(AiAssistantService::class);
-    $tasks = Task::factory()->count(1)->create();
+    $tasks = Activity::factory()->count(1)->create();
 
     $service->suggestDailyPlan($tasks->fresh());
 
@@ -280,7 +280,7 @@ test('service parses JSON embedded in markdown response', function () {
         'soloboard.ai_model' => 'claude-sonnet-4-20250514',
     ]);
 
-    $tasks = Task::factory()->count(1)->create();
+    $tasks = Activity::factory()->count(1)->create();
     $suggestions = [['task_id' => $tasks[0]->id, 'reason' => 'Important', 'priority_score' => 85]];
 
     Http::fake([

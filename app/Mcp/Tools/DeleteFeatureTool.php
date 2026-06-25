@@ -2,7 +2,7 @@
 
 namespace App\Mcp\Tools;
 
-use App\Models\Feature;
+use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -22,20 +22,20 @@ class DeleteFeatureTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'feature_id' => 'required|integer|exists:features,id',
+            'feature_id' => 'required|integer|exists:activities,id',
         ], [
             'feature_id.required' => 'You must provide a feature_id. Use list-features to find available feature IDs.',
             'feature_id.exists' => 'Feature not found. Use list-features to find available feature IDs.',
         ]);
 
-        $feature = Feature::findOrFail($validated['feature_id']);
+        $feature = Activity::query()->epics()->findOrFail($validated['feature_id']);
 
         $title = $feature->title;
-        $tasksCount = $feature->tasks()->count();
+        $tasksCount = $feature->children()->count();
         $timeEntriesCount = $feature->timeEntries()->count();
 
         // Unlink tasks from feature (don't delete them)
-        $feature->tasks()->update(['feature_id' => null]);
+        $feature->children()->update(['parent_id' => null]);
 
         // Delete time entries and the feature
         $feature->timeEntries()->delete();

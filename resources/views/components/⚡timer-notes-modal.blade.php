@@ -27,17 +27,11 @@ new class extends Component
     #[On('open-timer-notes')]
     public function openNotes(int $entryId): void
     {
-        $entry = TimeEntry::with(['task', 'feature'])->findOrFail($entryId);
+        $entry = TimeEntry::with(['activity'])->findOrFail($entryId);
 
         $this->entryId = $entry->id;
-
-        if ($entry->feature_id !== null && $entry->feature !== null) {
-            $this->itemName = $entry->feature->title;
-            $this->itemType = 'feature';
-        } else {
-            $this->itemName = $entry->task->title ?? '';
-            $this->itemType = 'task';
-        }
+        $this->itemName = $entry->activity?->title ?? '';
+        $this->itemType = ($entry->activity?->type->value === 'epic') ? 'feature' : 'task';
 
         $this->notes = '';
         $this->isFocusSession = (bool) $entry->is_focus_session;

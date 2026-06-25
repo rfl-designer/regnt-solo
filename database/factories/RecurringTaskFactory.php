@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Enums\ActivityPriority;
 use App\Enums\RecurrenceFrequency;
-use App\Enums\TaskPriority;
 use App\Models\Project;
 use App\Models\RecurringTask;
 use Carbon\Carbon;
@@ -29,7 +29,7 @@ class RecurringTaskFactory extends Factory
             'frequency' => $frequency,
             'day_of_week' => $frequency === RecurrenceFrequency::Weekly ? fake()->numberBetween(0, 6) : null,
             'day_of_month' => $frequency === RecurrenceFrequency::Monthly ? fake()->numberBetween(1, 28) : null,
-            'priority' => fake()->randomElement(TaskPriority::cases()),
+            'priority' => fake()->randomElement(ActivityPriority::cases()),
             'next_run' => Carbon::today()->addDays(fake()->numberBetween(0, 7)),
             'is_active' => true,
             'estimated_minutes' => fake()->optional()->numberBetween(15, 120),

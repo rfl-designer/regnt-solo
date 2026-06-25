@@ -38,7 +38,7 @@ class StakeholderIssuePlanningPrompt extends Prompt
         $issueId = $request->integer('issue_id');
 
         $issue = StakeholderIssue::query()
-            ->with(['project', 'stakeholder', 'feature'])
+            ->with(['project', 'stakeholder', 'activity'])
             ->findOrFail($issueId);
 
         $context = "## Stakeholder Issue\n";
@@ -58,11 +58,11 @@ class StakeholderIssuePlanningPrompt extends Prompt
 
         $context .= "\n## Original Comment\n{$issue->comment}\n";
 
-        if ($issue->feature) {
+        if ($issue->activity) {
             $context .= "\n## Already Linked Feature\n";
-            $context .= "- Feature ID: {$issue->feature->id}\n";
-            $context .= "- Feature Title: {$issue->feature->title}\n";
-            $context .= "- Feature Slug: {$issue->feature->slug}\n";
+            $context .= "- Feature ID: {$issue->activity->id}\n";
+            $context .= "- Feature Title: {$issue->activity->title}\n";
+            $context .= "- Feature Slug: {$issue->activity->slug}\n";
         }
 
         $systemMessage = 'You are a product planning assistant. '

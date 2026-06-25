@@ -24,7 +24,7 @@ class StakeholderIssueFactory extends Factory
         return [
             'project_id' => $project,
             'stakeholder_id' => Stakeholder::factory()->for($project),
-            'feature_id' => null,
+            'activity_id' => null,
             'comment' => fake()->paragraph(),
             'status' => StakeholderIssueStatus::Unread,
             'converted_at' => null,

@@ -1,10 +1,10 @@
 <?php
 
+use App\Models\Activity;
 use App\Models\DailyPlan;
-use App\Models\Task;
 
 test('task with due_date today is auto-added to daily plan on creation', function () {
-    $task = Task::factory()->create([
+    $task = Activity::factory()->create([
         'due_date' => now()->toDateString(),
     ]);
 
@@ -16,7 +16,7 @@ test('task with due_date today is auto-added to daily plan on creation', functio
 });
 
 test('task with due_date tomorrow is not auto-added to daily plan', function () {
-    $task = Task::factory()->create([
+    $task = Activity::factory()->create([
         'due_date' => now()->addDay()->toDateString(),
     ]);
 
@@ -26,7 +26,7 @@ test('task with due_date tomorrow is not auto-added to daily plan', function () 
 });
 
 test('task without due_date is not auto-added to daily plan', function () {
-    $task = Task::factory()->create([
+    $task = Activity::factory()->create([
         'due_date' => null,
     ]);
 
@@ -37,7 +37,7 @@ test('task without due_date is not auto-added to daily plan', function () {
 
 test('task is not duplicated if already in daily plan', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->create([
+    $task = Activity::factory()->create([
         'due_date' => now()->toDateString(),
     ]);
 
@@ -51,7 +51,7 @@ test('task is not duplicated if already in daily plan', function () {
 });
 
 test('updating due_date to today adds task to daily plan', function () {
-    $task = Task::factory()->create([
+    $task = Activity::factory()->create([
         'due_date' => now()->addDays(5)->toDateString(),
     ]);
 
@@ -69,7 +69,7 @@ test('updating due_date to today adds task to daily plan', function () {
 });
 
 test('updating due_date from today to another date does not remove from plan', function () {
-    $task = Task::factory()->create([
+    $task = Activity::factory()->create([
         'due_date' => now()->toDateString(),
     ]);
 
@@ -85,9 +85,9 @@ test('updating due_date from today to another date does not remove from plan', f
 });
 
 test('multiple tasks with due_date today are all added with correct sort_order', function () {
-    $task1 = Task::factory()->create(['due_date' => now()->toDateString()]);
-    $task2 = Task::factory()->create(['due_date' => now()->toDateString()]);
-    $task3 = Task::factory()->create(['due_date' => now()->toDateString()]);
+    $task1 = Activity::factory()->create(['due_date' => now()->toDateString()]);
+    $task2 = Activity::factory()->create(['due_date' => now()->toDateString()]);
+    $task3 = Activity::factory()->create(['due_date' => now()->toDateString()]);
 
     $plan = DailyPlan::query()->whereDate('date', now()->toDateString())->first();
 
@@ -99,10 +99,10 @@ test('multiple tasks with due_date today are all added with correct sort_order',
 
 test('task added to existing daily plan with tasks gets correct sort_order', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $existingTask = Task::factory()->create();
+    $existingTask = Activity::factory()->create();
     $plan->tasks()->attach($existingTask, ['sort_order' => 5]);
 
-    $newTask = Task::factory()->create(['due_date' => now()->toDateString()]);
+    $newTask = Activity::factory()->create(['due_date' => now()->toDateString()]);
 
     $plan->refresh();
     expect($plan->tasks)->toHaveCount(2);
@@ -113,12 +113,12 @@ test('task added to existing daily plan with tasks gets correct sort_order', fun
 
 test('marking task as done updates pivot completed_at in daily plan', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     expect($plan->tasks()->first()->pivot->completed_at)->toBeNull();
 
-    $task->update(['status' => \App\Enums\TaskStatus::Done, 'completed_at' => now()]);
+    $task->update(['status' => \App\Enums\ActivityStatus::Done, 'completed_at' => now()]);
 
     $plan->refresh();
     expect($plan->tasks()->first()->pivot->completed_at)->not->toBeNull();
@@ -126,12 +126,12 @@ test('marking task as done updates pivot completed_at in daily plan', function (
 
 test('reopening done task clears pivot completed_at in daily plan', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->done()->create();
+    $task = Activity::factory()->done()->create();
     $plan->tasks()->attach($task, ['sort_order' => 0, 'completed_at' => now()]);
 
     expect($plan->tasks()->first()->pivot->completed_at)->not->toBeNull();
 
-    $task->update(['status' => \App\Enums\TaskStatus::Doing, 'completed_at' => null]);
+    $task->update(['status' => \App\Enums\ActivityStatus::Doing, 'completed_at' => null]);
 
     $plan->refresh();
     expect($plan->tasks()->first()->pivot->completed_at)->toBeNull();
@@ -140,12 +140,12 @@ test('reopening done task clears pivot completed_at in daily plan', function () 
 test('marking task as done does not affect other daily plans', function () {
     $todayPlan = DailyPlan::factory()->today()->create();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => now()->subDay()]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
 
     $todayPlan->tasks()->attach($task, ['sort_order' => 0]);
     $yesterdayPlan->tasks()->attach($task, ['sort_order' => 0]);
 
-    $task->update(['status' => \App\Enums\TaskStatus::Done, 'completed_at' => now()]);
+    $task->update(['status' => \App\Enums\ActivityStatus::Done, 'completed_at' => now()]);
 
     $todayPlan->refresh();
     $yesterdayPlan->refresh();
@@ -156,13 +156,13 @@ test('marking task as done does not affect other daily plans', function () {
 });
 
 test('marking task as done when not in daily plan does not fail', function () {
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
 
     // Nenhum plano existe
     expect(DailyPlan::count())->toBe(0);
 
     // Não deve lançar exceção
-    $task->update(['status' => \App\Enums\TaskStatus::Done, 'completed_at' => now()]);
+    $task->update(['status' => \App\Enums\ActivityStatus::Done, 'completed_at' => now()]);
 
-    expect($task->fresh()->status)->toBe(\App\Enums\TaskStatus::Done);
+    expect($task->fresh()->status)->toBe(\App\Enums\ActivityStatus::Done);
 });

@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Services\AiAssistantService;
 use Carbon\Carbon;
@@ -42,8 +42,9 @@ new class extends Component
     #[Computed]
     public function tasksCompletedThisWeek(): int
     {
-        return Task::query()
-            ->where('status', TaskStatus::Done)
+        return Activity::query()
+            ->whereIn('type', [\App\Enums\ActivityType::Issue, \App\Enums\ActivityType::Task])
+            ->where('status', ActivityStatus::Done)
             ->where('completed_at', '>=', Carbon::now()->startOfWeek())
             ->count();
     }
@@ -54,8 +55,9 @@ new class extends Component
     #[Computed]
     public function activeTasksCount(): int
     {
-        return Task::query()
-            ->whereIn('status', [TaskStatus::Todo, TaskStatus::Doing])
+        return Activity::query()
+            ->whereIn('type', [\App\Enums\ActivityType::Issue, \App\Enums\ActivityType::Task])
+            ->whereIn('status', [ActivityStatus::Todo, ActivityStatus::Doing])
             ->count();
     }
 
@@ -65,8 +67,9 @@ new class extends Component
     #[Computed]
     public function inboxCount(): int
     {
-        return Task::query()
-            ->where('status', TaskStatus::Inbox)
+        return Activity::query()
+            ->whereIn('type', [\App\Enums\ActivityType::Issue, \App\Enums\ActivityType::Task])
+            ->where('status', ActivityStatus::Inbox)
             ->count();
     }
 
@@ -77,7 +80,9 @@ new class extends Component
     #[Computed]
     public function shouldShowWelcome(): bool
     {
-        $hasAnyTasks = Task::query()->exists();
+        $hasAnyTasks = Activity::query()
+            ->whereIn('type', [\App\Enums\ActivityType::Issue, \App\Enums\ActivityType::Task])
+            ->exists();
         $userDismissed = auth()->user()?->hide_welcome_dashboard ?? false;
 
         return ! $hasAnyTasks && ! $userDismissed;
@@ -106,14 +111,16 @@ new class extends Component
     {
         $now = Carbon::now();
 
-        $currentPeriodTasks = Task::query()
-            ->where('status', TaskStatus::Done)
+        $currentPeriodTasks = Activity::query()
+            ->whereIn('type', [\App\Enums\ActivityType::Issue, \App\Enums\ActivityType::Task])
+            ->where('status', ActivityStatus::Done)
             ->where('completed_at', '>=', $now->copy()->subDays(30))
             ->with('statusChanges')
             ->get();
 
-        $previousPeriodTasks = Task::query()
-            ->where('status', TaskStatus::Done)
+        $previousPeriodTasks = Activity::query()
+            ->whereIn('type', [\App\Enums\ActivityType::Issue, \App\Enums\ActivityType::Task])
+            ->where('status', ActivityStatus::Done)
             ->where('completed_at', '>=', $now->copy()->subDays(60))
             ->where('completed_at', '<', $now->copy()->subDays(30))
             ->with('statusChanges')
@@ -128,7 +135,7 @@ new class extends Component
 
         $averages = [];
 
-        foreach (TaskStatus::cases() as $status) {
+        foreach (ActivityStatus::cases() as $status) {
             $statusValue = $status->value;
 
             if (! isset($currentAverages[$statusValue])) {
@@ -173,7 +180,7 @@ new class extends Component
     /**
      * Calculate average time in each status for a collection of tasks.
      *
-     * @param  \Illuminate\Support\Collection<int, Task>  $tasks
+     * @param  \Illuminate\Support\Collection<int, Activity>  $tasks
      * @return array<string, float>
      */
     private function calculateAveragesForTasks($tasks): array
@@ -181,7 +188,7 @@ new class extends Component
         $totals = [];
         $counts = [];
 
-        foreach (TaskStatus::cases() as $status) {
+        foreach (ActivityStatus::cases() as $status) {
             $totals[$status->value] = 0.0;
             $counts[$status->value] = 0;
         }
@@ -199,7 +206,7 @@ new class extends Component
 
         $averages = [];
 
-        foreach (TaskStatus::cases() as $status) {
+        foreach (ActivityStatus::cases() as $status) {
             $count = $counts[$status->value];
 
             if ($count > 0) {
@@ -346,7 +353,8 @@ new class extends Component
         $today = Carbon::today();
         $weekAgo = $today->copy()->subDays(6);
 
-        $tasksByStatus = Task::query()
+        $tasksByStatus = Activity::query()
+            ->whereIn('type', [\App\Enums\ActivityType::Issue, \App\Enums\ActivityType::Task])
             ->selectRaw('status, count(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status')
@@ -379,8 +387,9 @@ new class extends Component
             $hoursPerDay[$dateString] = round($minutes / 60, 2);
         }
 
-        $staleBacklogTasks = Task::query()
-            ->where('status', TaskStatus::Backlog)
+        $staleBacklogTasks = Activity::query()
+            ->whereIn('type', [\App\Enums\ActivityType::Issue, \App\Enums\ActivityType::Task])
+            ->where('status', ActivityStatus::Backlog)
             ->where('created_at', '<', Carbon::now()->subDays(14))
             ->count();
 

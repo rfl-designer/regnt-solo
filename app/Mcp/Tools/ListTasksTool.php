@@ -2,9 +2,9 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -29,7 +29,7 @@ class ListTasksTool extends Tool
             'limit' => 'nullable|integer|min:1|max:100',
         ]);
 
-        $query = Task::query()->with('project');
+        $query = Activity::query()->with('project');
 
         if (! empty($validated['project_slug'])) {
             $project = Project::query()->where('slug', $validated['project_slug'])->first();
@@ -37,14 +37,14 @@ class ListTasksTool extends Tool
         }
 
         if (! empty($validated['status'])) {
-            $query->byStatus(TaskStatus::from($validated['status']));
+            $query->byStatus(ActivityStatus::from($validated['status']));
         }
 
         $limit = $validated['limit'] ?? 20;
 
         $tasks = $query->latest()->limit($limit)->get();
 
-        $data = $tasks->map(fn (Task $task) => [
+        $data = $tasks->map(fn (Activity $task) => [
             'id' => $task->id,
             'title' => $task->title,
             'status' => $task->status->value,
@@ -54,7 +54,7 @@ class ListTasksTool extends Tool
             'estimated_minutes' => $task->estimated_minutes,
             'is_overdue' => $task->isOverdue(),
             'is_running' => $task->isRunning(),
-            'feature_id' => $task->feature_id,
+            'feature_id' => $task->parent_id,
             'github_issue_number' => $task->github_issue_number,
             'github_synced_hash' => $task->github_synced_hash,
         ])->all();

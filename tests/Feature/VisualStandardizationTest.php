@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
 use App\Models\User;
 
 beforeEach(function (): void {
@@ -55,7 +55,7 @@ describe('Color Legend Component', function (): void {
         $response->assertSuccessful();
 
         // Verifica que todas as labels de status estão disponíveis
-        foreach (TaskStatus::cases() as $status) {
+        foreach (ActivityStatus::cases() as $status) {
             $response->assertSee($status->label());
         }
     });
@@ -66,46 +66,46 @@ describe('Color Legend Component', function (): void {
         $response->assertSuccessful();
 
         // Verifica que todas as labels de prioridade estão disponíveis
-        foreach (TaskPriority::cases() as $priority) {
+        foreach (ActivityPriority::cases() as $priority) {
             $response->assertSee($priority->label());
         }
     });
 });
 
 describe('Enum Color Methods', function (): void {
-    it('returns valid color for each task status', function (TaskStatus $status): void {
+    it('returns valid color for each task status', function (ActivityStatus $status): void {
         $color = $status->color();
 
         expect($color)->toBeString()
             ->and($color)->not->toBeEmpty();
-    })->with(TaskStatus::cases());
+    })->with(ActivityStatus::cases());
 
-    it('returns valid hex color for each task status', function (TaskStatus $status): void {
+    it('returns valid hex color for each task status', function (ActivityStatus $status): void {
         $hexColor = $status->hexColor();
 
         expect($hexColor)->toBeString()
             ->and($hexColor)->toStartWith('#')
             ->and(strlen($hexColor))->toBe(7);
-    })->with(TaskStatus::cases());
+    })->with(ActivityStatus::cases());
 
-    it('returns valid icon for each task status', function (TaskStatus $status): void {
+    it('returns valid icon for each task status', function (ActivityStatus $status): void {
         $icon = $status->icon();
 
         expect($icon)->toBeString()
             ->and($icon)->not->toBeEmpty();
-    })->with(TaskStatus::cases());
+    })->with(ActivityStatus::cases());
 
-    it('returns valid color for each task priority', function (TaskPriority $priority): void {
+    it('returns valid color for each task priority', function (ActivityPriority $priority): void {
         $color = $priority->color();
 
         expect($color)->toBeString()
             ->and($color)->not->toBeEmpty();
-    })->with(TaskPriority::cases());
+    })->with(ActivityPriority::cases());
 
-    it('returns valid icon for each task priority', function (TaskPriority $priority): void {
+    it('returns valid icon for each task priority', function (ActivityPriority $priority): void {
         $icon = $priority->icon();
 
         expect($icon)->toBeString()
             ->and($icon)->not->toBeEmpty();
-    })->with(TaskPriority::cases());
+    })->with(ActivityPriority::cases());
 });

@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Task;
+use App\Models\Activity;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -9,7 +9,7 @@ beforeEach(function () {
 });
 
 test('kanban cards have drag affordance classes', function () {
-    Task::factory()->backlog()->create(['title' => 'Test task']);
+    Activity::factory()->backlog()->create(['title' => 'Test task']);
 
     Livewire::test('pages::kanban')
         ->assertSeeHtml('class="kanban-card"')
@@ -24,7 +24,7 @@ test('kanban drop zones have transition classes', function () {
 });
 
 test('kanban cards have hover states', function () {
-    Task::factory()->backlog()->create();
+    Activity::factory()->backlog()->create();
 
     Livewire::test('pages::kanban')
         ->assertSeeHtml('hover:border-zinc-500')

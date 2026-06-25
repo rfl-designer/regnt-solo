@@ -1,15 +1,15 @@
 <?php
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
 use App\Mcp\Prompts\DevelopmentWorkflowPrompt;
 use App\Mcp\Servers\SoloBoardServer;
+use App\Models\Activity;
 use App\Models\Document;
 use App\Models\Project;
-use App\Models\Task;
 
 test('development workflow prompt returns complete context for task', function () {
     $project = Project::factory()->create();
-    $task = Task::factory()->session()->todo()->create([
+    $task = Activity::factory()->session()->todo()->create([
         'project_id' => $project->id,
     ]);
 
@@ -36,7 +36,7 @@ test('development workflow prompt returns error for non-existent task', function
 
 test('development workflow prompt includes related documents', function () {
     $project = Project::factory()->create();
-    $task = Task::factory()->session()->doing()->create([
+    $task = Activity::factory()->session()->doing()->create([
         'project_id' => $project->id,
     ]);
     $document = Document::factory()->create([
@@ -55,10 +55,10 @@ test('development workflow prompt includes related documents', function () {
 
 test('development workflow prompt includes related tasks', function () {
     $project = Project::factory()->create();
-    $task = Task::factory()->session()->doing()->create([
+    $task = Activity::factory()->session()->doing()->create([
         'project_id' => $project->id,
     ]);
-    $relatedTask = Task::factory()->todo()->create([
+    $relatedTask = Activity::factory()->todo()->create([
         'project_id' => $project->id,
     ]);
 
@@ -72,7 +72,7 @@ test('development workflow prompt includes related tasks', function () {
 });
 
 test('development workflow prompt detects livewire skills from session prompt', function () {
-    $task = Task::factory()->create([
+    $task = Activity::factory()->create([
         'session_prompt' => 'Criar componente Livewire com wire:model para formulário',
     ]);
 
@@ -85,7 +85,7 @@ test('development workflow prompt detects livewire skills from session prompt', 
 });
 
 test('development workflow prompt detects flux ui skills', function () {
-    $task = Task::factory()->create([
+    $task = Activity::factory()->create([
         'session_prompt' => 'Adicionar modal com flux:modal e tabela com flux:table',
     ]);
 
@@ -98,7 +98,7 @@ test('development workflow prompt detects flux ui skills', function () {
 });
 
 test('development workflow prompt detects auth skills', function () {
-    $task = Task::factory()->create([
+    $task = Activity::factory()->create([
         'session_prompt' => 'Implementar 2FA no login do usuário',
     ]);
 
@@ -111,8 +111,8 @@ test('development workflow prompt detects auth skills', function () {
 });
 
 test('development workflow prompt shows done task warning', function () {
-    $task = Task::factory()->create([
-        'status' => TaskStatus::Done,
+    $task = Activity::factory()->create([
+        'status' => ActivityStatus::Done,
     ]);
 
     $response = SoloBoardServer::prompt(DevelopmentWorkflowPrompt::class, [
@@ -124,7 +124,7 @@ test('development workflow prompt shows done task warning', function () {
 });
 
 test('development workflow prompt includes today context', function () {
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
 
     $response = SoloBoardServer::prompt(DevelopmentWorkflowPrompt::class, [
         'task_id' => (string) $task->id,
@@ -137,7 +137,7 @@ test('development workflow prompt includes today context', function () {
 });
 
 test('development workflow prompt always suggests pest testing', function () {
-    $task = Task::factory()->create([
+    $task = Activity::factory()->create([
         'session_prompt' => 'Criar API endpoint simples',
     ]);
 

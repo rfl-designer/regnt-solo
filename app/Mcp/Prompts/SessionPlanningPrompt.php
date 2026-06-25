@@ -2,8 +2,8 @@
 
 namespace App\Mcp\Prompts;
 
-use App\Enums\TaskStatus;
-use App\Models\Task;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Prompt;
@@ -37,7 +37,7 @@ class SessionPlanningPrompt extends Prompt
     public function handle(Request $request): array
     {
         $taskId = $request->integer('task_id');
-        $task = Task::query()
+        $task = Activity::query()
             ->with(['project', 'commits', 'timeEntries', 'statusChanges'])
             ->findOrFail($taskId);
 
@@ -71,10 +71,10 @@ class SessionPlanningPrompt extends Prompt
         }
 
         if ($task->project) {
-            $relatedTasks = Task::query()
+            $relatedTasks = Activity::query()
                 ->where('project_id', $task->project_id)
                 ->where('id', '!=', $task->id)
-                ->whereIn('status', [TaskStatus::Doing, TaskStatus::Todo])
+                ->whereIn('status', [ActivityStatus::Doing, ActivityStatus::Todo])
                 ->limit(5)
                 ->get();
 

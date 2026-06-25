@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Livewire\Livewire;
@@ -18,7 +18,7 @@ test('component renders successfully', function () {
 });
 
 test('opens modal when open-task-modal event is dispatched', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -29,12 +29,12 @@ test('opens modal when open-task-modal event is dispatched', function () {
 
 test('loads task data correctly when opened', function () {
     $project = Project::factory()->create();
-    $task = Task::factory()->create([
+    $task = Activity::factory()->create([
         'project_id' => $project->id,
         'title' => 'Test Task',
         'description' => 'Test description',
-        'status' => TaskStatus::Todo,
-        'priority' => TaskPriority::High,
+        'status' => ActivityStatus::Todo,
+        'priority' => ActivityPriority::High,
         'due_date' => '2026-03-15',
         'estimated_minutes' => 90,
     ]);
@@ -50,9 +50,9 @@ test('loads task data correctly when opened', function () {
 });
 
 test('loads time entries when opened', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     $entry = TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => '2026-02-13 10:00:00',
         'stopped_at' => '2026-02-13 11:30:00',
         'notes' => 'Working on feature',
@@ -65,7 +65,7 @@ test('loads time entries when opened', function () {
 });
 
 test('can save task with updated title', function () {
-    $task = Task::factory()->create(['title' => 'Original Title']);
+    $task = Activity::factory()->create(['title' => 'Original Title']);
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -77,7 +77,7 @@ test('can save task with updated title', function () {
 });
 
 test('modal stays open after saving', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -86,7 +86,7 @@ test('modal stays open after saving', function () {
 });
 
 test('validates title is required', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -96,7 +96,7 @@ test('validates title is required', function () {
 });
 
 test('validates title max length', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -106,30 +106,30 @@ test('validates title max length', function () {
 });
 
 test('can update task priority', function () {
-    $task = Task::factory()->create(['priority' => TaskPriority::Medium]);
+    $task = Activity::factory()->create(['priority' => ActivityPriority::Medium]);
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
         ->set('priority', 'urgent')
         ->call('saveTask');
 
-    expect($task->fresh()->priority)->toBe(TaskPriority::Urgent);
+    expect($task->fresh()->priority)->toBe(ActivityPriority::Urgent);
 });
 
 test('can update task status', function () {
-    $task = Task::factory()->create(['status' => TaskStatus::Inbox]);
+    $task = Activity::factory()->create(['status' => ActivityStatus::Inbox]);
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
         ->set('status', 'todo')
         ->call('saveTask');
 
-    expect($task->fresh()->status)->toBe(TaskStatus::Todo);
+    expect($task->fresh()->status)->toBe(ActivityStatus::Todo);
 });
 
 test('can assign project to task', function () {
     $project = Project::factory()->create();
-    $task = Task::factory()->create(['project_id' => null]);
+    $task = Activity::factory()->create(['project_id' => null]);
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -141,7 +141,7 @@ test('can assign project to task', function () {
 
 test('can remove project from task', function () {
     $project = Project::factory()->create();
-    $task = Task::factory()->create(['project_id' => $project->id]);
+    $task = Activity::factory()->create(['project_id' => $project->id]);
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -152,7 +152,7 @@ test('can remove project from task', function () {
 });
 
 test('can update due date', function () {
-    $task = Task::factory()->create(['due_date' => null]);
+    $task = Activity::factory()->create(['due_date' => null]);
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -163,7 +163,7 @@ test('can update due date', function () {
 });
 
 test('can update estimated minutes', function () {
-    $task = Task::factory()->create(['estimated_minutes' => null]);
+    $task = Activity::factory()->create(['estimated_minutes' => null]);
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -174,8 +174,8 @@ test('can update estimated minutes', function () {
 });
 
 test('uses markAsDone when changing status to done', function () {
-    $task = Task::factory()->doing()->create();
-    $entry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->doing()->create();
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -183,14 +183,14 @@ test('uses markAsDone when changing status to done', function () {
         ->call('saveTask');
 
     $task->refresh();
-    expect($task->status)->toBe(TaskStatus::Done);
+    expect($task->status)->toBe(ActivityStatus::Done);
     expect($task->completed_at)->not->toBeNull();
     expect($entry->fresh()->stopped_at)->not->toBeNull();
 });
 
 test('can delete a time entry', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->create(['activity_id' => $task->id]);
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -200,8 +200,8 @@ test('can delete a time entry', function () {
 });
 
 test('time entry is removed from local array after deletion', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->create(['activity_id' => $task->id]);
 
     $component = Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id);
@@ -214,9 +214,9 @@ test('time entry is removed from local array after deletion', function () {
 });
 
 test('cannot delete time entry from another task', function () {
-    $task = Task::factory()->create();
-    $otherTask = Task::factory()->create();
-    $entry = TimeEntry::factory()->create(['task_id' => $otherTask->id]);
+    $task = Activity::factory()->create();
+    $otherTask = Activity::factory()->create();
+    $entry = TimeEntry::factory()->create(['activity_id' => $otherTask->id]);
 
     expect(fn () => Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -227,7 +227,7 @@ test('cannot delete time entry from another task', function () {
 });
 
 test('confirm delete shows confirmation modal', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -236,7 +236,7 @@ test('confirm delete shows confirmation modal', function () {
 });
 
 test('can delete task', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -245,11 +245,11 @@ test('can delete task', function () {
         ->assertSet('showDeleteConfirm', false)
         ->assertDispatched('task-updated');
 
-    expect(Task::find($task->id))->toBeNull();
+    expect(Activity::find($task->id))->toBeNull();
 });
 
 test('deleting task resets component state', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -261,9 +261,9 @@ test('deleting task resets component state', function () {
 });
 
 test('can update time entry notes', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     $entry = TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'notes' => 'Original notes',
     ]);
 
@@ -276,7 +276,7 @@ test('can update time entry notes', function () {
 });
 
 test('dispatches task-updated event on save', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -285,7 +285,7 @@ test('dispatches task-updated event on save', function () {
 });
 
 test('dispatches task-updated event on delete', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -294,7 +294,7 @@ test('dispatches task-updated event on delete', function () {
 });
 
 test('validates invalid priority value', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -304,7 +304,7 @@ test('validates invalid priority value', function () {
 });
 
 test('validates invalid status value', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -314,7 +314,7 @@ test('validates invalid status value', function () {
 });
 
 test('validates project must exist', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -324,7 +324,7 @@ test('validates project must exist', function () {
 });
 
 test('validates estimated minutes must be positive', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -334,7 +334,7 @@ test('validates estimated minutes must be positive', function () {
 });
 
 test('task modal shows session view for session tasks', function () {
-    $task = Task::factory()->doing()->session()->create();
+    $task = Activity::factory()->doing()->session()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -342,7 +342,7 @@ test('task modal shows session view for session tasks', function () {
 });
 
 test('task modal does not show session view for normal tasks', function () {
-    $task = Task::factory()->doing()->create();
+    $task = Activity::factory()->doing()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
@@ -350,7 +350,7 @@ test('task modal does not show session view for normal tasks', function () {
 });
 
 test('task modal loads session fields when opening session task', function () {
-    $task = Task::factory()->doing()->create([
+    $task = Activity::factory()->doing()->create([
         'session_prompt' => 'Implement login feature',
         'session_result' => 'Login implemented with tests',
     ]);
@@ -362,7 +362,7 @@ test('task modal loads session fields when opening session task', function () {
 });
 
 test('task modal saves session fields', function () {
-    $task = Task::factory()->doing()->session()->create();
+    $task = Activity::factory()->doing()->session()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)

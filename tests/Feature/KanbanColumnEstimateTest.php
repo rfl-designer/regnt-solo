@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use App\Enums\TaskStatus;
-use App\Models\Task;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -13,12 +13,12 @@ beforeEach(function (): void {
 });
 
 test('kanban column displays total estimate for tasks', function (): void {
-    Task::factory()->create([
-        'status' => TaskStatus::Todo,
+    Activity::factory()->create([
+        'status' => ActivityStatus::Todo,
         'estimated_minutes' => 60,
     ]);
-    Task::factory()->create([
-        'status' => TaskStatus::Todo,
+    Activity::factory()->create([
+        'status' => ActivityStatus::Todo,
         'estimated_minutes' => 90,
     ]);
 
@@ -27,8 +27,8 @@ test('kanban column displays total estimate for tasks', function (): void {
 });
 
 test('kanban column shows hours only when no remaining minutes', function (): void {
-    Task::factory()->create([
-        'status' => TaskStatus::Doing,
+    Activity::factory()->create([
+        'status' => ActivityStatus::Doing,
         'estimated_minutes' => 120, // exactly 2 hours
     ]);
 
@@ -37,8 +37,8 @@ test('kanban column shows hours only when no remaining minutes', function (): vo
 });
 
 test('kanban column shows minutes only when less than an hour', function (): void {
-    Task::factory()->create([
-        'status' => TaskStatus::Backlog,
+    Activity::factory()->create([
+        'status' => ActivityStatus::Backlog,
         'estimated_minutes' => 45,
     ]);
 
@@ -47,35 +47,35 @@ test('kanban column shows minutes only when less than an hour', function (): voi
 });
 
 test('kanban column hides estimate badge when no tasks have estimates', function (): void {
-    Task::factory()->create([
-        'status' => TaskStatus::Backlog,
+    Activity::factory()->create([
+        'status' => ActivityStatus::Backlog,
         'estimated_minutes' => null,
     ]);
 
     // Should show the column but no estimate badge
     Livewire::test('pages::kanban')
-        ->assertSee(TaskStatus::Backlog->label())
+        ->assertSee(ActivityStatus::Backlog->label())
         ->assertDontSee('0m')
         ->assertDontSee('0h');
 });
 
 test('getColumnEstimate returns sum of estimated_minutes', function (): void {
-    Task::factory()->create([
-        'status' => TaskStatus::Todo,
+    Activity::factory()->create([
+        'status' => ActivityStatus::Todo,
         'estimated_minutes' => 30,
     ]);
-    Task::factory()->create([
-        'status' => TaskStatus::Todo,
+    Activity::factory()->create([
+        'status' => ActivityStatus::Todo,
         'estimated_minutes' => 45,
     ]);
-    Task::factory()->create([
-        'status' => TaskStatus::Todo,
+    Activity::factory()->create([
+        'status' => ActivityStatus::Todo,
         'estimated_minutes' => null, // should be ignored
     ]);
 
     $component = Livewire::test('pages::kanban');
 
-    expect($component->instance()->getColumnEstimate(TaskStatus::Todo))->toBe(75);
+    expect($component->instance()->getColumnEstimate(ActivityStatus::Todo))->toBe(75);
 });
 
 test('formatDuration returns empty string for zero minutes', function (): void {

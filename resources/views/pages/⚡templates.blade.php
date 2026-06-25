@@ -1,7 +1,7 @@
 <?php
 
+use App\Enums\ActivityPriority;
 use App\Enums\RecurrenceFrequency;
-use App\Enums\TaskPriority;
 use App\Models\Project;
 use App\Models\RecurringTask;
 use App\Models\TaskTemplate;
@@ -617,7 +617,7 @@ new class extends Component
                 <flux:field>
                     <flux:label>Prioridade Padrão</flux:label>
                     <flux:select wire:model="templatePriority">
-                        @foreach (TaskPriority::cases() as $priority)
+                        @foreach (ActivityPriority::cases() as $priority)
                             <option value="{{ $priority->value }}">{{ $priority->label() }}</option>
                         @endforeach
                     </flux:select>
@@ -715,7 +715,7 @@ new class extends Component
                 <flux:field>
                     <flux:label>Prioridade</flux:label>
                     <flux:select wire:model="recurringPriority">
-                        @foreach (TaskPriority::cases() as $priority)
+                        @foreach (ActivityPriority::cases() as $priority)
                             <option value="{{ $priority->value }}">{{ $priority->label() }}</option>
                         @endforeach
                     </flux:select>

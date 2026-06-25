@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Services\AiAssistantService;
 use Flux\Flux;
 use Illuminate\Support\Facades\Cache;
@@ -42,12 +42,12 @@ new class extends Component
     public bool $showBulkDeleteModal = false;
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Task>
+     * @return \Illuminate\Database\Eloquent\Collection<int, Activity>
      */
     #[Computed]
     public function tasks(): \Illuminate\Database\Eloquent\Collection
     {
-        $query = Task::inbox()->with('project');
+        $query = Activity::inbox()->with('project');
 
         if ($this->search !== '') {
             $query->whereRaw('lower(title) like ?', ['%'.mb_strtolower($this->search).'%']);
@@ -79,7 +79,7 @@ new class extends Component
 
     public function assignProject(int $taskId, ?string $projectId): void
     {
-        $task = Task::inbox()->findOrFail($taskId);
+        $task = Activity::inbox()->findOrFail($taskId);
 
         $validProjectId = ($projectId !== '' && $projectId !== null)
             ? Project::findOrFail((int) $projectId)->id
@@ -94,9 +94,9 @@ new class extends Component
 
     public function updatePriority(int $taskId, string $priority): void
     {
-        $task = Task::inbox()->findOrFail($taskId);
+        $task = Activity::inbox()->findOrFail($taskId);
 
-        $newPriority = TaskPriority::from($priority);
+        $newPriority = ActivityPriority::from($priority);
 
         $task->update(['priority' => $newPriority]);
 
@@ -108,15 +108,15 @@ new class extends Component
     /**
      * Get statuses available to move tasks to (all except Inbox).
      *
-     * @return array<TaskStatus>
+     * @return array<ActivityStatus>
      */
     public function availableStatuses(): array
     {
         return [
-            TaskStatus::Backlog,
-            TaskStatus::Todo,
-            TaskStatus::Doing,
-            TaskStatus::Done,
+            ActivityStatus::Backlog,
+            ActivityStatus::Todo,
+            ActivityStatus::Doing,
+            ActivityStatus::Done,
         ];
     }
 
@@ -136,17 +136,17 @@ new class extends Component
             return;
         }
 
-        $newStatus = TaskStatus::from($status);
+        $newStatus = ActivityStatus::from($status);
         $updateData = ['status' => $newStatus];
 
-        if ($newStatus === TaskStatus::Done) {
+        if ($newStatus === ActivityStatus::Done) {
             $updateData['completed_at'] = now();
         }
 
-        Task::inbox()
+        Activity::inbox()
             ->whereIn('id', $this->selectedTasks)
             ->get()
-            ->each(fn (Task $task) => $task->update($updateData));
+            ->each(fn (Activity $task) => $task->update($updateData));
 
         $count = count($this->selectedTasks);
         $this->selectedTasks = [];
@@ -174,7 +174,7 @@ new class extends Component
 
         $count = count($this->selectedTasks);
 
-        Task::inbox()->whereIn('id', $this->selectedTasks)->get()->each(fn (Task $task) => $task->delete());
+        Activity::inbox()->whereIn('id', $this->selectedTasks)->get()->each(fn (Activity $task) => $task->delete());
 
         $this->selectedTasks = [];
         $this->showBulkDeleteModal = false;
@@ -187,13 +187,13 @@ new class extends Component
 
     public function moveToStatus(int $taskId, string $status): void
     {
-        $task = Task::inbox()->findOrFail($taskId);
+        $task = Activity::inbox()->findOrFail($taskId);
 
-        $newStatus = TaskStatus::from($status);
+        $newStatus = ActivityStatus::from($status);
 
         $updateData = ['status' => $newStatus];
 
-        if ($newStatus === TaskStatus::Done) {
+        if ($newStatus === ActivityStatus::Done) {
             $updateData['completed_at'] = now();
         }
 
@@ -208,7 +208,7 @@ new class extends Component
 
     public function confirmDelete(int $taskId): void
     {
-        $task = Task::inbox()->findOrFail($taskId);
+        $task = Activity::inbox()->findOrFail($taskId);
 
         $this->deletingTaskId = $task->id;
         $this->deletingTaskTitle = $task->title;
@@ -221,7 +221,7 @@ new class extends Component
             return;
         }
 
-        $task = Task::inbox()->findOrFail($this->deletingTaskId);
+        $task = Activity::inbox()->findOrFail($this->deletingTaskId);
         $title = $task->title;
 
         $task->delete();
@@ -269,8 +269,8 @@ new class extends Component
         $this->aiLoading = true;
 
         try {
-            $inboxTasks = Task::query()
-                ->whereIn('status', [TaskStatus::Inbox, TaskStatus::Backlog])
+            $inboxTasks = Activity::query()
+                ->whereIn('status', [ActivityStatus::Inbox, ActivityStatus::Backlog])
                 ->with('project')
                 ->get();
 
@@ -293,16 +293,16 @@ new class extends Component
      */
     public function applyBacklogSuggestion(int $taskId, string $action): void
     {
-        $task = Task::find($taskId);
+        $task = Activity::find($taskId);
 
         if (! $task) {
             return;
         }
 
         match ($action) {
-            'archive' => $task->update(['status' => TaskStatus::Done, 'completed_at' => now()]),
+            'archive' => $task->update(['status' => ActivityStatus::Done, 'completed_at' => now()]),
             'prioritize' => $this->applyPrioritySuggestion($task, $taskId),
-            'estimate' => $task->update(['status' => TaskStatus::Todo]),
+            'estimate' => $task->update(['status' => ActivityStatus::Todo]),
             default => null,
         };
 
@@ -318,15 +318,15 @@ new class extends Component
     /**
      * Apply priority suggestion from AI analysis.
      */
-    private function applyPrioritySuggestion(Task $task, int $taskId): void
+    private function applyPrioritySuggestion(Activity $task, int $taskId): void
     {
         $suggestion = collect($this->backlogAnalysis)->firstWhere('task_id', $taskId);
         $priority = $suggestion['suggested_priority'] ?? null;
 
-        $priorityEnum = $priority ? TaskPriority::tryFrom($priority) : null;
+        $priorityEnum = $priority ? ActivityPriority::tryFrom($priority) : null;
 
         $task->update([
-            'status' => TaskStatus::Todo,
+            'status' => ActivityStatus::Todo,
             'priority' => $priorityEnum ?? $task->priority,
         ]);
     }
@@ -459,7 +459,7 @@ new class extends Component
                                 size="sm"
                                 class="min-w-32"
                             >
-                                @foreach (TaskPriority::cases() as $priority)
+                                @foreach (ActivityPriority::cases() as $priority)
                                     <option
                                         value="{{ $priority->value }}"
                                         @selected($task->priority === $priority)
@@ -595,7 +595,7 @@ new class extends Component
                 @else
                     @php
                         $analysisTaskIds = array_column($backlogAnalysis, 'task_id');
-                        $analysisTasks = \App\Models\Task::whereIn('id', $analysisTaskIds)->get()->keyBy('id');
+                        $analysisTasks = \App\Models\Activity::whereIn('id', $analysisTaskIds)->get()->keyBy('id');
                     @endphp
 
                     <div class="max-h-96 space-y-3 overflow-y-auto">

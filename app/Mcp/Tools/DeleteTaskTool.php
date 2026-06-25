@@ -2,7 +2,7 @@
 
 namespace App\Mcp\Tools;
 
-use App\Models\Task;
+use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -22,13 +22,13 @@ class DeleteTaskTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'task_id' => 'required|integer|exists:tasks,id',
+            'task_id' => 'required|integer|exists:activities,id',
         ], [
             'task_id.required' => 'You must provide a task_id. Use list-tasks to find available task IDs.',
             'task_id.exists' => 'Task not found. Use list-tasks to find available task IDs.',
         ]);
 
-        $task = Task::findOrFail($validated['task_id']);
+        $task = Activity::findOrFail($validated['task_id']);
         $title = $task->title;
         $id = $task->id;
 

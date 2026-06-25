@@ -1,8 +1,8 @@
 <?php
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\DailyPlan;
-use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -37,7 +37,7 @@ test('suggestDailyPlan calls service and shows suggestions', function () {
         'soloboard.ai_model' => 'claude-sonnet-4-20250514',
     ]);
 
-    $task = Task::factory()->todo()->create(['title' => 'Task sugerida']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task sugerida']);
 
     $suggestions = [
         ['task_id' => $task->id, 'reason' => 'High priority task', 'priority_score' => 85],
@@ -78,7 +78,7 @@ test('suggestDailyPlan rate limiting prevents rapid API calls', function () {
         'soloboard.ai_model' => 'claude-sonnet-4-20250514',
     ]);
 
-    Task::factory()->todo()->create();
+    Activity::factory()->todo()->create();
 
     Http::fake([
         'api.anthropic.com/*' => Http::response([
@@ -111,7 +111,7 @@ test('suggestDailyPlan handles API error gracefully', function () {
         'soloboard.ai_model' => 'claude-sonnet-4-20250514',
     ]);
 
-    Task::factory()->todo()->create();
+    Activity::factory()->todo()->create();
 
     Http::fake([
         'api.anthropic.com/*' => Http::response(['error' => 'server_error'], 500),
@@ -129,7 +129,7 @@ test('addSuggestionToPlan adds task to daily plan', function () {
         'soloboard.ai_api_key' => 'test-key',
     ]);
 
-    $task = Task::factory()->todo()->create(['title' => 'Task sugerida']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task sugerida']);
 
     Livewire::test('pages::daily-planner')
         ->set('aiSuggestions', [
@@ -141,7 +141,7 @@ test('addSuggestionToPlan adds task to daily plan', function () {
 
     $plan = DailyPlan::whereDate('date', now()->toDateString())->first();
 
-    expect($plan->tasks()->where('task_id', $task->id)->exists())->toBeTrue();
+    expect($plan->tasks()->where('activities.id', $task->id)->exists())->toBeTrue();
 });
 
 test('addAllSuggestionsToPlan adds all tasks and closes modal', function () {
@@ -150,8 +150,8 @@ test('addAllSuggestionsToPlan adds all tasks and closes modal', function () {
         'soloboard.ai_api_key' => 'test-key',
     ]);
 
-    $task1 = Task::factory()->todo()->create();
-    $task2 = Task::factory()->doing()->create();
+    $task1 = Activity::factory()->todo()->create();
+    $task2 = Activity::factory()->doing()->create();
 
     Livewire::test('pages::daily-planner')
         ->set('aiSuggestions', [
@@ -165,7 +165,7 @@ test('addAllSuggestionsToPlan adds all tasks and closes modal', function () {
 
     $plan = DailyPlan::whereDate('date', now()->toDateString())->first();
 
-    expect($plan->tasks()->whereIn('task_id', [$task1->id, $task2->id])->count())->toBe(2);
+    expect($plan->tasks()->whereIn('activities.id', [$task1->id, $task2->id])->count())->toBe(2);
 });
 
 // ── Inbox AI Integration ──────────────────────────────────────────────
@@ -194,7 +194,7 @@ test('analyzeBacklog calls service and shows analysis', function () {
         'soloboard.ai_model' => 'claude-sonnet-4-20250514',
     ]);
 
-    $task = Task::factory()->create(['title' => 'Task para analisar']);
+    $task = Activity::factory()->create(['title' => 'Task para analisar']);
 
     $analysis = [
         [
@@ -241,7 +241,7 @@ test('analyzeBacklog rate limiting prevents rapid API calls', function () {
         'soloboard.ai_model' => 'claude-sonnet-4-20250514',
     ]);
 
-    Task::factory()->create();
+    Activity::factory()->create();
 
     Http::fake([
         'api.anthropic.com/*' => Http::response([
@@ -273,7 +273,7 @@ test('analyzeBacklog handles API error gracefully', function () {
         'soloboard.ai_model' => 'claude-sonnet-4-20250514',
     ]);
 
-    Task::factory()->create();
+    Activity::factory()->create();
 
     Http::fake([
         'api.anthropic.com/*' => Http::response(['error' => 'server_error'], 500),
@@ -291,7 +291,7 @@ test('applyBacklogSuggestion with prioritize action updates task', function () {
         'soloboard.ai_api_key' => 'test-key',
     ]);
 
-    $task = Task::factory()->create(['title' => 'Task para priorizar']);
+    $task = Activity::factory()->create(['title' => 'Task para priorizar']);
 
     Livewire::test('pages::inbox')
         ->set('backlogAnalysis', [
@@ -309,7 +309,7 @@ test('applyBacklogSuggestion with prioritize action updates task', function () {
 
     $task->refresh();
 
-    expect($task->status)->toBe(TaskStatus::Todo)
+    expect($task->status)->toBe(ActivityStatus::Todo)
         ->and($task->priority->value)->toBe('high');
 });
 
@@ -319,7 +319,7 @@ test('applyBacklogSuggestion with archive action archives task', function () {
         'soloboard.ai_api_key' => 'test-key',
     ]);
 
-    $task = Task::factory()->create(['title' => 'Task para arquivar']);
+    $task = Activity::factory()->create(['title' => 'Task para arquivar']);
 
     Livewire::test('pages::inbox')
         ->set('backlogAnalysis', [
@@ -337,7 +337,7 @@ test('applyBacklogSuggestion with archive action archives task', function () {
 
     $task->refresh();
 
-    expect($task->status)->toBe(TaskStatus::Done)
+    expect($task->status)->toBe(ActivityStatus::Done)
         ->and($task->completed_at)->not->toBeNull();
 });
 
@@ -347,8 +347,8 @@ test('dismissBacklogSuggestion removes suggestion from list', function () {
         'soloboard.ai_api_key' => 'test-key',
     ]);
 
-    $task1 = Task::factory()->create();
-    $task2 = Task::factory()->create();
+    $task1 = Activity::factory()->create();
+    $task2 = Activity::factory()->create();
 
     Livewire::test('pages::inbox')
         ->set('backlogAnalysis', [
@@ -367,7 +367,7 @@ test('dismissBacklogSuggestion closes modal when last suggestion dismissed', fun
         'soloboard.ai_api_key' => 'test-key',
     ]);
 
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('pages::inbox')
         ->set('backlogAnalysis', [

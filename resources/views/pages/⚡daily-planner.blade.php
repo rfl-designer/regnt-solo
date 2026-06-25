@@ -1,8 +1,8 @@
 <?php
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\DailyPlan;
-use App\Models\Task;
 use App\Services\AiAssistantService;
 use Carbon\Carbon;
 use Flux\Flux;
@@ -62,14 +62,14 @@ new class extends Component
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Task>
+     * @return \Illuminate\Database\Eloquent\Collection<int, Activity>
      */
     #[Computed]
     public function availableTasks(): \Illuminate\Database\Eloquent\Collection
     {
         $planTaskIds = $this->plan->tasks->pluck('id')->toArray();
 
-        return Task::active()
+        return Activity::active()
             ->whereNotIn('id', $planTaskIds)
             ->when($this->filterProjectId, fn ($q) => $q->where('project_id', $this->filterProjectId))
             ->with('project')
@@ -114,7 +114,7 @@ new class extends Component
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, Task>|\Illuminate\Database\Eloquent\Collection<int, Task>
+     * @return \Illuminate\Support\Collection<int, Activity>|\Illuminate\Database\Eloquent\Collection<int, Activity>
      */
     #[Computed]
     public function yesterdayIncompleteTasks(): \Illuminate\Support\Collection|\Illuminate\Database\Eloquent\Collection
@@ -155,8 +155,8 @@ new class extends Component
             return;
         }
 
-        $task = Task::active()->findOrFail($taskId);
-        $maxOrder = $this->plan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+        $task = Activity::active()->findOrFail($taskId);
+        $maxOrder = $this->plan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
 
         $this->plan->tasks()->syncWithoutDetaching([
             $taskId => ['sort_order' => $maxOrder + 1],
@@ -173,7 +173,7 @@ new class extends Component
             return;
         }
 
-        $task = Task::findOrFail($taskId);
+        $task = Activity::findOrFail($taskId);
         $this->plan->tasks()->detach($taskId);
 
         unset($this->plan, $this->availableTasks, $this->completionRate);
@@ -187,8 +187,8 @@ new class extends Component
             return;
         }
 
-        $task = Task::findOrFail($taskId);
-        $pivot = $this->plan->tasks()->where('task_id', $taskId)->first()?->pivot;
+        $task = Activity::findOrFail($taskId);
+        $pivot = $this->plan->tasks()->where('activity_id', $taskId)->first()?->pivot;
 
         if (! $pivot) {
             return;
@@ -200,7 +200,7 @@ new class extends Component
             Flux::toast(variant: 'success', heading: 'Task concluída', text: $task->title);
         } else {
             $task->update([
-                'status' => TaskStatus::Doing,
+                'status' => ActivityStatus::Doing,
                 'completed_at' => null,
             ]);
             $this->plan->tasks()->updateExistingPivot($taskId, ['completed_at' => null]);
@@ -230,7 +230,7 @@ new class extends Component
         }
 
         $tasks = $this->yesterdayIncompleteTasks;
-        $maxOrder = $this->plan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+        $maxOrder = $this->plan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
 
         foreach ($tasks as $index => $task) {
             $this->plan->tasks()->syncWithoutDetaching([
@@ -252,7 +252,7 @@ new class extends Component
         }
 
         $tasks = $this->yesterdayIncompleteTasks->whereIn('id', $this->selectedYesterdayTasks);
-        $maxOrder = $this->plan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+        $maxOrder = $this->plan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
 
         foreach ($tasks as $index => $task) {
             $this->plan->tasks()->syncWithoutDetaching([
@@ -280,13 +280,13 @@ new class extends Component
 
     public function moveToToday(int $taskId): void
     {
-        if (! $this->plan->tasks()->where('task_id', $taskId)->exists()) {
+        if (! $this->plan->tasks()->where('activity_id', $taskId)->exists()) {
             return;
         }
 
-        $task = Task::findOrFail($taskId);
+        $task = Activity::findOrFail($taskId);
         $todayPlan = DailyPlan::getOrCreateForDate(Carbon::today());
-        $maxOrder = $todayPlan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+        $maxOrder = $todayPlan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
 
         $todayPlan->tasks()->syncWithoutDetaching([
             $taskId => ['sort_order' => $maxOrder + 1],
@@ -332,8 +332,8 @@ new class extends Component
         $this->aiLoading = true;
 
         try {
-            $availableTasks = Task::query()
-                ->whereIn('status', [TaskStatus::Todo, TaskStatus::Doing])
+            $availableTasks = Activity::query()
+                ->whereIn('status', [ActivityStatus::Todo, ActivityStatus::Doing])
                 ->with('project')
                 ->get();
 
@@ -389,15 +389,15 @@ new class extends Component
      */
     public function addSuggestionToPlan(int $taskId): void
     {
-        $task = Task::query()
-            ->whereIn('status', [TaskStatus::Todo, TaskStatus::Doing])
+        $task = Activity::query()
+            ->whereIn('status', [ActivityStatus::Todo, ActivityStatus::Doing])
             ->find($taskId);
 
         if (! $task) {
             return;
         }
 
-        $maxOrder = $this->plan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+        $maxOrder = $this->plan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
 
         $this->plan->tasks()->syncWithoutDetaching([
             $taskId => ['sort_order' => $maxOrder + 1],
@@ -419,12 +419,12 @@ new class extends Component
     {
         $taskIds = array_column($this->aiSuggestions, 'task_id');
 
-        $tasks = Task::query()
-            ->whereIn('status', [TaskStatus::Todo, TaskStatus::Doing])
+        $tasks = Activity::query()
+            ->whereIn('status', [ActivityStatus::Todo, ActivityStatus::Doing])
             ->whereIn('id', $taskIds)
             ->get();
 
-        $maxOrder = $this->plan->tasks()->max('daily_plan_task.sort_order') ?? -1;
+        $maxOrder = $this->plan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
 
         foreach ($tasks as $index => $task) {
             $this->plan->tasks()->syncWithoutDetaching([
@@ -935,7 +935,7 @@ new class extends Component
                 @else
                     @php
                         $suggestionTaskIds = array_column($aiSuggestions, 'task_id');
-                        $suggestionTasks = \App\Models\Task::whereIn('id', $suggestionTaskIds)->get()->keyBy('id');
+                        $suggestionTasks = \App\Models\Activity::whereIn('id', $suggestionTaskIds)->get()->keyBy('id');
                     @endphp
 
                     <div class="max-h-96 space-y-3 overflow-y-auto">

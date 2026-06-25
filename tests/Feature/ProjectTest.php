@@ -2,8 +2,8 @@
 
 use App\Enums\ProjectPriority;
 use App\Enums\ProjectStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 
 test('project status enum has all expected values', function () {
     $cases = ProjectStatus::cases();
@@ -68,7 +68,7 @@ test('project casts status and priority to enums', function () {
 
 test('project has many tasks', function () {
     $project = Project::factory()->create();
-    Task::factory()->count(3)->create(['project_id' => $project->id]);
+    Activity::factory()->count(3)->create(['project_id' => $project->id]);
 
     expect($project->tasks)->toHaveCount(3);
 });

@@ -1,7 +1,7 @@
 <?php
 
+use App\Models\Activity;
 use App\Models\DailyPlan;
-use App\Models\Task;
 use App\Models\User;
 use Carbon\Carbon;
 use Livewire\Livewire;
@@ -22,8 +22,8 @@ test('daily planner has selectedYesterdayTasks property', function () {
 test('daily planner can select individual yesterday tasks', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task1 = Task::factory()->todo()->create(['title' => 'Task 1']);
-    $task2 = Task::factory()->todo()->create(['title' => 'Task 2']);
+    $task1 = Activity::factory()->todo()->create(['title' => 'Task 1']);
+    $task2 = Activity::factory()->todo()->create(['title' => 'Task 2']);
     $yesterdayPlan->tasks()->attach($task1, ['sort_order' => 0]);
     $yesterdayPlan->tasks()->attach($task2, ['sort_order' => 1]);
 
@@ -35,9 +35,9 @@ test('daily planner can select individual yesterday tasks', function () {
 test('daily planner can carry over only selected tasks', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task1 = Task::factory()->todo()->create(['title' => 'Task 1']);
-    $task2 = Task::factory()->todo()->create(['title' => 'Task 2']);
-    $task3 = Task::factory()->todo()->create(['title' => 'Task 3']);
+    $task1 = Activity::factory()->todo()->create(['title' => 'Task 1']);
+    $task2 = Activity::factory()->todo()->create(['title' => 'Task 2']);
+    $task3 = Activity::factory()->todo()->create(['title' => 'Task 3']);
     $yesterdayPlan->tasks()->attach($task1, ['sort_order' => 0]);
     $yesterdayPlan->tasks()->attach($task2, ['sort_order' => 1]);
     $yesterdayPlan->tasks()->attach($task3, ['sort_order' => 2]);
@@ -48,15 +48,15 @@ test('daily planner can carry over only selected tasks', function () {
 
     $todayPlan = DailyPlan::whereDate('date', now()->toDateString())->first();
 
-    expect($todayPlan->tasks()->where('task_id', $task1->id)->exists())->toBeTrue()
-        ->and($todayPlan->tasks()->where('task_id', $task2->id)->exists())->toBeFalse()
-        ->and($todayPlan->tasks()->where('task_id', $task3->id)->exists())->toBeTrue();
+    expect($todayPlan->tasks()->where('activity_id', $task1->id)->exists())->toBeTrue()
+        ->and($todayPlan->tasks()->where('activity_id', $task2->id)->exists())->toBeFalse()
+        ->and($todayPlan->tasks()->where('activity_id', $task3->id)->exists())->toBeTrue();
 });
 
 test('daily planner clears selection after carry over selected', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $yesterdayPlan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
@@ -68,7 +68,7 @@ test('daily planner clears selection after carry over selected', function () {
 test('daily planner carry over selected does nothing when empty selection', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $yesterdayPlan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
@@ -77,14 +77,14 @@ test('daily planner carry over selected does nothing when empty selection', func
 
     $todayPlan = DailyPlan::whereDate('date', now()->toDateString())->first();
 
-    expect($todayPlan?->tasks()->where('task_id', $task->id)->exists() ?? false)->toBeFalse();
+    expect($todayPlan?->tasks()->where('activity_id', $task->id)->exists() ?? false)->toBeFalse();
 });
 
 test('daily planner carry over selected only works on today', function () {
     $tomorrow = Carbon::tomorrow()->toDateString();
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $yesterdayPlan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner', ['date' => $tomorrow])
@@ -93,15 +93,15 @@ test('daily planner carry over selected only works on today', function () {
 
     $tomorrowPlan = DailyPlan::whereDate('date', $tomorrow)->first();
 
-    expect($tomorrowPlan?->tasks()->where('task_id', $task->id)->exists() ?? false)->toBeFalse();
+    expect($tomorrowPlan?->tasks()->where('activity_id', $task->id)->exists() ?? false)->toBeFalse();
 });
 
 test('daily planner can select all yesterday tasks', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task1 = Task::factory()->todo()->create();
-    $task2 = Task::factory()->todo()->create();
-    $task3 = Task::factory()->todo()->create();
+    $task1 = Activity::factory()->todo()->create();
+    $task2 = Activity::factory()->todo()->create();
+    $task3 = Activity::factory()->todo()->create();
     $yesterdayPlan->tasks()->attach($task1, ['sort_order' => 0]);
     $yesterdayPlan->tasks()->attach($task2, ['sort_order' => 1]);
     $yesterdayPlan->tasks()->attach($task3, ['sort_order' => 2]);
@@ -120,8 +120,8 @@ test('daily planner can select all yesterday tasks', function () {
 test('daily planner can deselect all yesterday tasks', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task1 = Task::factory()->todo()->create();
-    $task2 = Task::factory()->todo()->create();
+    $task1 = Activity::factory()->todo()->create();
+    $task2 = Activity::factory()->todo()->create();
     $yesterdayPlan->tasks()->attach($task1, ['sort_order' => 0]);
     $yesterdayPlan->tasks()->attach($task2, ['sort_order' => 1]);
 
@@ -134,7 +134,7 @@ test('daily planner can deselect all yesterday tasks', function () {
 test('daily planner clears selection after regular carry over', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $yesterdayPlan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
@@ -159,7 +159,7 @@ test('daily planner does not show today badge', function () {
 
 test('daily planner shows collapsible section for completed tasks', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $completedTask = Task::factory()->done()->create(['title' => 'Task concluída']);
+    $completedTask = Activity::factory()->done()->create(['title' => 'Task concluída']);
     $plan->tasks()->attach($completedTask, ['sort_order' => 0, 'completed_at' => now()]);
 
     Livewire::test('pages::daily-planner')
@@ -169,8 +169,8 @@ test('daily planner shows collapsible section for completed tasks', function () 
 
 test('daily planner separates pending and completed tasks', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $pendingTask = Task::factory()->todo()->create(['title' => 'Task pendente']);
-    $completedTask = Task::factory()->done()->create(['title' => 'Task concluída']);
+    $pendingTask = Activity::factory()->todo()->create(['title' => 'Task pendente']);
+    $completedTask = Activity::factory()->done()->create(['title' => 'Task concluída']);
     $plan->tasks()->attach($pendingTask, ['sort_order' => 0]);
     $plan->tasks()->attach($completedTask, ['sort_order' => 1, 'completed_at' => now()]);
 
@@ -182,8 +182,8 @@ test('daily planner separates pending and completed tasks', function () {
 
 test('daily planner shows completed count badge in collapsible header', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $completedTask1 = Task::factory()->done()->create(['title' => 'Task 1']);
-    $completedTask2 = Task::factory()->done()->create(['title' => 'Task 2']);
+    $completedTask1 = Activity::factory()->done()->create(['title' => 'Task 1']);
+    $completedTask2 = Activity::factory()->done()->create(['title' => 'Task 2']);
     $plan->tasks()->attach($completedTask1, ['sort_order' => 0, 'completed_at' => now()]);
     $plan->tasks()->attach($completedTask2, ['sort_order' => 1, 'completed_at' => now()]);
 
@@ -193,7 +193,7 @@ test('daily planner shows completed count badge in collapsible header', function
 
 test('daily planner hides completed section when no completed tasks', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $pendingTask = Task::factory()->todo()->create(['title' => 'Task pendente']);
+    $pendingTask = Activity::factory()->todo()->create(['title' => 'Task pendente']);
     $plan->tasks()->attach($pendingTask, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
@@ -203,7 +203,7 @@ test('daily planner hides completed section when no completed tasks', function (
 test('daily planner renders checkboxes in yesterday tasks section', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create(['title' => 'Task de ontem']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task de ontem']);
     $yesterdayPlan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
@@ -214,8 +214,8 @@ test('daily planner renders checkboxes in yesterday tasks section', function () 
 test('daily planner shows selection count when tasks selected', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task1 = Task::factory()->todo()->create();
-    $task2 = Task::factory()->todo()->create();
+    $task1 = Activity::factory()->todo()->create();
+    $task2 = Activity::factory()->todo()->create();
     $yesterdayPlan->tasks()->attach($task1, ['sort_order' => 0]);
     $yesterdayPlan->tasks()->attach($task2, ['sort_order' => 1]);
 

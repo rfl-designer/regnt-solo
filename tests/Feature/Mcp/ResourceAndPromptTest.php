@@ -1,20 +1,20 @@
 <?php
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
 use App\Mcp\Prompts\DailyPlanningPrompt;
 use App\Mcp\Resources\ProjectOverviewResource;
 use App\Mcp\Servers\SoloBoardServer;
+use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TimeEntry;
 
 // ProjectOverviewResource tests
 test('overview resource returns project data', function () {
     $project = Project::factory()->create();
-    Task::factory()->count(2)->create([
+    Activity::factory()->count(2)->create([
         'project_id' => $project->id,
-        'status' => TaskStatus::Todo,
+        'status' => ActivityStatus::Todo,
     ]);
 
     $response = SoloBoardServer::resource(ProjectOverviewResource::class);
@@ -24,8 +24,8 @@ test('overview resource returns project data', function () {
 });
 
 test('overview resource shows running timer', function () {
-    $task = Task::factory()->create();
-    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     $response = SoloBoardServer::resource(ProjectOverviewResource::class);
 
@@ -34,7 +34,7 @@ test('overview resource shows running timer', function () {
 });
 
 test('overview resource shows overdue tasks', function () {
-    $task = Task::factory()->overdue()->create();
+    $task = Activity::factory()->overdue()->create();
 
     $response = SoloBoardServer::resource(ProjectOverviewResource::class);
 
@@ -43,9 +43,9 @@ test('overview resource shows overdue tasks', function () {
 });
 
 test('overview resource shows hours worked today', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subHours(2),
         'stopped_at' => now(),
     ]);
@@ -58,9 +58,9 @@ test('overview resource shows hours worked today', function () {
 
 // DailyPlanningPrompt tests
 test('daily planning prompt returns context', function () {
-    Task::factory()->overdue()->create();
-    Task::factory()->doing()->create();
-    Task::factory()->todo()->create();
+    Activity::factory()->overdue()->create();
+    Activity::factory()->doing()->create();
+    Activity::factory()->todo()->create();
 
     $response = SoloBoardServer::prompt(DailyPlanningPrompt::class, []);
 
@@ -71,7 +71,7 @@ test('daily planning prompt returns context', function () {
 
 test('daily planning prompt accepts focus project', function () {
     $project = Project::factory()->create(['slug' => 'my-project']);
-    Task::factory()->todo()->create(['project_id' => $project->id]);
+    Activity::factory()->todo()->create(['project_id' => $project->id]);
 
     $response = SoloBoardServer::prompt(DailyPlanningPrompt::class, [
         'focus_project' => 'my-project',
@@ -83,7 +83,7 @@ test('daily planning prompt accepts focus project', function () {
 
 test('daily planning prompt includes planned tasks', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     $plan->tasks()->attach($task->id, ['sort_order' => 1]);
 
     $response = SoloBoardServer::prompt(DailyPlanningPrompt::class, []);

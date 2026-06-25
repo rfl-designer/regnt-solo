@@ -2,10 +2,10 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Document;
 use App\Models\Project;
-use App\Models\Task;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -40,27 +40,27 @@ class GetProjectContextTool extends Tool
             ->ordered()
             ->get();
 
-        $activeTasks = Task::query()
+        $activeTasks = Activity::query()
             ->where('project_id', $project->id)
-            ->where('status', '!=', TaskStatus::Done)
+            ->where('status', '!=', ActivityStatus::Done)
             ->orderByRaw("CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END")
             ->orderBy('due_date')
             ->get();
 
-        $allTasks = Task::query()
+        $allTasks = Activity::query()
             ->where('project_id', $project->id)
             ->get();
 
         $tasksByStatus = [];
-        foreach (TaskStatus::cases() as $status) {
+        foreach (ActivityStatus::cases() as $status) {
             $tasksByStatus[$status->value] = $allTasks->where('status', $status)->count();
         }
 
-        $totalTimeMinutes = $allTasks->sum(function (Task $task) {
+        $totalTimeMinutes = $allTasks->sum(function (Activity $task) {
             return $task->timeEntries->sum('duration_minutes');
         });
 
-        $overdueCount = $allTasks->filter(fn (Task $task) => $task->isOverdue())->count();
+        $overdueCount = $allTasks->filter(fn (Activity $task) => $task->isOverdue())->count();
 
         $data = [
             'project' => [
@@ -81,7 +81,7 @@ class GetProjectContextTool extends Tool
                 'content' => $doc->content,
                 'is_pinned' => $doc->is_pinned,
             ])->all(),
-            'active_tasks' => $activeTasks->map(fn (Task $task) => [
+            'active_tasks' => $activeTasks->map(fn (Activity $task) => [
                 'id' => $task->id,
                 'title' => $task->title,
                 'status' => $task->status->value,

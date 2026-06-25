@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
+use App\Models\ActivityStatusChange;
 use App\Models\Project;
-use App\Models\Task;
-use App\Models\TaskStatusChange;
 use App\Models\TimeEntry;
 use App\Services\AnalyticsService;
 use Carbon\Carbon;
@@ -25,11 +25,11 @@ test('contributionHeatmap returns correct number of days for given weeks', funct
 test('contributionHeatmap calculates hours from time entries correctly', function () {
     $service = new AnalyticsService;
 
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     // 2-hour time entry today
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->addHours(9),
         'stopped_at' => Carbon::today()->addHours(11),
     ]);
@@ -44,7 +44,7 @@ test('contributionHeatmap calculates hours from time entries correctly', functio
 test('contributionHeatmap counts completed tasks per day', function () {
     $service = new AnalyticsService;
 
-    Task::withoutEvents(fn () => Task::factory()->count(3)->done()->create([
+    Activity::withoutEvents(fn () => Activity::factory()->count(3)->done()->create([
         'completed_at' => Carbon::today(),
     ]));
 
@@ -57,7 +57,7 @@ test('contributionHeatmap counts completed tasks per day', function () {
 test('contributionHeatmap calculates level correctly based on hours', function () {
     $service = new AnalyticsService;
 
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     $yesterday = Carbon::yesterday();
     $twoDaysAgo = Carbon::today()->subDays(2);
@@ -66,28 +66,28 @@ test('contributionHeatmap calculates level correctly based on hours', function (
 
     // Level 1: 30 minutes (<1h)
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => $yesterday->copy()->addHours(9),
         'stopped_at' => $yesterday->copy()->addHours(9)->addMinutes(30),
     ]);
 
     // Level 2: 1.5 hours (1-2h)
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => $twoDaysAgo->copy()->addHours(9),
         'stopped_at' => $twoDaysAgo->copy()->addHours(10)->addMinutes(30),
     ]);
 
     // Level 3: 3 hours (2-4h)
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => $threeDaysAgo->copy()->addHours(9),
         'stopped_at' => $threeDaysAgo->copy()->addHours(12),
     ]);
 
     // Level 4: 5 hours (4h+)
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => $fourDaysAgo->copy()->addHours(8),
         'stopped_at' => $fourDaysAgo->copy()->addHours(13),
     ]);
@@ -113,10 +113,10 @@ test('contributionHeatmap returns level 0 when no entries exist', function () {
 test('contributionHeatmap ignores running time entries', function () {
     $service = new AnalyticsService;
 
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     TimeEntry::factory()->running()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->addHours(9),
     ]);
 
@@ -132,33 +132,33 @@ test('contributionHeatmap ignores running time entries', function () {
 test('cycleTime calculates cycle time from first status change to done', function () {
     $service = new AnalyticsService;
 
-    $task = Task::withoutEvents(fn () => Task::factory()->done()->create([
+    $task = Activity::withoutEvents(fn () => Activity::factory()->done()->create([
         'completed_at' => Carbon::today(),
     ]));
 
     $baseTime = Carbon::today()->subHours(3);
 
     // First status change: task created (inbox)
-    TaskStatusChange::factory()->create([
-        'task_id' => $task->id,
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $task->id,
         'from_status' => null,
-        'to_status' => TaskStatus::Inbox,
+        'to_status' => ActivityStatus::Inbox,
         'changed_at' => $baseTime,
     ]);
 
     // Moved to doing
-    TaskStatusChange::factory()->create([
-        'task_id' => $task->id,
-        'from_status' => TaskStatus::Inbox,
-        'to_status' => TaskStatus::Doing,
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $task->id,
+        'from_status' => ActivityStatus::Inbox,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => $baseTime->copy()->addHour(),
     ]);
 
     // Completed (done) — 3 hours after first change
-    TaskStatusChange::factory()->create([
-        'task_id' => $task->id,
-        'from_status' => TaskStatus::Doing,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $task->id,
+        'from_status' => ActivityStatus::Doing,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => $baseTime->copy()->addHours(3),
     ]);
 
@@ -177,42 +177,42 @@ test('cycleTime filters by project when projectId provided', function () {
     $projectB = Project::factory()->create(['name' => 'Project B']);
 
     // Task in Project A
-    $taskA = Task::withoutEvents(fn () => Task::factory()->done()->create([
+    $taskA = Activity::withoutEvents(fn () => Activity::factory()->done()->create([
         'project_id' => $projectA->id,
         'completed_at' => Carbon::today(),
     ]));
 
-    TaskStatusChange::factory()->create([
-        'task_id' => $taskA->id,
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $taskA->id,
         'from_status' => null,
-        'to_status' => TaskStatus::Inbox,
+        'to_status' => ActivityStatus::Inbox,
         'changed_at' => Carbon::today()->subHours(2),
     ]);
 
-    TaskStatusChange::factory()->create([
-        'task_id' => $taskA->id,
-        'from_status' => TaskStatus::Inbox,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $taskA->id,
+        'from_status' => ActivityStatus::Inbox,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => Carbon::today(),
     ]);
 
     // Task in Project B
-    $taskB = Task::withoutEvents(fn () => Task::factory()->done()->create([
+    $taskB = Activity::withoutEvents(fn () => Activity::factory()->done()->create([
         'project_id' => $projectB->id,
         'completed_at' => Carbon::today(),
     ]));
 
-    TaskStatusChange::factory()->create([
-        'task_id' => $taskB->id,
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $taskB->id,
         'from_status' => null,
-        'to_status' => TaskStatus::Inbox,
+        'to_status' => ActivityStatus::Inbox,
         'changed_at' => Carbon::today()->subHour(),
     ]);
 
-    TaskStatusChange::factory()->create([
-        'task_id' => $taskB->id,
-        'from_status' => TaskStatus::Inbox,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $taskB->id,
+        'from_status' => ActivityStatus::Inbox,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => Carbon::today(),
     ]);
 
@@ -225,7 +225,7 @@ test('cycleTime filters by project when projectId provided', function () {
 test('cycleTime returns empty when no completed tasks', function () {
     $service = new AnalyticsService;
 
-    Task::withoutEvents(fn () => Task::factory()->doing()->create());
+    Activity::withoutEvents(fn () => Activity::factory()->doing()->create());
 
     $result = $service->cycleTime('7d');
 
@@ -237,18 +237,18 @@ test('cycleTime returns empty when no completed tasks', function () {
 test('focusRatio returns correct ratio with mix of focus and non-focus entries', function () {
     $service = new AnalyticsService;
 
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     // 1-hour focus session
     TimeEntry::factory()->focus()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->addHours(9),
         'stopped_at' => Carbon::today()->addHours(10),
     ]);
 
     // 1-hour non-focus entry
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->addHours(11),
         'stopped_at' => Carbon::today()->addHours(12),
         'is_focus_session' => false,
@@ -270,16 +270,16 @@ test('focusRatio returns 0.0 when no entries exist', function () {
 test('focusRatio returns 1.0 when all entries are focus sessions', function () {
     $service = new AnalyticsService;
 
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     TimeEntry::factory()->focus()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->addHours(9),
         'stopped_at' => Carbon::today()->addHours(10),
     ]);
 
     TimeEntry::factory()->focus()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->addHours(11),
         'stopped_at' => Carbon::today()->addHours(12),
     ]);
@@ -290,18 +290,18 @@ test('focusRatio returns 1.0 when all entries are focus sessions', function () {
 test('focusRatio excludes running entries', function () {
     $service = new AnalyticsService;
 
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     // Completed focus session: 1 hour
     TimeEntry::factory()->focus()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->addHours(9),
         'stopped_at' => Carbon::today()->addHours(10),
     ]);
 
     // Running non-focus entry — should be excluded
     TimeEntry::factory()->running()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->addHours(11),
         'is_focus_session' => false,
     ]);
@@ -318,14 +318,14 @@ test('projectHealthScores scores high for healthy project', function () {
     $project = Project::factory()->create();
 
     // Recent, non-overdue, non-stale task
-    $task = Task::withoutEvents(fn () => Task::factory()->doing()->create([
+    $task = Activity::withoutEvents(fn () => Activity::factory()->doing()->create([
         'project_id' => $project->id,
         'updated_at' => Carbon::now(),
     ]));
 
     // Recent activity
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::now()->subHour(),
         'stopped_at' => Carbon::now(),
     ]);
@@ -342,15 +342,15 @@ test('projectHealthScores penalizes project with overdue tasks', function () {
     $project = Project::factory()->create();
 
     // Create overdue tasks
-    Task::withoutEvents(fn () => Task::factory()->count(2)->overdue()->create([
+    Activity::withoutEvents(fn () => Activity::factory()->count(2)->overdue()->create([
         'project_id' => $project->id,
         'updated_at' => Carbon::now(),
     ]));
 
     // Recent activity to avoid inactivity penalty
-    $task = Task::query()->where('project_id', $project->id)->first();
+    $task = Activity::query()->where('project_id', $project->id)->first();
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::now()->subHour(),
         'stopped_at' => Carbon::now(),
     ]);
@@ -369,16 +369,16 @@ test('projectHealthScores penalizes project with stale tasks', function () {
     $project = Project::factory()->create();
 
     // Stale task: updated more than 7 days ago
-    Task::withoutEvents(fn () => Task::factory()->todo()->create([
+    Activity::withoutEvents(fn () => Activity::factory()->todo()->create([
         'project_id' => $project->id,
         'updated_at' => Carbon::now()->subDays(10),
     ]));
 
     // Recent activity to avoid inactivity penalty
-    TaskStatusChange::factory()->create([
-        'task_id' => Task::query()->where('project_id', $project->id)->first()->id,
-        'from_status' => TaskStatus::Inbox,
-        'to_status' => TaskStatus::Todo,
+    ActivityStatusChange::factory()->create([
+        'activity_id' => Activity::query()->where('project_id', $project->id)->first()->id,
+        'from_status' => ActivityStatus::Inbox,
+        'to_status' => ActivityStatus::Todo,
         'changed_at' => Carbon::now(),
     ]);
 
@@ -425,12 +425,12 @@ test('velocityTrend counts completed and created tasks per week', function () {
     $weekStart = Carbon::today()->startOfWeek();
 
     // 3 tasks created this week
-    Task::withoutEvents(fn () => Task::factory()->count(3)->create([
+    Activity::withoutEvents(fn () => Activity::factory()->count(3)->create([
         'created_at' => $weekStart->copy()->addDay(),
     ]));
 
     // 2 tasks completed this week
-    Task::withoutEvents(fn () => Task::factory()->count(2)->done()->create([
+    Activity::withoutEvents(fn () => Activity::factory()->count(2)->done()->create([
         'created_at' => $weekStart->copy()->subWeeks(2),
         'completed_at' => $weekStart->copy()->addDays(2),
     ]));
@@ -465,12 +465,12 @@ test('streaks calculates current streak from consecutive days', function () {
 
     $service = new AnalyticsService;
 
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     // Activity for 3 consecutive days ending today
     for ($i = 0; $i < 3; $i++) {
         TimeEntry::factory()->create([
-            'task_id' => $task->id,
+            'activity_id' => $task->id,
             'started_at' => Carbon::today()->subDays($i)->addHours(9),
             'stopped_at' => Carbon::today()->subDays($i)->addHours(10),
         ]);
@@ -489,18 +489,18 @@ test('streaks breaks when day is missed', function () {
 
     $service = new AnalyticsService;
 
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     // Activity today
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->addHours(9),
         'stopped_at' => Carbon::today()->addHours(10),
     ]);
 
     // Activity 2 days ago (gap yesterday)
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->subDays(2)->addHours(9),
         'stopped_at' => Carbon::today()->subDays(2)->addHours(10),
     ]);
@@ -518,18 +518,18 @@ test('streaks focus streak requires 2+ hours of focus sessions', function () {
 
     $service = new AnalyticsService;
 
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     // Today: 2.5 hours of focus — qualifies
     TimeEntry::factory()->focus()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->addHours(9),
         'stopped_at' => Carbon::today()->addHours(11)->addMinutes(30),
     ]);
 
     // Yesterday: only 30 minutes of focus — does NOT qualify
     TimeEntry::factory()->focus()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::yesterday()->addHours(9),
         'stopped_at' => Carbon::yesterday()->addHours(9)->addMinutes(30),
     ]);
@@ -559,12 +559,12 @@ test('streaks best streak can be longer than current streak', function () {
 
     $service = new AnalyticsService;
 
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     // Old streak: 5 consecutive days (ending 10 days ago)
     for ($i = 0; $i < 5; $i++) {
         TimeEntry::factory()->create([
-            'task_id' => $task->id,
+            'activity_id' => $task->id,
             'started_at' => Carbon::today()->subDays(10 + $i)->addHours(9),
             'stopped_at' => Carbon::today()->subDays(10 + $i)->addHours(10),
         ]);
@@ -573,7 +573,7 @@ test('streaks best streak can be longer than current streak', function () {
     // Current streak: 2 consecutive days (today and yesterday)
     for ($i = 0; $i < 2; $i++) {
         TimeEntry::factory()->create([
-            'task_id' => $task->id,
+            'activity_id' => $task->id,
             'started_at' => Carbon::today()->subDays($i)->addHours(9),
             'stopped_at' => Carbon::today()->subDays($i)->addHours(10),
         ]);
@@ -592,7 +592,7 @@ test('streaks best streak can be longer than current streak', function () {
 test('productivityPatterns identifies best days and hours', function () {
     $service = new AnalyticsService;
 
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     // Find the most recent Monday and Wednesday
     $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
@@ -606,14 +606,14 @@ test('productivityPatterns identifies best days and hours', function () {
 
     // 4 hours on Monday at 10am
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => $monday->copy()->addHours(10),
         'stopped_at' => $monday->copy()->addHours(14),
     ]);
 
     // 2 hours on Wednesday at 14:00
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => $wednesday->copy()->addHours(14),
         'stopped_at' => $wednesday->copy()->addHours(16),
     ]);

@@ -1,9 +1,8 @@
 <?php
 
-use App\Enums\FeatureStatus;
-use App\Models\Feature;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -15,79 +14,80 @@ beforeEach(function () {
 // Kanban renders features (not tasks)
 // ========================================
 
+// ADR: Draft status retired. Board has 4 columns: Backlog/Todo/Doing/Done.
+// Features that previously used 'Draft' status now use 'Backlog'.
 test('project board shows features grouped by explicit status', function () {
     $project = Project::factory()->create();
 
-    // Each feature has explicit status set
-    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature Rascunho', 'status' => FeatureStatus::Draft]);
-    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature Backlog', 'status' => FeatureStatus::Backlog]);
-    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature A Fazer', 'status' => FeatureStatus::Todo]);
-    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature Em Progresso', 'status' => FeatureStatus::Doing]);
-    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Feature Concluida', 'status' => FeatureStatus::Done]);
+    // Each feature has explicit status set (Draft replaced by Backlog)
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'title' => 'Feature Backlog', 'status' => ActivityStatus::Backlog]);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'title' => 'Feature A Fazer', 'status' => ActivityStatus::Todo]);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'title' => 'Feature Em Progresso', 'status' => ActivityStatus::Doing]);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'title' => 'Feature Concluida', 'status' => ActivityStatus::Done]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
     $component
-        ->assertSee('Feature Rascunho')
         ->assertSee('Feature Backlog')
         ->assertSee('Feature A Fazer')
         ->assertSee('Feature Em Progresso')
         ->assertSee('Feature Concluida');
 });
 
-test('project board kanban has all five column headers', function () {
+// ADR: Draft status retired. Board now has 4 columns (Backlog/Todo/Doing/Done). No Rascunho column.
+test('project board kanban has all four column headers', function () {
     $project = Project::factory()->create();
 
     Livewire::test('pages::project-detail', ['slug' => $project->slug])
-        ->assertSee('Rascunho')
         ->assertSee('Backlog')
         ->assertSee('A Fazer')
-        ->assertSee('Em Progresso')
+        ->assertSee('Fazendo')
         ->assertSee('Concluída');
 });
 
 // ========================================
-// Draft column for features without tasks
+// Backlog column (previously Draft column)
 // ========================================
 
-test('draft column shows features with draft status', function () {
+// ADR: Draft status retired; features without explicit status land in Backlog.
+test('backlog column shows features with backlog status', function () {
     $project = Project::factory()->create();
 
-    $draft = Feature::factory()->create([
+    $backlog = Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'title' => 'Feature Sem Tasks',
-        'status' => FeatureStatus::Draft,
+        'status' => ActivityStatus::Backlog,
     ]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
-    $draftFeatures = $component->instance()->getColumnFeatures(FeatureStatus::Draft);
-    expect($draftFeatures)->toHaveCount(1);
-    expect($draftFeatures->first()->id)->toBe($draft->id);
+    $backlogFeatures = $component->instance()->getColumnFeatures(ActivityStatus::Backlog);
+    expect($backlogFeatures)->toHaveCount(1);
+    expect($backlogFeatures->first()->id)->toBe($backlog->id);
 
     $component->assertSee('Feature Sem Tasks');
 });
 
-test('draft column does not include features with non-draft status', function () {
+test('backlog column does not include features with non-backlog status', function () {
     $project = Project::factory()->create();
 
-    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Draft Feature', 'status' => FeatureStatus::Draft]);
-    Feature::factory()->create(['project_id' => $project->id, 'title' => 'Backlog Feature', 'status' => FeatureStatus::Backlog]);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'title' => 'Backlog Feature', 'status' => ActivityStatus::Backlog]);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'title' => 'Todo Feature', 'status' => ActivityStatus::Todo]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
-    $draftFeatures = $component->instance()->getColumnFeatures(FeatureStatus::Draft);
-    expect($draftFeatures)->toHaveCount(1);
-    expect($draftFeatures->first()->title)->toBe('Draft Feature');
+    $backlogFeatures = $component->instance()->getColumnFeatures(ActivityStatus::Backlog);
+    expect($backlogFeatures)->toHaveCount(1);
+    expect($backlogFeatures->first()->title)->toBe('Backlog Feature');
 });
 
-test('draft column count reflects features with draft status', function () {
+test('backlog column count reflects features with backlog status', function () {
     $project = Project::factory()->create();
 
-    Feature::factory()->count(4)->create(['project_id' => $project->id, 'status' => FeatureStatus::Draft]);
+    Activity::factory()->epic()->count(4)->create(['project_id' => $project->id, 'status' => ActivityStatus::Backlog]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
-    expect($component->instance()->getColumnTotal(FeatureStatus::Draft))->toBe(4);
+    expect($component->instance()->getColumnTotal(ActivityStatus::Backlog))->toBe(4);
 });
 
 // ========================================
@@ -97,7 +97,7 @@ test('draft column count reflects features with draft status', function () {
 test('features tab shows feature specs rendered as documents', function () {
     $project = Project::factory()->create();
 
-    $feature = Feature::factory()->create([
+    $feature = Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'title' => 'Feature com Spec',
         'spec' => '## User Story\nTexto exclusivo da spec renderizada.',
@@ -114,7 +114,7 @@ test('features tab shows feature specs rendered as documents', function () {
 test('features tab shows selection prompt before selecting a feature', function () {
     $project = Project::factory()->create();
 
-    Feature::factory()->create([
+    Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'title' => 'Feature sem selecao',
     ]);
@@ -124,32 +124,33 @@ test('features tab shows selection prompt before selecting a feature', function 
         ->assertSee('Selecione uma feature');
 });
 
+// ADR: ActivityStatus::Draft retired. Feature with Backlog status shows 'Backlog' badge.
 test('features tab shows status badge for each feature', function () {
     $project = Project::factory()->create();
 
-    Feature::factory()->create([
+    Activity::factory()->epic()->create([
         'project_id' => $project->id,
-        'title' => 'Feature Draft Tab',
-        'status' => FeatureStatus::Draft,
+        'title' => 'Feature Backlog Tab',
+        'status' => ActivityStatus::Backlog,
     ]);
 
     Livewire::test('pages::project-detail', ['slug' => $project->slug])
         ->set('tab', 'features')
-        ->assertSee('Feature Draft Tab')
-        ->assertSee('Rascunho');
+        ->assertSee('Feature Backlog Tab')
+        ->assertSee('Backlog');
 });
 
 test('features tab shows progress count when feature has tasks', function () {
     $project = Project::factory()->create();
 
-    $feature = Feature::factory()->create([
+    $feature = Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'title' => 'Feature Progresso Tab',
     ]);
 
-    Task::factory()->done()->create(['feature_id' => $feature->id, 'project_id' => $project->id]);
-    Task::factory()->todo()->create(['feature_id' => $feature->id, 'project_id' => $project->id]);
-    Task::factory()->todo()->create(['feature_id' => $feature->id, 'project_id' => $project->id]);
+    Activity::factory()->done()->create(['parent_id' => $feature->id, 'project_id' => $project->id]);
+    Activity::factory()->todo()->create(['parent_id' => $feature->id, 'project_id' => $project->id]);
+    Activity::factory()->todo()->create(['parent_id' => $feature->id, 'project_id' => $project->id]);
 
     Livewire::test('pages::project-detail', ['slug' => $project->slug])
         ->set('tab', 'features')
@@ -159,7 +160,7 @@ test('features tab shows progress count when feature has tasks', function () {
 test('features tab shows priority badge when feature has priority', function () {
     $project = Project::factory()->create();
 
-    Feature::factory()->urgent()->create([
+    Activity::factory()->epic()->urgent()->create([
         'project_id' => $project->id,
         'title' => 'Feature Urgente Tab',
     ]);
@@ -172,7 +173,7 @@ test('features tab shows priority badge when feature has priority', function () 
 test('features tab shows due date when feature has due date', function () {
     $project = Project::factory()->create();
 
-    Feature::factory()->create([
+    Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'title' => 'Feature Com Prazo',
         'due_date' => '2026-03-15',
@@ -186,7 +187,7 @@ test('features tab shows due date when feature has due date', function () {
 test('features tab shows no spec message when spec is empty', function () {
     $project = Project::factory()->create();
 
-    $feature = Feature::factory()->create([
+    $feature = Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'title' => 'Feature Sem Spec',
         'spec' => null,
@@ -205,7 +206,7 @@ test('features tab shows no spec message when spec is empty', function () {
 test('features tab list items trigger selectFeature action', function () {
     $project = Project::factory()->create();
 
-    $feature = Feature::factory()->create([
+    $feature = Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'title' => 'Feature Selecionavel',
     ]);
@@ -220,7 +221,7 @@ test('features tab list items trigger selectFeature action', function () {
 test('features tab preview renders spec content for selected feature', function () {
     $project = Project::factory()->create();
 
-    $feature = Feature::factory()->create([
+    $feature = Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'title' => 'Feature Editavel',
         'spec' => '## Spec\nConteudo da preview.',
@@ -240,11 +241,11 @@ test('features tab only shows features from current project', function () {
     $project = Project::factory()->create();
     $otherProject = Project::factory()->create();
 
-    Feature::factory()->create([
+    Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'title' => 'Feature Deste Projeto',
     ]);
-    Feature::factory()->create([
+    Activity::factory()->epic()->create([
         'project_id' => $otherProject->id,
         'title' => 'Feature Outro Projeto',
     ]);
@@ -259,7 +260,7 @@ test('selectFeature ignores features from other projects', function () {
     $project = Project::factory()->create();
     $otherProject = Project::factory()->create();
 
-    $otherFeature = Feature::factory()->create([
+    $otherFeature = Activity::factory()->epic()->create([
         'project_id' => $otherProject->id,
     ]);
 
@@ -273,11 +274,11 @@ test('board kanban only shows features from current project', function () {
     $project = Project::factory()->create();
     $otherProject = Project::factory()->create();
 
-    Feature::factory()->create([
+    Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'title' => 'Feature Board Projeto',
     ]);
-    Feature::factory()->create([
+    Activity::factory()->epic()->create([
         'project_id' => $otherProject->id,
         'title' => 'Feature Board Outro',
     ]);
@@ -321,7 +322,7 @@ test('board kanban shows empty state per column when no features', function () {
 test('metrics includes feature count', function () {
     $project = Project::factory()->create();
 
-    Feature::factory()->count(5)->create(['project_id' => $project->id]);
+    Activity::factory()->epic()->count(5)->create(['project_id' => $project->id]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
     $metrics = $component->get('metrics');
@@ -329,15 +330,16 @@ test('metrics includes feature count', function () {
     expect($metrics['feature_count'])->toBe(5);
 });
 
+// ADR: Draft retired, replaced by Backlog. Metrics count done features by explicit status.
 test('metrics includes done features count', function () {
     $project = Project::factory()->create();
 
     // 2 done features (explicit status)
-    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]);
-    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'status' => ActivityStatus::Done]);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'status' => ActivityStatus::Done]);
 
-    // 1 not-done feature
-    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Draft]);
+    // 1 not-done feature (Backlog instead of Draft)
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'status' => ActivityStatus::Backlog]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
     $metrics = $component->get('metrics');
@@ -346,15 +348,16 @@ test('metrics includes done features count', function () {
     expect($metrics['feature_count'])->toBe(3);
 });
 
+// ADR: Draft retired. Replaced with Backlog in feature_completion_percent test.
 test('metrics includes feature completion percentage', function () {
     $project = Project::factory()->create();
 
     // 2 done features
-    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]);
-    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'status' => ActivityStatus::Done]);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'status' => ActivityStatus::Done]);
 
-    // 2 not-done features
-    Feature::factory()->count(2)->create(['project_id' => $project->id, 'status' => FeatureStatus::Draft]);
+    // 2 not-done features (Backlog instead of Draft)
+    Activity::factory()->epic()->count(2)->create(['project_id' => $project->id, 'status' => ActivityStatus::Backlog]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
     $metrics = $component->get('metrics');
@@ -362,19 +365,19 @@ test('metrics includes feature completion percentage', function () {
     expect($metrics['feature_completion_percent'])->toBe(50.0);
 });
 
+// ADR: Draft retired. features_by_status no longer has a 'draft' key; use 'backlog' instead.
 test('metrics includes features by status breakdown', function () {
     $project = Project::factory()->create();
 
-    Feature::factory()->count(2)->create(['project_id' => $project->id, 'status' => FeatureStatus::Draft]);
-    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Backlog]);
-    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]);
+    Activity::factory()->epic()->count(2)->create(['project_id' => $project->id, 'status' => ActivityStatus::Backlog]);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'status' => ActivityStatus::Todo]);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'status' => ActivityStatus::Done]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
     $metrics = $component->get('metrics');
 
-    expect($metrics['features_by_status']['draft'])->toBe(2);
-    expect($metrics['features_by_status']['backlog'])->toBe(1);
-    expect($metrics['features_by_status']['todo'])->toBe(0);
+    expect($metrics['features_by_status']['backlog'])->toBe(2);
+    expect($metrics['features_by_status']['todo'])->toBe(1);
     expect($metrics['features_by_status']['doing'])->toBe(0);
     expect($metrics['features_by_status']['done'])->toBe(1);
 });
@@ -393,18 +396,18 @@ test('metrics feature completion is zero when no features', function () {
 // featuresByStatus computed property
 // ========================================
 
+// ADR: Draft retired. featuresByStatus uses Backlog instead of Draft.
 test('featuresByStatus groups features by explicit status', function () {
     $project = Project::factory()->create();
 
-    Feature::factory()->count(2)->create(['project_id' => $project->id, 'status' => FeatureStatus::Draft]);
-    Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Doing]);
+    Activity::factory()->epic()->count(2)->create(['project_id' => $project->id, 'status' => ActivityStatus::Backlog]);
+    Activity::factory()->epic()->create(['project_id' => $project->id, 'status' => ActivityStatus::Doing]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
     $byStatus = $component->get('featuresByStatus');
 
-    expect($byStatus['draft'])->toHaveCount(2);
+    expect($byStatus['backlog'])->toHaveCount(2);
     expect($byStatus['doing'])->toHaveCount(1);
-    expect($byStatus['backlog'])->toHaveCount(0);
     expect($byStatus['todo'])->toHaveCount(0);
     expect($byStatus['done'])->toHaveCount(0);
 });

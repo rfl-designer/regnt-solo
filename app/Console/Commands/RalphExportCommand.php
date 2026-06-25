@@ -2,9 +2,10 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
-use App\Models\Feature;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
+use App\Models\Activity;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 
@@ -38,8 +39,9 @@ class RalphExportCommand extends Command
         $maxIterations = (int) $this->option('max-iterations');
         $outputDir = $this->option('output-dir');
 
-        $feature = Feature::query()
-            ->with(['project', 'tasks.project'])
+        $feature = Activity::query()
+            ->where('type', ActivityType::Epic)
+            ->with(['project', 'children.project'])
             ->find($featureId);
 
         if ($feature === null) {
@@ -84,7 +86,7 @@ class RalphExportCommand extends Command
         }
 
         $this->info("Arquivos Ralph gerados para feature \"{$feature->title}\":");
-        $this->line("  ✓ {$outputDir}/prd.json ({$feature->tasks->count()} user stories)");
+        $this->line("  ✓ {$outputDir}/prd.json ({$feature->children->count()} user stories)");
         $this->line("  ✓ {$outputDir}/CLAUDE.md");
         $this->line("  ✓ {$outputDir}/progress.txt");
         $this->newLine();
@@ -98,9 +100,9 @@ class RalphExportCommand extends Command
      *
      * @return array<string, mixed>
      */
-    public function buildPrd(Feature $feature, int $maxIterations = 10): array
+    public function buildPrd(Activity $feature, int $maxIterations = 10): array
     {
-        $tasks = $feature->tasks->sortBy('sort_order');
+        $tasks = $feature->children->sortBy('sort_order');
 
         return [
             'project' => $feature->title,
@@ -126,7 +128,7 @@ class RalphExportCommand extends Command
             'description' => $description,
             'acceptanceCriteria' => $this->extractAcceptanceCriteria($description),
             'priority' => $this->mapPriority($task->priority),
-            'passes' => $task->status === TaskStatus::Done,
+            'passes' => $task->status === ActivityStatus::Done,
             'metadata' => [
                 'soloboard_task_id' => $task->id,
                 'soloboard_status' => $task->status->value,
@@ -173,22 +175,22 @@ class RalphExportCommand extends Command
     }
 
     /**
-     * Map TaskPriority to Ralph priority number (1=urgent, 4=low).
+     * Map ActivityPriority to Ralph priority number (1=urgent, 4=low).
      */
-    private function mapPriority(TaskPriority $priority): int
+    private function mapPriority(ActivityPriority $priority): int
     {
         return match ($priority) {
-            TaskPriority::Urgent => 1,
-            TaskPriority::High => 2,
-            TaskPriority::Medium => 3,
-            TaskPriority::Low => 4,
+            ActivityPriority::Urgent => 1,
+            ActivityPriority::High => 2,
+            ActivityPriority::Medium => 3,
+            ActivityPriority::Low => 4,
         };
     }
 
     /**
      * Build the CLAUDE.md content from the stub template.
      */
-    public function buildClaudeMd(Feature $feature): string
+    public function buildClaudeMd(Activity $feature): string
     {
         $stubPath = base_path('stubs/ralph-claude.md.stub');
 
@@ -201,8 +203,8 @@ class RalphExportCommand extends Command
         $projectName = $feature->project?->name ?? 'SoloBoard';
         $featureTitle = $feature->title;
 
-        $taskList = $feature->tasks->map(function ($task) {
-            $status = $task->status === TaskStatus::Done ? '✅' : '⬜';
+        $taskList = $feature->children->map(function ($task) {
+            $status = $task->status === ActivityStatus::Done ? '✅' : '⬜';
 
             return "  - {$status} US-{$task->id}: {$task->title} (task_id={$task->id})";
         })->implode("\n");
@@ -217,7 +219,7 @@ class RalphExportCommand extends Command
     /**
      * Fallback CLAUDE.md when stub file is missing.
      */
-    private function buildClaudeMdFallback(Feature $feature): string
+    private function buildClaudeMdFallback(Activity $feature): string
     {
         $projectName = $feature->project?->name ?? 'SoloBoard';
 

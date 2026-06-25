@@ -2,9 +2,10 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\FeaturePriority;
-use App\Enums\FeatureStatus;
-use App\Models\Feature;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
+use App\Models\Activity;
 use App\Models\Project;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Validation\Rule;
@@ -27,7 +28,7 @@ class CreateFeatureTool extends Tool
             'title' => 'required|string|max:255',
             'spec' => 'nullable|string',
             'project_slug' => 'nullable|string|exists:projects,slug',
-            'priority' => ['nullable', 'string', Rule::enum(FeaturePriority::class)],
+            'priority' => ['nullable', 'string', Rule::enum(ActivityPriority::class)],
             'due_date' => 'nullable|date',
             'github_issue_number' => 'nullable|integer',
             'github_synced_hash' => 'nullable|string',
@@ -43,10 +44,11 @@ class CreateFeatureTool extends Tool
         }
 
         $payload = [
+            'type' => ActivityType::Epic,
             'title' => $validated['title'],
             'spec' => $validated['spec'] ?? null,
             'project_id' => $projectId,
-            'priority' => $validated['priority'] ?? FeaturePriority::Medium,
+            'priority' => $validated['priority'] ?? ActivityPriority::Medium,
             'due_date' => $validated['due_date'] ?? null,
         ];
 
@@ -55,13 +57,17 @@ class CreateFeatureTool extends Tool
         }
 
         if (! empty($validated['github_issue_number'])) {
-            $feature = Feature::updateOrCreate(
+            $feature = Activity::updateOrCreate(
                 ['github_issue_number' => $validated['github_issue_number']],
                 $payload,
             );
+
+            if ($feature->wasRecentlyCreated && $feature->status === null) {
+                $feature->update(['status' => ActivityStatus::Backlog]);
+            }
         } else {
-            $payload['status'] = FeatureStatus::Draft;
-            $feature = Feature::create($payload);
+            $payload['status'] = ActivityStatus::Backlog;
+            $feature = Activity::create($payload);
         }
 
         $feature->refresh();

@@ -2,8 +2,8 @@
 
 namespace App\Mcp\Tools;
 
+use App\Models\Activity;
 use App\Models\DailyPlan;
-use App\Models\Task;
 use Carbon\Carbon;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -22,16 +22,16 @@ class AddToPlanTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'task_id' => 'required|integer|exists:tasks,id',
+            'task_id' => 'required|integer|exists:activities,id',
         ], [
             'task_id.required' => 'You must provide a task_id. Use list-tasks or suggest-tasks to find task IDs.',
             'task_id.exists' => 'Task not found. Use list-tasks to find available task IDs.',
         ]);
 
-        $task = Task::findOrFail($validated['task_id']);
+        $task = Activity::findOrFail($validated['task_id']);
         $plan = DailyPlan::getOrCreateForDate(Carbon::today());
 
-        if ($plan->tasks()->where('tasks.id', $task->id)->exists()) {
+        if ($plan->tasks()->where('activities.id', $task->id)->exists()) {
             return Response::text(json_encode([
                 'added' => false,
                 'message' => "Task \"{$task->title}\" is already in today's plan.",
@@ -39,7 +39,7 @@ class AddToPlanTool extends Tool
             ], JSON_PRETTY_PRINT));
         }
 
-        $maxOrder = $plan->tasks()->max('daily_plan_task.sort_order') ?? 0;
+        $maxOrder = $plan->tasks()->max('daily_plan_activity.sort_order') ?? 0;
         $plan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
 
         $plan->load('tasks.project');

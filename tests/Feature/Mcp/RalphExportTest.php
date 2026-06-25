@@ -1,13 +1,12 @@
 <?php
 
 use App\Console\Commands\RalphExportCommand;
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\RalphExportTool;
-use App\Models\Feature;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use Illuminate\Support\Facades\File;
 
 // --- Artisan Command Tests ---
@@ -15,24 +14,24 @@ use Illuminate\Support\Facades\File;
 describe('RalphExportCommand', function () {
     test('generates prd.json with correct format from feature with tasks', function () {
         $project = Project::factory()->create(['name' => 'Test Project']);
-        $feature = Feature::factory()->create([
+        $feature = Activity::factory()->epic()->create([
             'title' => 'Auth Feature',
             'slug' => 'auth-feature',
             'spec' => 'Implement authentication',
             'project_id' => $project->id,
         ]);
-        Task::factory()->create([
-            'feature_id' => $feature->id,
+        Activity::factory()->create([
+            'parent_id' => $feature->id,
             'title' => 'Login form',
-            'status' => TaskStatus::Todo,
-            'priority' => TaskPriority::High,
+            'status' => ActivityStatus::Todo,
+            'priority' => ActivityPriority::High,
             'session_prompt' => "## Critérios de Aceitação\n- [ ] Email field\n- [ ] Password field",
         ]);
-        Task::factory()->create([
-            'feature_id' => $feature->id,
+        Activity::factory()->create([
+            'parent_id' => $feature->id,
             'title' => 'Logout button',
-            'status' => TaskStatus::Inbox,
-            'priority' => TaskPriority::Medium,
+            'status' => ActivityStatus::Inbox,
+            'priority' => ActivityPriority::Medium,
         ]);
 
         $outputDir = storage_path('testing/ralph-'.uniqid());
@@ -60,18 +59,18 @@ describe('RalphExportCommand', function () {
     });
 
     test('maps done tasks as passes true', function () {
-        $feature = Feature::factory()->create();
-        $doneTask = Task::factory()->done()->create([
-            'feature_id' => $feature->id,
+        $feature = Activity::factory()->epic()->create();
+        $doneTask = Activity::factory()->done()->create([
+            'parent_id' => $feature->id,
             'title' => 'Completed task',
         ]);
-        $todoTask = Task::factory()->todo()->create([
-            'feature_id' => $feature->id,
+        $todoTask = Activity::factory()->todo()->create([
+            'parent_id' => $feature->id,
             'title' => 'Pending task',
         ]);
 
         $command = new RalphExportCommand;
-        $prd = $command->buildPrd($feature->load('tasks'));
+        $prd = $command->buildPrd($feature->load('children'));
 
         $stories = collect($prd['userStories']);
         $doneStory = $stories->firstWhere('metadata.soloboard_task_id', $doneTask->id);
@@ -82,36 +81,36 @@ describe('RalphExportCommand', function () {
     });
 
     test('maps priority correctly', function () {
-        $feature = Feature::factory()->create();
-        Task::factory()->create([
-            'feature_id' => $feature->id,
-            'priority' => TaskPriority::Urgent,
+        $feature = Activity::factory()->epic()->create();
+        Activity::factory()->create([
+            'parent_id' => $feature->id,
+            'priority' => ActivityPriority::Urgent,
         ]);
-        Task::factory()->create([
-            'feature_id' => $feature->id,
-            'priority' => TaskPriority::High,
+        Activity::factory()->create([
+            'parent_id' => $feature->id,
+            'priority' => ActivityPriority::High,
         ]);
-        Task::factory()->create([
-            'feature_id' => $feature->id,
-            'priority' => TaskPriority::Medium,
+        Activity::factory()->create([
+            'parent_id' => $feature->id,
+            'priority' => ActivityPriority::Medium,
         ]);
-        Task::factory()->create([
-            'feature_id' => $feature->id,
-            'priority' => TaskPriority::Low,
+        Activity::factory()->create([
+            'parent_id' => $feature->id,
+            'priority' => ActivityPriority::Low,
         ]);
 
         $command = new RalphExportCommand;
-        $prd = $command->buildPrd($feature->load('tasks'));
+        $prd = $command->buildPrd($feature->load('children'));
 
         $priorities = collect($prd['userStories'])->pluck('priority')->sort()->values()->all();
         expect($priorities)->toBe([1, 2, 3, 4]);
     });
 
     test('feature without tasks returns empty userStories', function () {
-        $feature = Feature::factory()->create();
+        $feature = Activity::factory()->epic()->create();
 
         $command = new RalphExportCommand;
-        $prd = $command->buildPrd($feature->load('tasks'));
+        $prd = $command->buildPrd($feature->load('children'));
 
         expect($prd['userStories'])->toBeEmpty();
     });
@@ -123,14 +122,14 @@ describe('RalphExportCommand', function () {
     });
 
     test('generates CLAUDE.md with MCP instructions', function () {
-        $feature = Feature::factory()->create(['title' => 'Test Feature']);
-        Task::factory()->create([
-            'feature_id' => $feature->id,
+        $feature = Activity::factory()->epic()->create(['title' => 'Test Feature']);
+        Activity::factory()->create([
+            'parent_id' => $feature->id,
             'title' => 'Test task',
         ]);
 
         $command = new RalphExportCommand;
-        $claudeMd = $command->buildClaudeMd($feature->load('tasks'));
+        $claudeMd = $command->buildClaudeMd($feature->load('children'));
 
         expect($claudeMd)
             ->toContain('Test Feature')
@@ -142,8 +141,8 @@ describe('RalphExportCommand', function () {
     });
 
     test('dry-run does not create files', function () {
-        $feature = Feature::factory()->create();
-        Task::factory()->create(['feature_id' => $feature->id]);
+        $feature = Activity::factory()->epic()->create();
+        Activity::factory()->create(['parent_id' => $feature->id]);
 
         $outputDir = storage_path('testing/ralph-dryrun-'.uniqid());
 
@@ -157,8 +156,8 @@ describe('RalphExportCommand', function () {
     });
 
     test('generates progress.txt file', function () {
-        $feature = Feature::factory()->create();
-        Task::factory()->create(['feature_id' => $feature->id]);
+        $feature = Activity::factory()->epic()->create();
+        Activity::factory()->create(['parent_id' => $feature->id]);
 
         $outputDir = storage_path('testing/ralph-progress-'.uniqid());
 
@@ -173,14 +172,14 @@ describe('RalphExportCommand', function () {
     });
 
     test('extracts acceptance criteria from session_prompt', function () {
-        $feature = Feature::factory()->create();
-        Task::factory()->create([
-            'feature_id' => $feature->id,
+        $feature = Activity::factory()->epic()->create();
+        Activity::factory()->create([
+            'parent_id' => $feature->id,
             'session_prompt' => "## User Story\nAs a dev...\n\n## Critérios de Aceitação\n- [ ] First criterion\n- [ ] Second criterion\n\n## Notas",
         ]);
 
         $command = new RalphExportCommand;
-        $prd = $command->buildPrd($feature->load('tasks'));
+        $prd = $command->buildPrd($feature->load('children'));
 
         $criteria = $prd['userStories'][0]['acceptanceCriteria'];
         expect($criteria)->toContain('First criterion')
@@ -193,15 +192,15 @@ describe('RalphExportCommand', function () {
 
 describe('RalphExportTool', function () {
     test('returns correct prd format', function () {
-        $feature = Feature::factory()->create([
+        $feature = Activity::factory()->epic()->create([
             'title' => 'MCP Feature',
             'slug' => 'mcp-feature',
             'spec' => 'MCP spec content',
         ]);
-        Task::factory()->todo()->create([
-            'feature_id' => $feature->id,
+        Activity::factory()->todo()->create([
+            'parent_id' => $feature->id,
             'title' => 'MCP Task 1',
-            'priority' => TaskPriority::High,
+            'priority' => ActivityPriority::High,
         ]);
 
         $response = SoloBoardServer::tool(RalphExportTool::class, [
@@ -230,8 +229,8 @@ describe('RalphExportTool', function () {
     });
 
     test('respects max_iterations parameter', function () {
-        $feature = Feature::factory()->create();
-        Task::factory()->create(['feature_id' => $feature->id]);
+        $feature = Activity::factory()->epic()->create();
+        Activity::factory()->create(['parent_id' => $feature->id]);
 
         $response = SoloBoardServer::tool(RalphExportTool::class, [
             'feature_id' => $feature->id,

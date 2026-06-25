@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\TaskPriority;
-use App\Models\Task;
+use App\Enums\ActivityPriority;
+use App\Models\Activity;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -17,11 +17,11 @@ test('inbox search defaults to empty string', function () {
 });
 
 test('inbox filters tasks by search term', function () {
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Fix login bug',
         'status' => 'inbox',
     ]);
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Add dashboard chart',
         'status' => 'inbox',
     ]);
@@ -33,7 +33,7 @@ test('inbox filters tasks by search term', function () {
 });
 
 test('inbox search is case insensitive', function () {
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Fix Login Bug',
         'status' => 'inbox',
     ]);
@@ -44,11 +44,11 @@ test('inbox search is case insensitive', function () {
 });
 
 test('inbox search shows all tasks when empty', function () {
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Task Alpha',
         'status' => 'inbox',
     ]);
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Task Beta',
         'status' => 'inbox',
     ]);
@@ -60,11 +60,11 @@ test('inbox search shows all tasks when empty', function () {
 });
 
 test('inbox sorts tasks by title ascending', function () {
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Zebra task',
         'status' => 'inbox',
     ]);
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Alpha task',
         'status' => 'inbox',
     ]);
@@ -95,15 +95,15 @@ test('inbox resets direction to asc on new column', function () {
 });
 
 test('inbox sorts tasks by priority', function () {
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Low task',
         'status' => 'inbox',
-        'priority' => TaskPriority::Low,
+        'priority' => ActivityPriority::Low,
     ]);
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Urgent task',
         'status' => 'inbox',
-        'priority' => TaskPriority::Urgent,
+        'priority' => ActivityPriority::Urgent,
     ]);
 
     Livewire::test('pages::inbox')
@@ -115,12 +115,12 @@ test('inbox sorts tasks by priority', function () {
 });
 
 test('inbox sorts tasks by created_at', function () {
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Old task',
         'status' => 'inbox',
         'created_at' => now()->subDays(5),
     ]);
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'New task',
         'status' => 'inbox',
         'created_at' => now(),
@@ -133,15 +133,15 @@ test('inbox sorts tasks by created_at', function () {
 });
 
 test('inbox search and sort work together', function () {
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Fix API bug',
         'status' => 'inbox',
     ]);
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Fix UI bug',
         'status' => 'inbox',
     ]);
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Add new feature',
         'status' => 'inbox',
     ]);
@@ -156,11 +156,11 @@ test('inbox search and sort work together', function () {
 });
 
 test('inbox search only affects inbox tasks', function () {
-    Task::factory()->create([
+    Activity::factory()->create([
         'title' => 'Inbox task matching',
         'status' => 'inbox',
     ]);
-    Task::factory()->todo()->create([
+    Activity::factory()->todo()->create([
         'title' => 'Todo task matching',
     ]);
 

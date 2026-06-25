@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TaskTemplate;
 
 describe('TaskTemplate Model', function (): void {
@@ -12,13 +12,13 @@ describe('TaskTemplate Model', function (): void {
             'name' => 'Code Review',
             'slug' => null,
             'description' => 'Review checklist',
-            'default_priority' => TaskPriority::High,
+            'default_priority' => ActivityPriority::High,
             'default_estimated_minutes' => 30,
         ]);
 
         expect($template->name)->toBe('Code Review')
             ->and($template->slug)->toBe('code-review')
-            ->and($template->default_priority)->toBe(TaskPriority::High)
+            ->and($template->default_priority)->toBe(ActivityPriority::High)
             ->and($template->default_estimated_minutes)->toBe(30);
     });
 
@@ -35,17 +35,17 @@ describe('TaskTemplate Model', function (): void {
         $template = TaskTemplate::factory()->create([
             'name' => 'Bug Investigation',
             'description' => '## Steps',
-            'default_priority' => TaskPriority::High,
+            'default_priority' => ActivityPriority::High,
             'default_estimated_minutes' => 60,
         ]);
 
         $task = $template->createTask();
 
-        expect($task)->toBeInstanceOf(Task::class)
+        expect($task)->toBeInstanceOf(Activity::class)
             ->and($task->title)->toBe('Bug Investigation')
             ->and($task->description)->toBe('## Steps')
-            ->and($task->priority)->toBe(TaskPriority::High)
-            ->and($task->status)->toBe(TaskStatus::Inbox)
+            ->and($task->priority)->toBe(ActivityPriority::High)
+            ->and($task->status)->toBe(ActivityStatus::Inbox)
             ->and($task->task_template_id)->toBe($template->id)
             ->and($task->estimated_minutes)->toBe(60);
     });
@@ -53,7 +53,7 @@ describe('TaskTemplate Model', function (): void {
     it('creates task with overrides', function (): void {
         $template = TaskTemplate::factory()->create([
             'name' => 'Generic Template',
-            'default_priority' => TaskPriority::Medium,
+            'default_priority' => ActivityPriority::Medium,
         ]);
 
         $project = Project::factory()->create();
@@ -61,12 +61,12 @@ describe('TaskTemplate Model', function (): void {
         $task = $template->createTask([
             'title' => 'Custom Title',
             'project_id' => $project->id,
-            'priority' => TaskPriority::Urgent,
+            'priority' => ActivityPriority::Urgent,
         ]);
 
         expect($task->title)->toBe('Custom Title')
             ->and($task->project_id)->toBe($project->id)
-            ->and($task->priority)->toBe(TaskPriority::Urgent)
+            ->and($task->priority)->toBe(ActivityPriority::Urgent)
             ->and($task->task_template_id)->toBe($template->id);
     });
 
@@ -104,7 +104,7 @@ describe('Task relationships', function (): void {
     });
 
     it('task without template returns false for isFromTemplate', function (): void {
-        $task = Task::factory()->create();
+        $task = Activity::factory()->create();
 
         expect($task->isFromTemplate())->toBeFalse();
     });
@@ -129,7 +129,7 @@ describe('Template Factory States', function (): void {
         expect($template->name)->toBe('Code Review')
             ->and($template->slug)->toBe('code-review')
             ->and($template->is_system)->toBeTrue()
-            ->and($template->default_priority)->toBe(TaskPriority::High);
+            ->and($template->default_priority)->toBe(ActivityPriority::High);
     });
 
     it('creates deploy checklist template', function (): void {
@@ -137,13 +137,13 @@ describe('Template Factory States', function (): void {
 
         expect($template->name)->toBe('Deploy Checklist')
             ->and($template->slug)->toBe('deploy-checklist')
-            ->and($template->default_priority)->toBe(TaskPriority::Urgent);
+            ->and($template->default_priority)->toBe(ActivityPriority::Urgent);
     });
 
     it('creates bug investigation template', function (): void {
         $template = TaskTemplate::factory()->bugInvestigation()->create();
 
         expect($template->name)->toBe('Bug Investigation')
-            ->and($template->default_priority)->toBe(TaskPriority::High);
+            ->and($template->default_priority)->toBe(ActivityPriority::High);
     });
 });

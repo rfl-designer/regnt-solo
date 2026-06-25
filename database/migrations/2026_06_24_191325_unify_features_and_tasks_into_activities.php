@@ -18,19 +18,38 @@ return new class extends Migration
     {
         Schema::rename('tasks', 'activities');
 
+        // Relax status first, while the table still has only its original columns.
+        // Doing this after adding parent_id would corrupt parent_id on SQLite's
+        // table rebuild, so the order here is deliberate.
         Schema::table('activities', function (Blueprint $table): void {
-            $table->dropForeign(['feature_id']);
-        });
-
-        Schema::table('activities', function (Blueprint $table): void {
-            $table->renameColumn('feature_id', 'parent_id');
+            $table->string('status')->nullable()->change();
         });
 
         Schema::table('activities', function (Blueprint $table): void {
             $table->string('type')->default('task')->after('id');
+            $table->unsignedBigInteger('parent_id')->nullable()->after('project_id');
             $table->string('slug')->nullable()->after('title');
             $table->text('spec')->nullable()->after('description');
-            $table->string('status')->nullable()->change();
+        });
+
+        // Carry the legacy feature link into parent_id, then retire feature_id.
+        DB::statement('UPDATE activities SET parent_id = feature_id');
+
+        Schema::table('activities', function (Blueprint $table): void {
+            $table->dropForeign(['feature_id']);
+        });
+
+        // Drop any single-column index still referencing feature_id (its name
+        // varies with how the legacy schema was built) so SQLite can drop the column.
+        foreach (DB::select("PRAGMA index_list('activities')") as $index) {
+            $columns = DB::select('PRAGMA index_info("'.$index->name.'")');
+            if (count($columns) === 1 && $columns[0]->name === 'feature_id') {
+                Schema::table('activities', fn (Blueprint $table) => $table->dropIndex($index->name));
+            }
+        }
+
+        Schema::table('activities', function (Blueprint $table): void {
+            $table->dropColumn('feature_id');
         });
 
         DB::table('activities')->whereNotNull('github_issue_number')->update(['type' => 'issue']);
@@ -64,7 +83,7 @@ return new class extends Migration
 
         Schema::table('activities', function (Blueprint $table): void {
             $table->index('type');
-            $table->foreign('parent_id')->references('id')->on('activities')->nullOnDelete();
+            $table->index('parent_id');
         });
 
         Schema::table('time_entries', function (Blueprint $table): void {
@@ -194,7 +213,7 @@ return new class extends Migration
 
         Schema::table('time_entries', function (Blueprint $table): void {
             $table->foreignId('feature_id')->nullable()->after('id')->index()->constrained()->nullOnDelete();
-            $table->foreignId('task_id')->nullable()->after('id')->index();
+            $table->foreignId('task_id')->nullable()->after('id');
         });
 
         DB::statement('UPDATE time_entries SET task_id = activity_id WHERE activity_id IS NOT NULL');
@@ -221,7 +240,7 @@ return new class extends Migration
         DB::table('activities')->where('type', 'epic')->delete();
 
         Schema::table('activities', function (Blueprint $table): void {
-            $table->dropForeign(['parent_id']);
+            $table->dropIndex(['parent_id']);
             $table->dropIndex(['type']);
             $table->dropColumn(['type', 'slug', 'spec']);
             $table->renameColumn('parent_id', 'feature_id');

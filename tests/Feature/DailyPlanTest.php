@@ -1,7 +1,7 @@
 <?php
 
+use App\Models\Activity;
 use App\Models\DailyPlan;
-use App\Models\Task;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 
@@ -14,7 +14,7 @@ test('can create a daily plan', function () {
 
 test('daily plan has many tasks through pivot', function () {
     $plan = DailyPlan::factory()->create();
-    $tasks = Task::factory()->count(3)->create();
+    $tasks = Activity::factory()->count(3)->create();
 
     foreach ($tasks as $index => $task) {
         $plan->tasks()->attach($task, ['sort_order' => $index]);
@@ -52,7 +52,7 @@ test('completionRate returns 0 when no tasks', function () {
 
 test('completionRate calculates percentage correctly', function () {
     $plan = DailyPlan::factory()->create();
-    $tasks = Task::factory()->count(4)->create();
+    $tasks = Activity::factory()->count(4)->create();
 
     foreach ($tasks as $index => $task) {
         $completedAt = $index < 3 ? now() : null;
@@ -67,8 +67,8 @@ test('completionRate calculates percentage correctly', function () {
 
 test('incompleteTasks returns only tasks without completed_at in pivot', function () {
     $plan = DailyPlan::factory()->create();
-    $completedTask = Task::factory()->create();
-    $incompleteTask = Task::factory()->create();
+    $completedTask = Activity::factory()->create();
+    $incompleteTask = Activity::factory()->create();
 
     $plan->tasks()->attach($completedTask, ['sort_order' => 0, 'completed_at' => now()]);
     $plan->tasks()->attach($incompleteTask, ['sort_order' => 1]);

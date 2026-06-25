@@ -1,8 +1,8 @@
 <?php
 
+use App\Models\Activity;
 use App\Models\Document;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -37,7 +37,7 @@ test('project detail docs tab shows empty state', function () {
 test('task modal shows project documents when task has project', function () {
     $project = Project::factory()->create();
     Document::factory()->forProject($project)->create(['title' => 'API Spec']);
-    $task = Task::factory()->create(['project_id' => $project->id, 'session_prompt' => 'Test prompt']);
+    $task = Activity::factory()->create(['project_id' => $project->id, 'session_prompt' => 'Test prompt']);
 
     Livewire::test('task-modal')
         ->call('openTask', $task->id)
@@ -46,7 +46,7 @@ test('task modal shows project documents when task has project', function () {
 });
 
 test('task modal does not show documents section when task has no project', function () {
-    $task = Task::factory()->create(['project_id' => null]);
+    $task = Activity::factory()->create(['project_id' => null]);
 
     Livewire::test('task-modal')
         ->call('openTask', $task->id)
@@ -54,7 +54,7 @@ test('task modal does not show documents section when task has no project', func
 });
 
 test('task modal renders session prompt as markdown when done', function () {
-    $task = Task::factory()->done()->create([
+    $task = Activity::factory()->done()->create([
         'session_prompt' => '**bold prompt**',
         'session_result' => '**bold result**',
     ]);
@@ -66,7 +66,7 @@ test('task modal renders session prompt as markdown when done', function () {
 });
 
 test('task modal shows session prompt field when not done', function () {
-    $task = Task::factory()->doing()->create([
+    $task = Activity::factory()->doing()->create([
         'session_prompt' => 'My prompt',
     ]);
 

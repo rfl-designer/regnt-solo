@@ -5,7 +5,7 @@ use App\Mcp\Prompts\StakeholderIssuePlanningPrompt;
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\ListStakeholderIssuesTool;
 use App\Mcp\Tools\PromoteStakeholderIssueToFeatureTool;
-use App\Models\Feature;
+use App\Models\Activity;
 use App\Models\Project;
 use App\Models\Stakeholder;
 use App\Models\StakeholderIssue;
@@ -69,12 +69,12 @@ test('promote-stakeholder-issue creates feature and links issue', function () {
 
     $issue->refresh();
 
-    expect($issue->feature_id)->not->toBeNull();
+    expect($issue->activity_id)->not->toBeNull();
     expect($issue->status)->toBe(StakeholderIssueStatus::Feature);
     expect($issue->converted_at)->not->toBeNull();
 
-    $this->assertDatabaseHas('features', [
-        'id' => $issue->feature_id,
+    $this->assertDatabaseHas('activities', [
+        'id' => $issue->activity_id,
         'project_id' => $project->id,
         'title' => 'Stakeholder report by period',
         'priority' => 'high',
@@ -84,7 +84,7 @@ test('promote-stakeholder-issue creates feature and links issue', function () {
 test('promote-stakeholder-issue is idempotent when issue already has feature', function () {
     $project = Project::factory()->create();
     $stakeholder = Stakeholder::factory()->create(['project_id' => $project->id]);
-    $feature = Feature::factory()->create([
+    $feature = Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'title' => 'Feature already created',
     ]);
@@ -92,10 +92,10 @@ test('promote-stakeholder-issue is idempotent when issue already has feature', f
     $issue = StakeholderIssue::factory()->featured()->create([
         'project_id' => $project->id,
         'stakeholder_id' => $stakeholder->id,
-        'feature_id' => $feature->id,
+        'activity_id' => $feature->id,
     ]);
 
-    $existingFeaturesCount = Feature::query()->count();
+    $existingFeaturesCount = Activity::query()->epics()->count();
 
     $response = SoloBoardServer::tool(PromoteStakeholderIssueToFeatureTool::class, [
         'issue_id' => $issue->id,
@@ -105,8 +105,8 @@ test('promote-stakeholder-issue is idempotent when issue already has feature', f
     $response->assertSee('"created_feature": false');
     $response->assertSee('Feature already created');
 
-    expect(Feature::query()->count())->toBe($existingFeaturesCount);
-    expect($issue->fresh()->feature_id)->toBe($feature->id);
+    expect(Activity::query()->epics()->count())->toBe($existingFeaturesCount);
+    expect($issue->fresh()->activity_id)->toBe($feature->id);
 });
 
 test('stakeholder issue planning prompt returns issue context', function () {

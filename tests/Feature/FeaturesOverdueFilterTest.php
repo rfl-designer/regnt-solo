@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\FeaturePriority;
-use App\Models\Feature;
+use App\Enums\ActivityPriority;
+use App\Models\Activity;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,19 +22,19 @@ describe('Features Overdue Filter', function () {
 
     test('overdue filter shows only features with past due date', function () {
         // Overdue feature with explicit todo status
-        $overdueFeature = Feature::factory()->todo()->create([
+        $overdueFeature = Activity::factory()->epic()->todo()->create([
             'title' => 'Overdue Feature',
             'due_date' => now()->subDays(3),
         ]);
 
         // Future feature
-        $futureFeature = Feature::factory()->todo()->create([
+        $futureFeature = Activity::factory()->epic()->todo()->create([
             'title' => 'Future Feature',
             'due_date' => now()->addDays(10),
         ]);
 
         // Feature without due date
-        $noDueFeature = Feature::factory()->backlog()->create([
+        $noDueFeature = Activity::factory()->epic()->backlog()->create([
             'title' => 'No Due Feature',
         ]);
 
@@ -47,13 +47,13 @@ describe('Features Overdue Filter', function () {
 
     test('overdue filter excludes done features', function () {
         // Overdue but explicitly done feature
-        Feature::factory()->done()->create([
+        Activity::factory()->epic()->done()->create([
             'title' => 'Done Overdue Feature',
             'due_date' => now()->subDays(5),
         ]);
 
         // Overdue and active feature
-        Feature::factory()->doing()->create([
+        Activity::factory()->epic()->doing()->create([
             'title' => 'Active Overdue Feature',
             'due_date' => now()->subDays(2),
         ]);
@@ -65,12 +65,12 @@ describe('Features Overdue Filter', function () {
     });
 
     test('overdue filter shows all features when disabled', function () {
-        Feature::factory()->todo()->create([
+        Activity::factory()->epic()->todo()->create([
             'title' => 'Overdue Feature Here',
             'due_date' => now()->subDays(3),
         ]);
 
-        Feature::factory()->backlog()->create([
+        Activity::factory()->epic()->backlog()->create([
             'title' => 'Future Feature Here',
             'due_date' => now()->addDays(10),
         ]);
@@ -84,13 +84,13 @@ describe('Features Overdue Filter', function () {
     test('overdue filter works with project filter (AND logic)', function () {
         $project = Project::factory()->create(['name' => 'Project Alpha']);
 
-        Feature::factory()->todo()->create([
+        Activity::factory()->epic()->todo()->create([
             'title' => 'Overdue In Project',
             'due_date' => now()->subDays(2),
             'project_id' => $project->id,
         ]);
 
-        Feature::factory()->todo()->create([
+        Activity::factory()->epic()->todo()->create([
             'title' => 'Overdue No Project',
             'due_date' => now()->subDays(2),
         ]);
@@ -103,21 +103,21 @@ describe('Features Overdue Filter', function () {
     });
 
     test('overdue filter works with priority filter (AND logic)', function () {
-        Feature::factory()->todo()->create([
+        Activity::factory()->epic()->todo()->create([
             'title' => 'Overdue High Priority',
             'due_date' => now()->subDays(2),
-            'priority' => FeaturePriority::High,
+            'priority' => ActivityPriority::High,
         ]);
 
-        Feature::factory()->todo()->create([
+        Activity::factory()->epic()->todo()->create([
             'title' => 'Overdue Low Priority',
             'due_date' => now()->subDays(2),
-            'priority' => FeaturePriority::Low,
+            'priority' => ActivityPriority::Low,
         ]);
 
         Livewire::test('pages::features')
             ->set('filterOverdue', true)
-            ->set('filterPriority', FeaturePriority::High->value)
+            ->set('filterPriority', ActivityPriority::High->value)
             ->assertSee('Overdue High Priority')
             ->assertDontSee('Overdue Low Priority');
     });

@@ -1,7 +1,7 @@
 <?php
 
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Livewire\Livewire;
@@ -86,9 +86,9 @@ test('analytics shows focus ratio', function () {
 });
 
 test('analytics heatmap displays data when time entries exist', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subHours(2),
         'stopped_at' => now(),
     ]);
@@ -99,7 +99,7 @@ test('analytics heatmap displays data when time entries exist', function () {
 });
 
 test('analytics velocity shows data when tasks exist', function () {
-    Task::factory()->create([
+    Activity::factory()->create([
         'created_at' => now()->subDays(3),
     ]);
 

@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\TaskPriority;
+use App\Enums\ActivityPriority;
+use App\Models\Activity;
 use App\Models\Project;
 use App\Models\RecurringTask;
-use App\Models\Task;
 use App\Models\TaskTemplate;
 use App\Models\User;
 use Livewire\Livewire;
@@ -118,17 +118,17 @@ describe('Templates Tab', function (): void {
     test('can use template to create task', function (): void {
         $template = TaskTemplate::factory()->create([
             'name' => 'Bug Fix',
-            'default_priority' => TaskPriority::High,
+            'default_priority' => ActivityPriority::High,
         ]);
 
         Livewire::test('pages::templates')
             ->call('useTemplate', $template->id)
             ->assertDispatched('task-created');
 
-        $task = Task::where('task_template_id', $template->id)->first();
+        $task = Activity::where('task_template_id', $template->id)->first();
         expect($task)->not->toBeNull()
             ->and($task->title)->toBe('Bug Fix')
-            ->and($task->priority)->toBe(TaskPriority::High);
+            ->and($task->priority)->toBe(ActivityPriority::High);
     });
 });
 
@@ -218,7 +218,7 @@ describe('Recurring Tasks Tab', function (): void {
             ->call('runRecurringNow', $recurring->id)
             ->assertDispatched('task-created');
 
-        $task = Task::where('recurring_task_id', $recurring->id)->first();
+        $task = Activity::where('recurring_task_id', $recurring->id)->first();
         expect($task)->not->toBeNull()
             ->and($task->title)->toBe('Manual Run');
     });

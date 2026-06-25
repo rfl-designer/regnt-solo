@@ -1,8 +1,8 @@
 <?php
 
-use App\Enums\TaskStatus;
-use App\Models\Task;
-use App\Models\TaskStatusChange;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
+use App\Models\ActivityStatusChange;
 use App\Models\User;
 use Carbon\Carbon;
 use Livewire\Livewire;
@@ -21,45 +21,45 @@ test('averageTimeByStatus returns empty array when no completed tasks', function
 test('averageTimeByStatus includes trend data when previous period has data', function () {
     $now = Carbon::now();
 
-    $currentTask = Task::factory()->create([
-        'status' => TaskStatus::Done,
+    $currentTask = Activity::factory()->create([
+        'status' => ActivityStatus::Done,
         'completed_at' => $now->copy()->subDays(10),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $currentTask->id,
-        'status' => TaskStatus::Doing,
+    ActivityStatusChange::create([
+        'activity_id' => $currentTask->id,
+        'status' => ActivityStatus::Doing,
         'from_status' => null,
-        'to_status' => TaskStatus::Doing,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => $now->copy()->subDays(12),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $currentTask->id,
-        'status' => TaskStatus::Done,
-        'from_status' => TaskStatus::Doing,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::create([
+        'activity_id' => $currentTask->id,
+        'status' => ActivityStatus::Done,
+        'from_status' => ActivityStatus::Doing,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => $now->copy()->subDays(10),
     ]);
 
-    $previousTask = Task::factory()->create([
-        'status' => TaskStatus::Done,
+    $previousTask = Activity::factory()->create([
+        'status' => ActivityStatus::Done,
         'completed_at' => $now->copy()->subDays(40),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $previousTask->id,
-        'status' => TaskStatus::Doing,
+    ActivityStatusChange::create([
+        'activity_id' => $previousTask->id,
+        'status' => ActivityStatus::Doing,
         'from_status' => null,
-        'to_status' => TaskStatus::Doing,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => $now->copy()->subDays(50),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $previousTask->id,
-        'status' => TaskStatus::Done,
-        'from_status' => TaskStatus::Doing,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::create([
+        'activity_id' => $previousTask->id,
+        'status' => ActivityStatus::Done,
+        'from_status' => ActivityStatus::Doing,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => $now->copy()->subDays(40),
     ]);
 
@@ -67,9 +67,9 @@ test('averageTimeByStatus includes trend data when previous period has data', fu
 
     $averages = $component->instance()->averageTimeByStatus;
 
-    expect($averages)->toHaveKey(TaskStatus::Doing->value);
+    expect($averages)->toHaveKey(ActivityStatus::Doing->value);
 
-    $doingData = $averages[TaskStatus::Doing->value];
+    $doingData = $averages[ActivityStatus::Doing->value];
 
     expect($doingData)->toHaveKeys([
         'label',
@@ -90,31 +90,31 @@ test('averageTimeByStatus includes trend data when previous period has data', fu
 test('averageTimeByStatus returns null trend data when no previous period data', function () {
     $now = Carbon::now();
 
-    $task = Task::factory()->create([
-        'status' => TaskStatus::Done,
+    $task = Activity::factory()->create([
+        'status' => ActivityStatus::Done,
         'completed_at' => $now->copy()->subDays(10),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $task->id,
-        'status' => TaskStatus::Doing,
+    ActivityStatusChange::create([
+        'activity_id' => $task->id,
+        'status' => ActivityStatus::Doing,
         'from_status' => null,
-        'to_status' => TaskStatus::Doing,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => $now->copy()->subDays(12),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $task->id,
-        'status' => TaskStatus::Done,
-        'from_status' => TaskStatus::Doing,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::create([
+        'activity_id' => $task->id,
+        'status' => ActivityStatus::Done,
+        'from_status' => ActivityStatus::Doing,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => $now->copy()->subDays(10),
     ]);
 
     $component = Livewire::test('pages::dashboard');
 
     $averages = $component->instance()->averageTimeByStatus;
-    $doingData = $averages[TaskStatus::Doing->value];
+    $doingData = $averages[ActivityStatus::Doing->value];
 
     expect($doingData['prev_avg_minutes'])->toBeNull();
     expect($doingData['prev_formatted'])->toBeNull();
@@ -125,52 +125,52 @@ test('averageTimeByStatus returns null trend data when no previous period data',
 test('trend direction is down (green) when current time is less than previous', function () {
     $now = Carbon::now();
 
-    $currentTask = Task::factory()->create([
-        'status' => TaskStatus::Done,
+    $currentTask = Activity::factory()->create([
+        'status' => ActivityStatus::Done,
         'completed_at' => $now->copy()->subDays(5),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $currentTask->id,
-        'status' => TaskStatus::Doing,
+    ActivityStatusChange::create([
+        'activity_id' => $currentTask->id,
+        'status' => ActivityStatus::Doing,
         'from_status' => null,
-        'to_status' => TaskStatus::Doing,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => $now->copy()->subDays(6),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $currentTask->id,
-        'status' => TaskStatus::Done,
-        'from_status' => TaskStatus::Doing,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::create([
+        'activity_id' => $currentTask->id,
+        'status' => ActivityStatus::Done,
+        'from_status' => ActivityStatus::Doing,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => $now->copy()->subDays(5),
     ]);
 
-    $previousTask = Task::factory()->create([
-        'status' => TaskStatus::Done,
+    $previousTask = Activity::factory()->create([
+        'status' => ActivityStatus::Done,
         'completed_at' => $now->copy()->subDays(40),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $previousTask->id,
-        'status' => TaskStatus::Doing,
+    ActivityStatusChange::create([
+        'activity_id' => $previousTask->id,
+        'status' => ActivityStatus::Doing,
         'from_status' => null,
-        'to_status' => TaskStatus::Doing,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => $now->copy()->subDays(50),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $previousTask->id,
-        'status' => TaskStatus::Done,
-        'from_status' => TaskStatus::Doing,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::create([
+        'activity_id' => $previousTask->id,
+        'status' => ActivityStatus::Done,
+        'from_status' => ActivityStatus::Doing,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => $now->copy()->subDays(40),
     ]);
 
     $component = Livewire::test('pages::dashboard');
 
     $averages = $component->instance()->averageTimeByStatus;
-    $doingData = $averages[TaskStatus::Doing->value];
+    $doingData = $averages[ActivityStatus::Doing->value];
 
     expect($doingData['trend_direction'])->toBe('down');
     expect($doingData['trend_pct'])->toBeLessThan(0);
@@ -179,52 +179,52 @@ test('trend direction is down (green) when current time is less than previous', 
 test('trend direction is up (red) when current time is greater than previous', function () {
     $now = Carbon::now();
 
-    $currentTask = Task::factory()->create([
-        'status' => TaskStatus::Done,
+    $currentTask = Activity::factory()->create([
+        'status' => ActivityStatus::Done,
         'completed_at' => $now->copy()->subDays(5),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $currentTask->id,
-        'status' => TaskStatus::Doing,
+    ActivityStatusChange::create([
+        'activity_id' => $currentTask->id,
+        'status' => ActivityStatus::Doing,
         'from_status' => null,
-        'to_status' => TaskStatus::Doing,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => $now->copy()->subDays(15),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $currentTask->id,
-        'status' => TaskStatus::Done,
-        'from_status' => TaskStatus::Doing,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::create([
+        'activity_id' => $currentTask->id,
+        'status' => ActivityStatus::Done,
+        'from_status' => ActivityStatus::Doing,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => $now->copy()->subDays(5),
     ]);
 
-    $previousTask = Task::factory()->create([
-        'status' => TaskStatus::Done,
+    $previousTask = Activity::factory()->create([
+        'status' => ActivityStatus::Done,
         'completed_at' => $now->copy()->subDays(40),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $previousTask->id,
-        'status' => TaskStatus::Doing,
+    ActivityStatusChange::create([
+        'activity_id' => $previousTask->id,
+        'status' => ActivityStatus::Doing,
         'from_status' => null,
-        'to_status' => TaskStatus::Doing,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => $now->copy()->subDays(41),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $previousTask->id,
-        'status' => TaskStatus::Done,
-        'from_status' => TaskStatus::Doing,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::create([
+        'activity_id' => $previousTask->id,
+        'status' => ActivityStatus::Done,
+        'from_status' => ActivityStatus::Doing,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => $now->copy()->subDays(40),
     ]);
 
     $component = Livewire::test('pages::dashboard');
 
     $averages = $component->instance()->averageTimeByStatus;
-    $doingData = $averages[TaskStatus::Doing->value];
+    $doingData = $averages[ActivityStatus::Doing->value];
 
     expect($doingData['trend_direction'])->toBe('up');
     expect($doingData['trend_pct'])->toBeGreaterThan(0);
@@ -233,45 +233,45 @@ test('trend direction is up (red) when current time is greater than previous', f
 test('dashboard renders trend indicators in the view', function () {
     $now = Carbon::now();
 
-    $currentTask = Task::factory()->create([
-        'status' => TaskStatus::Done,
+    $currentTask = Activity::factory()->create([
+        'status' => ActivityStatus::Done,
         'completed_at' => $now->copy()->subDays(5),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $currentTask->id,
-        'status' => TaskStatus::Doing,
+    ActivityStatusChange::create([
+        'activity_id' => $currentTask->id,
+        'status' => ActivityStatus::Doing,
         'from_status' => null,
-        'to_status' => TaskStatus::Doing,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => $now->copy()->subDays(6),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $currentTask->id,
-        'status' => TaskStatus::Done,
-        'from_status' => TaskStatus::Doing,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::create([
+        'activity_id' => $currentTask->id,
+        'status' => ActivityStatus::Done,
+        'from_status' => ActivityStatus::Doing,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => $now->copy()->subDays(5),
     ]);
 
-    $previousTask = Task::factory()->create([
-        'status' => TaskStatus::Done,
+    $previousTask = Activity::factory()->create([
+        'status' => ActivityStatus::Done,
         'completed_at' => $now->copy()->subDays(40),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $previousTask->id,
-        'status' => TaskStatus::Doing,
+    ActivityStatusChange::create([
+        'activity_id' => $previousTask->id,
+        'status' => ActivityStatus::Doing,
         'from_status' => null,
-        'to_status' => TaskStatus::Doing,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => $now->copy()->subDays(50),
     ]);
 
-    TaskStatusChange::create([
-        'task_id' => $previousTask->id,
-        'status' => TaskStatus::Done,
-        'from_status' => TaskStatus::Doing,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::create([
+        'activity_id' => $previousTask->id,
+        'status' => ActivityStatus::Done,
+        'from_status' => ActivityStatus::Doing,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => $now->copy()->subDays(40),
     ]);
 

@@ -1,8 +1,8 @@
 <?php
 
+use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\User;
 use Carbon\Carbon;
 use Livewire\Livewire;
@@ -92,7 +92,7 @@ test('weekly calendar can go to today', function () {
 test('weekly calendar shows tasks in their respective days', function () {
     $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
     $plan = DailyPlan::factory()->create(['date' => $monday]);
-    $task = Task::factory()->todo()->create(['title' => 'Task da segunda']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task da segunda']);
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::weekly-calendar')
@@ -100,14 +100,14 @@ test('weekly calendar shows tasks in their respective days', function () {
 });
 
 test('weekly calendar shows available tasks not planned for the week', function () {
-    $task = Task::factory()->todo()->create(['title' => 'Task disponível']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task disponível']);
 
     Livewire::test('pages::weekly-calendar')
         ->assertSee('Task disponível');
 });
 
 test('weekly calendar can add task to a specific day', function () {
-    $task = Task::factory()->todo()->create(['title' => 'Task para adicionar']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task para adicionar']);
     $tomorrow = Carbon::tomorrow()->toDateString();
 
     Livewire::test('pages::weekly-calendar')
@@ -115,23 +115,23 @@ test('weekly calendar can add task to a specific day', function () {
 
     $plan = DailyPlan::whereDate('date', $tomorrow)->first();
 
-    expect($plan->tasks()->where('task_id', $task->id)->exists())->toBeTrue();
+    expect($plan->tasks()->where('activity_id', $task->id)->exists())->toBeTrue();
 });
 
 test('weekly calendar can remove task from a specific day', function () {
     $tomorrow = Carbon::tomorrow();
     $plan = DailyPlan::factory()->create(['date' => $tomorrow]);
-    $task = Task::factory()->todo()->create(['title' => 'Task para remover']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task para remover']);
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::weekly-calendar')
         ->call('removeFromPlan', $task->id, $tomorrow->toDateString());
 
-    expect($plan->fresh()->tasks()->where('task_id', $task->id)->exists())->toBeFalse();
+    expect($plan->fresh()->tasks()->where('activity_id', $task->id)->exists())->toBeFalse();
 });
 
 test('weekly calendar prevents adding tasks to past days', function () {
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $yesterday = Carbon::yesterday()->toDateString();
 
     Livewire::test('pages::weekly-calendar')
@@ -145,13 +145,13 @@ test('weekly calendar prevents adding tasks to past days', function () {
 test('weekly calendar prevents removing tasks from past days', function () {
     $yesterday = Carbon::yesterday();
     $plan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::weekly-calendar')
         ->call('removeFromPlan', $task->id, $yesterday->toDateString());
 
-    expect($plan->fresh()->tasks()->where('task_id', $task->id)->exists())->toBeTrue();
+    expect($plan->fresh()->tasks()->where('activity_id', $task->id)->exists())->toBeTrue();
 });
 
 test('weekly calendar shows today badge on current day', function () {
@@ -163,7 +163,7 @@ test('weekly calendar shows project info on tasks', function () {
     $project = Project::factory()->create(['name' => 'Projeto Alpha', 'emoji' => '🎯']);
     $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
     $plan = DailyPlan::factory()->create(['date' => $monday]);
-    $task = Task::factory()->todo()->create(['project_id' => $project->id]);
+    $task = Activity::factory()->todo()->create(['project_id' => $project->id]);
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::weekly-calendar')
@@ -173,8 +173,8 @@ test('weekly calendar shows project info on tasks', function () {
 test('weekly calendar shows day load indicator', function () {
     $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
     $plan = DailyPlan::factory()->create(['date' => $monday]);
-    $task1 = Task::factory()->todo()->create(['estimated_minutes' => 60]);
-    $task2 = Task::factory()->todo()->create(['estimated_minutes' => 90]);
+    $task1 = Activity::factory()->todo()->create(['estimated_minutes' => 60]);
+    $task2 = Activity::factory()->todo()->create(['estimated_minutes' => 90]);
     $plan->tasks()->attach($task1, ['sort_order' => 0]);
     $plan->tasks()->attach($task2, ['sort_order' => 1]);
 
@@ -194,7 +194,7 @@ test('weekly calendar can drag task between days', function () {
     }
 
     $plan = DailyPlan::factory()->create(['date' => $monday]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::weekly-calendar')
@@ -202,7 +202,7 @@ test('weekly calendar can drag task between days', function () {
 
     $tuesdayPlan = DailyPlan::whereDate('date', $tuesday->toDateString())->first();
 
-    expect($tuesdayPlan->tasks()->where('task_id', $task->id)->exists())->toBeTrue();
+    expect($tuesdayPlan->tasks()->where('activity_id', $task->id)->exists())->toBeTrue();
 });
 
 test('weekly calendar prevents drag to past days', function () {
@@ -210,7 +210,7 @@ test('weekly calendar prevents drag to past days', function () {
     $yesterday = $today->copy()->subDay();
 
     $plan = DailyPlan::factory()->create(['date' => $today]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::weekly-calendar')
@@ -219,7 +219,7 @@ test('weekly calendar prevents drag to past days', function () {
     $yesterdayPlan = DailyPlan::whereDate('date', $yesterday->toDateString())->first();
 
     expect($yesterdayPlan)->toBeNull();
-    expect($plan->fresh()->tasks()->where('task_id', $task->id)->exists())->toBeTrue();
+    expect($plan->fresh()->tasks()->where('activity_id', $task->id)->exists())->toBeTrue();
 });
 
 test('weekly calendar listens to task-updated event', function () {
@@ -259,8 +259,8 @@ test('weekly calendar handles invalid week date gracefully', function () {
 test('weekly calendar excludes planned tasks from available list', function () {
     $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
     $plan = DailyPlan::factory()->create(['date' => $monday]);
-    $plannedTask = Task::factory()->todo()->create(['title' => 'Task planejada']);
-    $availableTask = Task::factory()->todo()->create(['title' => 'Task disponível']);
+    $plannedTask = Activity::factory()->todo()->create(['title' => 'Task planejada']);
+    $availableTask = Activity::factory()->todo()->create(['title' => 'Task disponível']);
     $plan->tasks()->attach($plannedTask, ['sort_order' => 0]);
 
     $component = Livewire::test('pages::weekly-calendar');
@@ -274,7 +274,7 @@ test('weekly calendar excludes planned tasks from available list', function () {
 test('weekly calendar shows completed tasks with different styling', function () {
     $monday = Carbon::today()->startOfWeek(Carbon::MONDAY);
     $plan = DailyPlan::factory()->create(['date' => $monday]);
-    $task = Task::factory()->done()->create(['title' => 'Task concluída']);
+    $task = Activity::factory()->done()->create(['title' => 'Task concluída']);
     $plan->tasks()->attach($task, ['sort_order' => 0, 'completed_at' => now()]);
 
     Livewire::test('pages::weekly-calendar')

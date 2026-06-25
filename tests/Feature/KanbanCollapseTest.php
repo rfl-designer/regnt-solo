@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\TaskStatus;
-use App\Models\Task;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\User;
 
 beforeEach(function () {
@@ -11,8 +11,8 @@ beforeEach(function () {
 
 test('kanban page renders with done column collapse functionality', function () {
     // Create tasks in done status
-    Task::factory()->count(3)->create([
-        'status' => TaskStatus::Done,
+    Activity::factory()->count(3)->create([
+        'status' => ActivityStatus::Done,
         'completed_at' => now(),
     ]);
 
@@ -27,8 +27,8 @@ test('kanban page renders with done column collapse functionality', function () 
 });
 
 test('kanban done column has collapse toggle button', function () {
-    Task::factory()->create([
-        'status' => TaskStatus::Done,
+    Activity::factory()->create([
+        'status' => ActivityStatus::Done,
         'completed_at' => now(),
     ]);
 
@@ -42,8 +42,8 @@ test('kanban done column has collapse toggle button', function () {
 });
 
 test('kanban done column displays task count in collapsed state', function () {
-    $tasks = Task::factory()->count(5)->create([
-        'status' => TaskStatus::Done,
+    $tasks = Activity::factory()->count(5)->create([
+        'status' => ActivityStatus::Done,
         'completed_at' => now(),
     ]);
 

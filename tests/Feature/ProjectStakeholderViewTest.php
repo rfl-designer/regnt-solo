@@ -1,12 +1,11 @@
 <?php
 
-use App\Enums\FeatureStatus;
+use App\Enums\ActivityStatus;
 use App\Enums\StakeholderIssueStatus;
-use App\Models\Feature;
+use App\Models\Activity;
 use App\Models\Project;
 use App\Models\Stakeholder;
 use App\Models\StakeholderIssue;
-use App\Models\Task;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -41,17 +40,17 @@ it('public url is available through accessor', function () {
 it('renders stakeholder view with project detail tabs and feature board', function () {
     $this->withoutVite();
 
-    $feature = Feature::factory()->withSpec()->create([
+    $feature = Activity::factory()->epic()->withSpec()->create([
         'project_id' => $this->project->id,
         'title' => 'Portal de Stakeholders',
-        'status' => FeatureStatus::Doing,
+        'status' => ActivityStatus::Doing,
     ]);
 
-    Task::factory()->forFeature($feature)->doing()->create([
+    Activity::factory()->forParent($feature)->doing()->create([
         'title' => 'Implementar board de acompanhamento',
     ]);
 
-    Task::factory()->forFeature($feature)->todo()->create([
+    Activity::factory()->forParent($feature)->todo()->create([
         'title' => 'Revisar especificações da feature',
     ]);
 

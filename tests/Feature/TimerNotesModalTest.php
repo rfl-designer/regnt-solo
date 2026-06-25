@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Task;
+use App\Models\Activity;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Livewire\Livewire;
@@ -15,8 +15,8 @@ test('component renders successfully', function () {
 });
 
 test('opens modal when open-timer-notes event is dispatched', function () {
-    $task = Task::factory()->create(['title' => 'My Task']);
-    $entry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create(['title' => 'My Task']);
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -28,9 +28,9 @@ test('opens modal when open-timer-notes event is dispatched', function () {
 });
 
 test('clears notes when opening modal', function () {
-    $task = Task::factory()->create();
-    $entry1 = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
-    $entry2 = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry1 = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
+    $entry2 = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry1->id)
@@ -40,8 +40,8 @@ test('clears notes when opening modal', function () {
 });
 
 test('saveWithNotes stops timer and saves notes', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -56,9 +56,9 @@ test('saveWithNotes stops timer and saves notes', function () {
 });
 
 test('skipNotes stops timer without notes', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     $entry = TimeEntry::factory()->running()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'notes' => null,
     ]);
 
@@ -74,8 +74,8 @@ test('skipNotes stops timer without notes', function () {
 });
 
 test('dispatches timer-updated event on saveWithNotes', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -85,8 +85,8 @@ test('dispatches timer-updated event on saveWithNotes', function () {
 });
 
 test('dispatches timer-updated event on skipNotes', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -95,8 +95,8 @@ test('dispatches timer-updated event on skipNotes', function () {
 });
 
 test('modal closes after saveWithNotes', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -105,8 +105,8 @@ test('modal closes after saveWithNotes', function () {
 });
 
 test('modal closes after skipNotes', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -115,8 +115,8 @@ test('modal closes after skipNotes', function () {
 });
 
 test('displays task name in modal', function () {
-    $task = Task::factory()->create(['title' => 'Implement feature ABC']);
-    $entry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create(['title' => 'Implement feature ABC']);
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -124,8 +124,8 @@ test('displays task name in modal', function () {
 });
 
 test('opens modal with isFocusSession true for focus entries', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->focus()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -134,8 +134,8 @@ test('opens modal with isFocusSession true for focus entries', function () {
 });
 
 test('opens modal with isFocusSession false for normal entries', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -143,8 +143,8 @@ test('opens modal with isFocusSession false for normal entries', function () {
 });
 
 test('displays focus emoji for focus session entries', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->focus()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -152,8 +152,8 @@ test('displays focus emoji for focus session entries', function () {
 });
 
 test('displays focus rating stars for focus session entries', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->focus()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -162,8 +162,8 @@ test('displays focus rating stars for focus session entries', function () {
 });
 
 test('does not display focus rating for normal entries', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -171,8 +171,8 @@ test('does not display focus rating for normal entries', function () {
 });
 
 test('saveWithNotes saves focus rating for focus sessions', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->focus()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -189,8 +189,8 @@ test('saveWithNotes saves focus rating for focus sessions', function () {
 });
 
 test('saveWithNotes does not save focus rating when not set', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->focus()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -202,8 +202,8 @@ test('saveWithNotes does not save focus rating when not set', function () {
 });
 
 test('skipNotes saves focus rating for focus sessions when set', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id, 'notes' => null]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->focus()->create(['activity_id' => $task->id, 'notes' => null]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -219,8 +219,8 @@ test('skipNotes saves focus rating for focus sessions when set', function () {
 });
 
 test('skipNotes does not save focus rating when not set', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->focus()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -231,9 +231,9 @@ test('skipNotes does not save focus rating when not set', function () {
 });
 
 test('resets focusRating when opening a new entry', function () {
-    $task = Task::factory()->create();
-    $entry1 = TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
-    $entry2 = TimeEntry::factory()->running()->focus()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry1 = TimeEntry::factory()->running()->focus()->create(['activity_id' => $task->id]);
+    $entry2 = TimeEntry::factory()->running()->focus()->create(['activity_id' => $task->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry1->id)
@@ -243,8 +243,8 @@ test('resets focusRating when opening a new entry', function () {
 });
 
 test('opens modal with feature title when entry belongs to a feature', function () {
-    $feature = \App\Models\Feature::factory()->create(['title' => 'Epic Feature']);
-    $entry = TimeEntry::factory()->running()->create(['feature_id' => $feature->id, 'task_id' => null]);
+    $feature = \App\Models\Activity::factory()->epic()->create(['title' => 'Epic Feature']);
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $feature->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)
@@ -256,8 +256,8 @@ test('opens modal with feature title when entry belongs to a feature', function 
 });
 
 test('displays feature name in modal for feature entries', function () {
-    $feature = \App\Models\Feature::factory()->create(['title' => 'Implement Dark Mode']);
-    $entry = TimeEntry::factory()->running()->create(['feature_id' => $feature->id, 'task_id' => null]);
+    $feature = \App\Models\Activity::factory()->epic()->create(['title' => 'Implement Dark Mode']);
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $feature->id]);
 
     Livewire::test('timer-notes-modal')
         ->dispatch('open-timer-notes', entryId: $entry->id)

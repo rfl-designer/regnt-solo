@@ -1,10 +1,8 @@
 <?php
 
-use App\Enums\FeatureStatus;
-use App\Enums\TaskStatus;
-use App\Models\Feature;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -18,15 +16,15 @@ beforeEach(function () {
 
 describe('Feature ID on Cards', function () {
     test('feature card renders #F-{id} with the correct ID', function () {
-        $feature = Feature::factory()->todo()->create(['title' => 'Test Feature']);
+        $feature = Activity::factory()->epic()->todo()->create(['title' => 'Test Feature']);
 
         $this->get(route('work'))
             ->assertSee("#F-{$feature->id}");
     });
 
     test('feature ID appears on Work page kanban', function () {
-        $feature1 = Feature::factory()->todo()->create(['title' => 'Feature Alpha']);
-        $feature2 = Feature::factory()->doing()->create(['title' => 'Feature Beta']);
+        $feature1 = Activity::factory()->epic()->todo()->create(['title' => 'Feature Alpha']);
+        $feature2 = Activity::factory()->epic()->doing()->create(['title' => 'Feature Beta']);
 
         $response = $this->get(route('work'));
 
@@ -36,15 +34,15 @@ describe('Feature ID on Cards', function () {
 
     test('feature ID appears on project detail kanban', function () {
         $project = Project::factory()->create();
-        $feature = Feature::factory()->create([
+        $feature = Activity::factory()->epic()->create([
             'title' => 'Project Feature',
             'project_id' => $project->id,
-            'status' => FeatureStatus::Todo,
+            'status' => ActivityStatus::Todo,
         ]);
-        Task::factory()->create([
-            'feature_id' => $feature->id,
+        Activity::factory()->create([
+            'parent_id' => $feature->id,
             'project_id' => $project->id,
-            'status' => TaskStatus::Todo,
+            'status' => ActivityStatus::Todo,
         ]);
 
         Livewire::test('pages::project-detail', ['slug' => $project->slug])
@@ -54,7 +52,7 @@ describe('Feature ID on Cards', function () {
 
 describe('Feature ID on Modal', function () {
     test('feature modal displays ID when editing', function () {
-        $feature = Feature::factory()->create(['title' => 'Editable Feature']);
+        $feature = Activity::factory()->epic()->create(['title' => 'Editable Feature']);
 
         Livewire::test('feature-modal')
             ->call('open', $feature->id)

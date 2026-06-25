@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -22,13 +22,13 @@ test('can create a task with a simple title', function () {
         ->set('rawInput', 'Minha nova tarefa')
         ->call('createTask');
 
-    expect(Task::count())->toBe(1);
+    expect(Activity::count())->toBe(1);
 
-    $task = Task::first();
+    $task = Activity::first();
     expect($task)
         ->title->toBe('Minha nova tarefa')
-        ->status->toBe(TaskStatus::Inbox)
-        ->priority->toBe(TaskPriority::Medium)
+        ->status->toBe(ActivityStatus::Inbox)
+        ->priority->toBe(ActivityPriority::Medium)
         ->project_id->toBeNull()
         ->due_date->toBeNull();
 });
@@ -40,13 +40,13 @@ test('can create a task with full inline syntax', function () {
         ->set('rawInput', 'Revisar PR #meu-projeto !high @hoje')
         ->call('createTask');
 
-    expect(Task::count())->toBe(1);
+    expect(Activity::count())->toBe(1);
 
-    $task = Task::first();
+    $task = Activity::first();
     expect($task)
         ->title->toBe('Revisar PR')
         ->project_id->toBe($project->id)
-        ->priority->toBe(TaskPriority::High)
+        ->priority->toBe(ActivityPriority::High)
         ->due_date->toEqual(now()->startOfDay());
 });
 
@@ -55,9 +55,9 @@ test('invalid project slug creates task without project and shows warning', func
         ->set('rawInput', 'Tarefa #projeto-inexistente')
         ->call('createTask');
 
-    expect(Task::count())->toBe(1);
+    expect(Activity::count())->toBe(1);
 
-    $task = Task::first();
+    $task = Activity::first();
     expect($task)
         ->title->toBe('Tarefa')
         ->project_id->toBeNull();
@@ -77,8 +77,8 @@ test('task defaults to inbox status when no initial status is set', function () 
         ->set('rawInput', 'Tarefa inbox')
         ->call('createTask');
 
-    $task = Task::first();
-    expect($task->status)->toBe(TaskStatus::Inbox);
+    $task = Activity::first();
+    expect($task->status)->toBe(ActivityStatus::Inbox);
 });
 
 test('does not create task with empty input', function () {
@@ -86,7 +86,7 @@ test('does not create task with empty input', function () {
         ->set('rawInput', '')
         ->call('createTask');
 
-    expect(Task::count())->toBe(0);
+    expect(Activity::count())->toBe(0);
 });
 
 test('does not create task when only tokens are provided', function () {
@@ -94,7 +94,7 @@ test('does not create task when only tokens are provided', function () {
         ->set('rawInput', '#projeto !high @hoje')
         ->call('createTask');
 
-    expect(Task::count())->toBe(0);
+    expect(Activity::count())->toBe(0);
 });
 
 test('detects active prefix when typing hash', function () {
@@ -139,7 +139,7 @@ test('can create task with date alias amanha', function () {
         ->set('rawInput', 'Tarefa @amanha')
         ->call('createTask');
 
-    $task = Task::first();
+    $task = Activity::first();
     expect($task->due_date)->toEqual(now()->addDay()->startOfDay());
 });
 
@@ -148,8 +148,8 @@ test('can create task with priority urgent', function () {
         ->set('rawInput', 'Tarefa urgente !urgent')
         ->call('createTask');
 
-    $task = Task::first();
-    expect($task->priority)->toBe(TaskPriority::Urgent);
+    $task = Activity::first();
+    expect($task->priority)->toBe(ActivityPriority::Urgent);
 });
 
 test('quick add creates session task with > prefix', function () {
@@ -157,9 +157,9 @@ test('quick add creates session task with > prefix', function () {
         ->set('rawInput', '>Implementar autenticação com OAuth')
         ->call('createTask');
 
-    expect(Task::count())->toBe(1);
+    expect(Activity::count())->toBe(1);
 
-    $task = Task::first();
+    $task = Activity::first();
     expect($task->session_prompt)->toBe('Implementar autenticação com OAuth');
     expect($task->title)->toBe('Implementar autenticação com OAuth');
 });
@@ -171,9 +171,9 @@ test('quick add creates session task via checkbox mode', function () {
         ->set('sessionPromptInput', 'Refatorar o módulo de pagamentos para usar Stripe SDK v3')
         ->call('createTask');
 
-    expect(Task::count())->toBe(1);
+    expect(Activity::count())->toBe(1);
 
-    $task = Task::first();
+    $task = Activity::first();
     expect($task->session_prompt)->toBe('Refatorar o módulo de pagamentos para usar Stripe SDK v3');
     expect($task->title)->toBe('Refatorar módulo de pagamentos');
 });
@@ -193,7 +193,7 @@ test('quick add creates normal task without > prefix', function () {
         ->set('rawInput', 'Tarefa normal sem sessão')
         ->call('createTask');
 
-    $task = Task::first();
+    $task = Activity::first();
     expect($task->session_prompt)->toBeNull();
 });
 
@@ -209,8 +209,8 @@ test('creates task with initial status when set', function () {
         ->set('rawInput', 'Tarefa para Todo')
         ->call('createTask');
 
-    $task = Task::first();
-    expect($task->status)->toBe(TaskStatus::Todo);
+    $task = Activity::first();
+    expect($task->status)->toBe(ActivityStatus::Todo);
 });
 
 test('creates task with backlog status when initial status is backlog', function () {
@@ -219,8 +219,8 @@ test('creates task with backlog status when initial status is backlog', function
         ->set('rawInput', 'Tarefa para Backlog')
         ->call('createTask');
 
-    $task = Task::first();
-    expect($task->status)->toBe(TaskStatus::Backlog);
+    $task = Activity::first();
+    expect($task->status)->toBe(ActivityStatus::Backlog);
 });
 
 test('creates task with doing status when initial status is doing', function () {
@@ -229,8 +229,8 @@ test('creates task with doing status when initial status is doing', function () 
         ->set('rawInput', 'Tarefa em progresso')
         ->call('createTask');
 
-    $task = Task::first();
-    expect($task->status)->toBe(TaskStatus::Doing);
+    $task = Activity::first();
+    expect($task->status)->toBe(ActivityStatus::Doing);
 });
 
 test('creates task with done status when initial status is done', function () {
@@ -239,8 +239,8 @@ test('creates task with done status when initial status is done', function () {
         ->set('rawInput', 'Tarefa concluída')
         ->call('createTask');
 
-    $task = Task::first();
-    expect($task->status)->toBe(TaskStatus::Done);
+    $task = Activity::first();
+    expect($task->status)->toBe(ActivityStatus::Done);
 });
 
 test('falls back to inbox when initial status is invalid', function () {
@@ -249,8 +249,8 @@ test('falls back to inbox when initial status is invalid', function () {
         ->set('rawInput', 'Tarefa com status inválido')
         ->call('createTask');
 
-    $task = Task::first();
-    expect($task->status)->toBe(TaskStatus::Inbox);
+    $task = Activity::first();
+    expect($task->status)->toBe(ActivityStatus::Inbox);
 });
 
 test('resets initial status after creating task', function () {
@@ -267,6 +267,6 @@ test('creates task in inbox when initial status is null', function () {
         ->set('rawInput', 'Tarefa normal')
         ->call('createTask');
 
-    $task = Task::first();
-    expect($task->status)->toBe(TaskStatus::Inbox);
+    $task = Activity::first();
+    expect($task->status)->toBe(ActivityStatus::Inbox);
 });

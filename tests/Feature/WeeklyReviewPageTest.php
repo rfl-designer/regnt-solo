@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
+use App\Models\ActivityStatusChange;
 use App\Models\Project;
-use App\Models\Task;
-use App\Models\TaskStatusChange;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Models\WeeklyReview;
@@ -108,7 +108,7 @@ test('weekly review shows week period in header', function () {
 test('weekly review shows summary cards with completed tasks count', function () {
     $review = WeeklyReview::factory()->thisWeek()->create();
 
-    Task::withoutEvents(fn () => Task::factory()->done()->create([
+    Activity::withoutEvents(fn () => Activity::factory()->done()->create([
         'completed_at' => now()->startOfWeek()->addDay(),
     ]));
 
@@ -119,9 +119,9 @@ test('weekly review shows summary cards with completed tasks count', function ()
 test('weekly review shows summary cards with total hours', function () {
     $review = WeeklyReview::factory()->thisWeek()->create();
 
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->startOfWeek()->addHours(9),
         'stopped_at' => now()->startOfWeek()->addHours(11),
     ]);
@@ -146,10 +146,10 @@ test('weekly review handles invalid week parameter gracefully', function () {
 
 test('weekly review shows hours by project section', function () {
     $project = Project::factory()->create(['name' => 'Projeto Alpha', 'emoji' => '🚀']);
-    $task = Task::withoutEvents(fn () => Task::factory()->create(['project_id' => $project->id]));
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create(['project_id' => $project->id]));
 
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->startOfWeek()->addHours(9),
         'stopped_at' => now()->startOfWeek()->addHours(11),
     ]);
@@ -167,7 +167,7 @@ test('weekly review shows hours by project empty state', function () {
 
 test('weekly review shows completed tasks section with task details', function () {
     $project = Project::factory()->create(['name' => 'Projeto Beta', 'emoji' => '📦']);
-    $task = Task::withoutEvents(fn () => Task::factory()->done()->create([
+    $task = Activity::withoutEvents(fn () => Activity::factory()->done()->create([
         'title' => 'Implementar feature X',
         'project_id' => $project->id,
         'completed_at' => now()->startOfWeek()->addDay(),
@@ -186,7 +186,7 @@ test('weekly review shows completed tasks empty state', function () {
 });
 
 test('weekly review shows stale tasks section', function () {
-    $task = Task::withoutEvents(fn () => Task::factory()->todo()->create([
+    $task = Activity::withoutEvents(fn () => Activity::factory()->todo()->create([
         'title' => 'Task parada',
     ]));
 
@@ -197,11 +197,11 @@ test('weekly review shows stale tasks section', function () {
 
 test('weekly review shows stale tasks positive empty state', function () {
     // Create a task with status change in the week so it's not stale
-    $task = Task::withoutEvents(fn () => Task::factory()->doing()->create());
-    TaskStatusChange::factory()->create([
-        'task_id' => $task->id,
-        'from_status' => TaskStatus::Todo,
-        'to_status' => TaskStatus::Doing,
+    $task = Activity::withoutEvents(fn () => Activity::factory()->doing()->create());
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $task->id,
+        'from_status' => ActivityStatus::Todo,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => now()->startOfWeek()->addDay(),
     ]);
 
@@ -210,7 +210,7 @@ test('weekly review shows stale tasks positive empty state', function () {
 });
 
 test('weekly review shows task priority badge in completed tasks', function () {
-    Task::withoutEvents(fn () => Task::factory()->done()->create([
+    Activity::withoutEvents(fn () => Activity::factory()->done()->create([
         'title' => 'Task urgente',
         'priority' => 'urgent',
         'completed_at' => now()->startOfWeek()->addDay(),
@@ -222,7 +222,7 @@ test('weekly review shows task priority badge in completed tasks', function () {
 });
 
 test('weekly review shows task status badge in stale tasks', function () {
-    Task::withoutEvents(fn () => Task::factory()->todo()->create([
+    Activity::withoutEvents(fn () => Activity::factory()->todo()->create([
         'title' => 'Task em todo',
     ]));
 
@@ -232,13 +232,13 @@ test('weekly review shows task status badge in stale tasks', function () {
 });
 
 test('weekly review shows tracked time on completed tasks', function () {
-    $task = Task::withoutEvents(fn () => Task::factory()->done()->create([
+    $task = Activity::withoutEvents(fn () => Activity::factory()->done()->create([
         'title' => 'Task com tempo',
         'completed_at' => now()->startOfWeek()->addDay(),
     ]));
 
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->startOfWeek()->addHours(9),
         'stopped_at' => now()->startOfWeek()->addHours(10)->addMinutes(30),
     ]);
@@ -249,10 +249,10 @@ test('weekly review shows tracked time on completed tasks', function () {
 });
 
 test('weekly review handles tasks without project in hours by project', function () {
-    $task = Task::withoutEvents(fn () => Task::factory()->create(['project_id' => null]));
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create(['project_id' => null]));
 
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->startOfWeek()->addHours(9),
         'stopped_at' => now()->startOfWeek()->addHours(10),
     ]);

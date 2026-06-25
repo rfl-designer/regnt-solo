@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\User;
 use Carbon\Carbon;
 use Livewire\Livewire;
@@ -37,7 +37,7 @@ test('daily planner defaults to today', function () {
 
 test('daily planner shows tasks added to the plan', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->todo()->create(['title' => 'Minha task do dia']);
+    $task = Activity::factory()->todo()->create(['title' => 'Minha task do dia']);
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
@@ -45,59 +45,59 @@ test('daily planner shows tasks added to the plan', function () {
 });
 
 test('daily planner can add a task to the plan', function () {
-    $task = Task::factory()->todo()->create(['title' => 'Task para adicionar']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task para adicionar']);
 
     Livewire::test('pages::daily-planner')
         ->call('addToPlan', $task->id);
 
     $plan = DailyPlan::whereDate('date', now()->toDateString())->first();
 
-    expect($plan->tasks()->where('task_id', $task->id)->exists())->toBeTrue();
+    expect($plan->tasks()->where('activity_id', $task->id)->exists())->toBeTrue();
 });
 
 test('daily planner can remove a task from the plan', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->todo()->create(['title' => 'Task para remover']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task para remover']);
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
         ->call('removeFromPlan', $task->id);
 
-    expect($plan->fresh()->tasks()->where('task_id', $task->id)->exists())->toBeFalse();
+    expect($plan->fresh()->tasks()->where('activity_id', $task->id)->exists())->toBeFalse();
 });
 
 test('daily planner can toggle task completion', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->todo()->create(['title' => 'Task para completar']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task para completar']);
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
         ->call('toggleTask', $task->id);
 
-    $pivot = $plan->fresh()->tasks()->where('task_id', $task->id)->first()->pivot;
+    $pivot = $plan->fresh()->tasks()->where('activity_id', $task->id)->first()->pivot;
 
     expect($pivot->completed_at)->not->toBeNull()
-        ->and($task->fresh()->status)->toBe(TaskStatus::Done);
+        ->and($task->fresh()->status)->toBe(ActivityStatus::Done);
 });
 
 test('daily planner can undo task completion', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->done()->create(['title' => 'Task concluída']);
+    $task = Activity::factory()->done()->create(['title' => 'Task concluída']);
     $plan->tasks()->attach($task, ['sort_order' => 0, 'completed_at' => now()]);
 
     Livewire::test('pages::daily-planner')
         ->call('toggleTask', $task->id);
 
-    $pivot = $plan->fresh()->tasks()->where('task_id', $task->id)->first()->pivot;
+    $pivot = $plan->fresh()->tasks()->where('activity_id', $task->id)->first()->pivot;
 
     expect($pivot->completed_at)->toBeNull()
-        ->and($task->fresh()->status)->toBe(TaskStatus::Doing);
+        ->and($task->fresh()->status)->toBe(ActivityStatus::Doing);
 });
 
 test('daily planner shows available tasks not in the plan', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $inPlan = Task::factory()->todo()->create(['title' => 'Task no plano']);
-    $available = Task::factory()->todo()->create(['title' => 'Task disponível']);
+    $inPlan = Activity::factory()->todo()->create(['title' => 'Task no plano']);
+    $available = Activity::factory()->todo()->create(['title' => 'Task disponível']);
     $plan->tasks()->attach($inPlan, ['sort_order' => 0]);
 
     $component = Livewire::test('pages::daily-planner');
@@ -109,7 +109,7 @@ test('daily planner shows available tasks not in the plan', function () {
 });
 
 test('daily planner does not show done tasks in available list', function () {
-    $doneTask = Task::factory()->done()->create(['title' => 'Task concluída']);
+    $doneTask = Activity::factory()->done()->create(['title' => 'Task concluída']);
 
     Livewire::test('pages::daily-planner')
         ->assertDontSee('Task concluída');
@@ -117,8 +117,8 @@ test('daily planner does not show done tasks in available list', function () {
 
 test('daily planner shows completion rate', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task1 = Task::factory()->done()->create();
-    $task2 = Task::factory()->todo()->create();
+    $task1 = Activity::factory()->done()->create();
+    $task2 = Activity::factory()->todo()->create();
     $plan->tasks()->attach($task1, ['sort_order' => 0, 'completed_at' => now()]);
     $plan->tasks()->attach($task2, ['sort_order' => 1]);
 
@@ -136,7 +136,7 @@ test('daily planner can change date via url parameter', function () {
 test('daily planner shows project info on tasks', function () {
     $project = Project::factory()->create(['name' => 'Projeto Alpha', 'emoji' => '🎯']);
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->todo()->create(['project_id' => $project->id]);
+    $task = Activity::factory()->todo()->create(['project_id' => $project->id]);
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
@@ -146,7 +146,7 @@ test('daily planner shows project info on tasks', function () {
 
 test('daily planner shows priority badges', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->todo()->urgent()->create();
+    $task = Activity::factory()->todo()->urgent()->create();
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
@@ -155,15 +155,15 @@ test('daily planner shows priority badges', function () {
 
 test('daily planner can reorder tasks', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task1 = Task::factory()->todo()->create();
-    $task2 = Task::factory()->todo()->create();
+    $task1 = Activity::factory()->todo()->create();
+    $task2 = Activity::factory()->todo()->create();
     $plan->tasks()->attach($task1, ['sort_order' => 0]);
     $plan->tasks()->attach($task2, ['sort_order' => 1]);
 
     Livewire::test('pages::daily-planner')
         ->call('handleSort', $task2->id, 0);
 
-    expect($plan->tasks()->where('task_id', $task2->id)->first()->pivot->sort_order)->toBe(0);
+    expect($plan->tasks()->where('activity_id', $task2->id)->first()->pivot->sort_order)->toBe(0);
 });
 
 test('daily planner saves notes on blur', function () {
@@ -178,24 +178,24 @@ test('daily planner saves notes on blur', function () {
 test('daily planner prevents modifications on past plans', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $plan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
 
     Livewire::test('pages::daily-planner', ['date' => $yesterday])
         ->call('addToPlan', $task->id);
 
-    expect($plan->fresh()->tasks()->where('task_id', $task->id)->exists())->toBeFalse();
+    expect($plan->fresh()->tasks()->where('activity_id', $task->id)->exists())->toBeFalse();
 });
 
 test('daily planner prevents toggle on past plans', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $plan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner', ['date' => $yesterday])
         ->call('toggleTask', $task->id);
 
-    expect($plan->fresh()->tasks()->where('task_id', $task->id)->first()->pivot->completed_at)->toBeNull();
+    expect($plan->fresh()->tasks()->where('activity_id', $task->id)->first()->pivot->completed_at)->toBeNull();
 });
 
 test('daily planner prevents notes update on past plans', function () {
@@ -211,7 +211,7 @@ test('daily planner prevents notes update on past plans', function () {
 test('daily planner shows yesterday tasks section when yesterday has incomplete tasks', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create(['title' => 'Task de ontem']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task de ontem']);
     $yesterdayPlan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
@@ -222,7 +222,7 @@ test('daily planner shows yesterday tasks section when yesterday has incomplete 
 test('daily planner can carry over tasks from yesterday', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create(['title' => 'Task de ontem']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task de ontem']);
     $yesterdayPlan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
@@ -230,13 +230,13 @@ test('daily planner can carry over tasks from yesterday', function () {
 
     $todayPlan = DailyPlan::whereDate('date', now()->toDateString())->first();
 
-    expect($todayPlan->tasks()->where('task_id', $task->id)->exists())->toBeTrue();
+    expect($todayPlan->tasks()->where('activity_id', $task->id)->exists())->toBeTrue();
 });
 
 test('daily planner can move past incomplete task to today', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $yesterdayPlan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner', ['date' => $yesterday])
@@ -244,7 +244,7 @@ test('daily planner can move past incomplete task to today', function () {
 
     $todayPlan = DailyPlan::whereDate('date', now()->toDateString())->first();
 
-    expect($todayPlan->tasks()->where('task_id', $task->id)->exists())->toBeTrue();
+    expect($todayPlan->tasks()->where('activity_id', $task->id)->exists())->toBeTrue();
 });
 
 test('daily planner listens to task-updated event', function () {
@@ -268,7 +268,7 @@ test('daily planner shows past plan badge', function () {
 
 test('daily planner hides available tasks column for past plans', function () {
     $yesterday = Carbon::yesterday()->toDateString();
-    $task = Task::factory()->todo()->create(['title' => 'Task ativa']);
+    $task = Activity::factory()->todo()->create(['title' => 'Task ativa']);
 
     Livewire::test('pages::daily-planner', ['date' => $yesterday])
         ->assertDontSee('Tasks Disponíveis');
@@ -277,34 +277,34 @@ test('daily planner hides available tasks column for past plans', function () {
 test('daily planner prevents reorder on past plans', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $plan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task1 = Task::factory()->todo()->create();
-    $task2 = Task::factory()->todo()->create();
+    $task1 = Activity::factory()->todo()->create();
+    $task2 = Activity::factory()->todo()->create();
     $plan->tasks()->attach($task1, ['sort_order' => 0]);
     $plan->tasks()->attach($task2, ['sort_order' => 1]);
 
     Livewire::test('pages::daily-planner', ['date' => $yesterday])
         ->call('handleSort', $task2->id, 0);
 
-    expect($plan->fresh()->tasks()->where('task_id', $task2->id)->first()->pivot->sort_order)->toBe(1);
+    expect($plan->fresh()->tasks()->where('activity_id', $task2->id)->first()->pivot->sort_order)->toBe(1);
 });
 
 test('daily planner prevents remove on past plans', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     $plan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner', ['date' => $yesterday])
         ->call('removeFromPlan', $task->id);
 
-    expect($plan->fresh()->tasks()->where('task_id', $task->id)->exists())->toBeTrue();
+    expect($plan->fresh()->tasks()->where('activity_id', $task->id)->exists())->toBeTrue();
 });
 
 test('daily planner carry-over does nothing on non-today date', function () {
     $tomorrow = Carbon::tomorrow()->toDateString();
     $yesterday = Carbon::yesterday()->toDateString();
     $yesterdayPlan = DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $yesterdayPlan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner', ['date' => $tomorrow])
@@ -312,34 +312,34 @@ test('daily planner carry-over does nothing on non-today date', function () {
 
     $tomorrowPlan = DailyPlan::whereDate('date', $tomorrow)->first();
 
-    expect($tomorrowPlan?->tasks()->where('task_id', $task->id)->exists() ?? false)->toBeFalse();
+    expect($tomorrowPlan?->tasks()->where('activity_id', $task->id)->exists() ?? false)->toBeFalse();
 });
 
 test('daily planner addToPlan does not duplicate existing task', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
         ->call('addToPlan', $task->id);
 
-    expect($plan->fresh()->tasks()->where('task_id', $task->id)->count())->toBe(1);
+    expect($plan->fresh()->tasks()->where('activity_id', $task->id)->count())->toBe(1);
 });
 
 test('daily planner toggleTask ignores task not in plan', function () {
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
 
     Livewire::test('pages::daily-planner')
         ->call('toggleTask', $task->id)
         ->assertSuccessful();
 
-    expect($task->fresh()->status)->toBe(TaskStatus::Todo);
+    expect($task->fresh()->status)->toBe(ActivityStatus::Todo);
 });
 
 test('daily planner moveToToday ignores task not in current plan', function () {
     $yesterday = Carbon::yesterday()->toDateString();
     DailyPlan::factory()->create(['date' => $yesterday]);
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
 
     Livewire::test('pages::daily-planner', ['date' => $yesterday])
         ->call('moveToToday', $task->id);
@@ -358,8 +358,8 @@ test('daily planner handles invalid date gracefully', function () {
 test('daily planner can filter available tasks by project', function () {
     $project1 = Project::factory()->create(['name' => 'Projeto Alpha']);
     $project2 = Project::factory()->create(['name' => 'Projeto Beta']);
-    $task1 = Task::factory()->todo()->create(['project_id' => $project1->id, 'title' => 'Task Alpha']);
-    $task2 = Task::factory()->todo()->create(['project_id' => $project2->id, 'title' => 'Task Beta']);
+    $task1 = Activity::factory()->todo()->create(['project_id' => $project1->id, 'title' => 'Task Alpha']);
+    $task2 = Activity::factory()->todo()->create(['project_id' => $project2->id, 'title' => 'Task Beta']);
 
     $component = Livewire::test('pages::daily-planner');
 
@@ -384,8 +384,8 @@ test('daily planner shows projects in filter dropdown', function () {
 
 test('daily planner filter resets when clearing project selection', function () {
     $project = Project::factory()->create();
-    $task1 = Task::factory()->todo()->create(['project_id' => $project->id]);
-    $task2 = Task::factory()->todo()->create(['project_id' => null]);
+    $task1 = Activity::factory()->todo()->create(['project_id' => $project->id]);
+    $task2 = Activity::factory()->todo()->create(['project_id' => null]);
 
     $component = Livewire::test('pages::daily-planner')
         ->set('filterProjectId', (string) $project->id);

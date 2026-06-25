@@ -108,7 +108,7 @@ new class extends Component
             Flux::toast(variant: 'success', heading: 'Feature atualizada', text: $feature->title);
             $this->dispatch('feature-updated');
         } else {
-            $feature = Activity::create(array_merge($data, ['type' => ActivityType::Epic]));
+            $feature = Activity::create(array_merge($data, ['type' => ActivityType::Epic, 'status' => ActivityStatus::Backlog]));
 
             Flux::toast(variant: 'success', heading: 'Feature criada', text: $feature->title);
             $this->dispatch('feature-created');

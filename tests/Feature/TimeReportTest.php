@@ -1,7 +1,7 @@
 <?php
 
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Livewire\Livewire;
@@ -34,9 +34,9 @@ test('time report defaults to thisWeek period', function () {
 });
 
 test('time report shows completed time entries', function () {
-    $task = Task::factory()->create(['title' => 'Task com tempo']);
+    $task = Activity::factory()->create(['title' => 'Task com tempo']);
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subHour(),
         'stopped_at' => now(),
         'notes' => 'Trabalhando no feature',
@@ -48,9 +48,9 @@ test('time report shows completed time entries', function () {
 });
 
 test('time report does not show running entries', function () {
-    $task = Task::factory()->create(['title' => 'Task rodando']);
+    $task = Activity::factory()->create(['title' => 'Task rodando']);
     TimeEntry::factory()->running()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
     ]);
 
     Livewire::test('pages::time-report')
@@ -66,16 +66,16 @@ test('time report filters by project', function () {
     $projectA = Project::factory()->create(['name' => 'Projeto Alpha']);
     $projectB = Project::factory()->create(['name' => 'Projeto Beta']);
 
-    $taskA = Task::factory()->create(['project_id' => $projectA->id, 'title' => 'Task Alpha']);
-    $taskB = Task::factory()->create(['project_id' => $projectB->id, 'title' => 'Task Beta']);
+    $taskA = Activity::factory()->create(['project_id' => $projectA->id, 'title' => 'Task Alpha']);
+    $taskB = Activity::factory()->create(['project_id' => $projectB->id, 'title' => 'Task Beta']);
 
     TimeEntry::factory()->create([
-        'task_id' => $taskA->id,
+        'activity_id' => $taskA->id,
         'started_at' => now()->subHour(),
         'stopped_at' => now(),
     ]);
     TimeEntry::factory()->create([
-        'task_id' => $taskB->id,
+        'activity_id' => $taskB->id,
         'started_at' => now()->subHours(2),
         'stopped_at' => now()->subHour(),
     ]);
@@ -90,16 +90,16 @@ test('time report shows all projects when filter is empty', function () {
     $projectA = Project::factory()->create(['name' => 'Projeto Alpha']);
     $projectB = Project::factory()->create(['name' => 'Projeto Beta']);
 
-    $taskA = Task::factory()->create(['project_id' => $projectA->id, 'title' => 'Task Alpha']);
-    $taskB = Task::factory()->create(['project_id' => $projectB->id, 'title' => 'Task Beta']);
+    $taskA = Activity::factory()->create(['project_id' => $projectA->id, 'title' => 'Task Alpha']);
+    $taskB = Activity::factory()->create(['project_id' => $projectB->id, 'title' => 'Task Beta']);
 
     TimeEntry::factory()->create([
-        'task_id' => $taskA->id,
+        'activity_id' => $taskA->id,
         'started_at' => now()->subHour(),
         'stopped_at' => now(),
     ]);
     TimeEntry::factory()->create([
-        'task_id' => $taskB->id,
+        'activity_id' => $taskB->id,
         'started_at' => now()->subHours(2),
         'stopped_at' => now()->subHour(),
     ]);
@@ -111,9 +111,9 @@ test('time report shows all projects when filter is empty', function () {
 
 test('time report shows project info on entries', function () {
     $project = Project::factory()->create(['name' => 'Meu Projeto', 'emoji' => '🚀']);
-    $task = Task::factory()->create(['project_id' => $project->id]);
+    $task = Activity::factory()->create(['project_id' => $project->id]);
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subHour(),
         'stopped_at' => now(),
     ]);
@@ -134,9 +134,9 @@ test('time report accepts thisMonth period', function () {
 });
 
 test('time report shows total duration', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subMinutes(90),
         'stopped_at' => now(),
     ]);
@@ -146,9 +146,9 @@ test('time report shows total duration', function () {
 });
 
 test('time report shows entry count', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     TimeEntry::factory()->count(3)->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subHour(),
         'stopped_at' => now(),
     ]);
@@ -159,15 +159,15 @@ test('time report shows entry count', function () {
 });
 
 test('time report groups entries by date', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subHour(),
         'stopped_at' => now(),
     ]);
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subDay()->subHour(),
         'stopped_at' => now()->subDay(),
     ]);
@@ -179,9 +179,9 @@ test('time report groups entries by date', function () {
 
 test('time report generates markdown with correct content', function () {
     $project = Project::factory()->create(['name' => 'Projeto Test']);
-    $task = Task::factory()->create(['title' => 'Task Test', 'project_id' => $project->id]);
+    $task = Activity::factory()->create(['title' => 'Task Test', 'project_id' => $project->id]);
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subMinutes(60),
         'stopped_at' => now(),
         'notes' => 'Nota de teste',
@@ -198,9 +198,9 @@ test('time report generates markdown with correct content', function () {
 });
 
 test('time report copy markdown dispatches event', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subHour(),
         'stopped_at' => now(),
     ]);
@@ -211,9 +211,9 @@ test('time report copy markdown dispatches event', function () {
 });
 
 test('time report does not show entries outside date range', function () {
-    $task = Task::factory()->create(['title' => 'Task antiga']);
+    $task = Activity::factory()->create(['title' => 'Task antiga']);
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subMonth()->subDay(),
         'stopped_at' => now()->subMonth(),
     ]);
@@ -223,9 +223,9 @@ test('time report does not show entries outside date range', function () {
 });
 
 test('time report shows subtotal label', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subHour(),
         'stopped_at' => now(),
     ]);
@@ -265,9 +265,9 @@ test('time report does not override range when period is custom', function () {
 });
 
 test('time report markdown escapes pipe characters in notes', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subHour(),
         'stopped_at' => now(),
         'notes' => 'Fix | bug | test',

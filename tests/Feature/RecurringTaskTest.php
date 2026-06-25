@@ -1,11 +1,11 @@
 <?php
 
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
 use App\Enums\RecurrenceFrequency;
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Models\Activity;
 use App\Models\Project;
 use App\Models\RecurringTask;
-use App\Models\Task;
 use Carbon\Carbon;
 
 beforeEach(function (): void {
@@ -50,17 +50,17 @@ describe('RecurringTask Model', function (): void {
         $recurring = RecurringTask::factory()->daily()->create([
             'title' => 'Daily Task',
             'description' => 'Task description',
-            'priority' => TaskPriority::High,
+            'priority' => ActivityPriority::High,
             'estimated_minutes' => 30,
         ]);
 
         $task = $recurring->createTask();
 
-        expect($task)->toBeInstanceOf(Task::class)
+        expect($task)->toBeInstanceOf(Activity::class)
             ->and($task->title)->toBe('Daily Task')
             ->and($task->description)->toBe('Task description')
-            ->and($task->priority)->toBe(TaskPriority::High)
-            ->and($task->status)->toBe(TaskStatus::Todo)
+            ->and($task->priority)->toBe(ActivityPriority::High)
+            ->and($task->status)->toBe(ActivityStatus::Todo)
             ->and($task->recurring_task_id)->toBe($recurring->id)
             ->and($task->estimated_minutes)->toBe(30);
     });
@@ -179,7 +179,7 @@ describe('ProcessRecurringTasks Command', function (): void {
             ->assertSuccessful()
             ->expectsOutputToContain('Criada: "Due Today"');
 
-        expect(Task::where('recurring_task_id', $recurring->id)->count())->toBe(1);
+        expect(Activity::where('recurring_task_id', $recurring->id)->count())->toBe(1);
     });
 
     it('does not process inactive recurring tasks', function (): void {
@@ -189,7 +189,7 @@ describe('ProcessRecurringTasks Command', function (): void {
             ->assertSuccessful()
             ->expectsOutputToContain('Nenhuma task recorrente para processar');
 
-        expect(Task::where('recurring_task_id', $recurring->id)->count())->toBe(0);
+        expect(Activity::where('recurring_task_id', $recurring->id)->count())->toBe(0);
     });
 
     it('does not process future recurring tasks', function (): void {
@@ -209,6 +209,6 @@ describe('ProcessRecurringTasks Command', function (): void {
             ->assertSuccessful()
             ->expectsOutputToContain('[SIMULAÇÃO] Criaria: "Dry Run Test"');
 
-        expect(Task::where('recurring_task_id', $recurring->id)->count())->toBe(0);
+        expect(Activity::where('recurring_task_id', $recurring->id)->count())->toBe(0);
     });
 });

@@ -1,73 +1,73 @@
 <?php
 
-use App\Enums\TaskStatus;
-use App\Models\Task;
-use App\Models\TaskStatusChange;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
+use App\Models\ActivityStatusChange;
 use Carbon\CarbonImmutable;
 
 test('creating a task records initial status change', function () {
-    $task = Task::factory()->create(['status' => TaskStatus::Todo]);
+    $task = Activity::factory()->create(['status' => ActivityStatus::Todo]);
 
-    $changes = TaskStatusChange::where('task_id', $task->id)->get();
+    $changes = ActivityStatusChange::where('activity_id', $task->id)->get();
 
     expect($changes)->toHaveCount(1)
         ->and($changes->first()->from_status)->toBeNull()
-        ->and($changes->first()->to_status)->toBe(TaskStatus::Todo)
+        ->and($changes->first()->to_status)->toBe(ActivityStatus::Todo)
         ->and($changes->first()->changed_at)->toBeInstanceOf(CarbonImmutable::class);
 });
 
 test('updating status records a status change', function () {
-    $task = Task::factory()->create(['status' => TaskStatus::Inbox]);
+    $task = Activity::factory()->create(['status' => ActivityStatus::Inbox]);
 
-    $task->update(['status' => TaskStatus::Doing]);
+    $task->update(['status' => ActivityStatus::Doing]);
 
-    $changes = TaskStatusChange::where('task_id', $task->id)
+    $changes = ActivityStatusChange::where('activity_id', $task->id)
         ->orderBy('changed_at')
         ->get();
 
     expect($changes)->toHaveCount(2)
         ->and($changes[0]->from_status)->toBeNull()
-        ->and($changes[0]->to_status)->toBe(TaskStatus::Inbox)
-        ->and($changes[1]->from_status)->toBe(TaskStatus::Inbox)
-        ->and($changes[1]->to_status)->toBe(TaskStatus::Doing);
+        ->and($changes[0]->to_status)->toBe(ActivityStatus::Inbox)
+        ->and($changes[1]->from_status)->toBe(ActivityStatus::Inbox)
+        ->and($changes[1]->to_status)->toBe(ActivityStatus::Doing);
 });
 
 test('updating a non-status field does not record a status change', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     $task->update(['title' => 'Updated title']);
 
-    $changes = TaskStatusChange::where('task_id', $task->id)->get();
+    $changes = ActivityStatusChange::where('activity_id', $task->id)->get();
 
     expect($changes)->toHaveCount(1); // Only the initial creation change
 });
 
 test('timeInStatus calculates accumulated time per status correctly', function () {
-    $task = Task::withoutEvents(fn () => Task::factory()->create(['status' => TaskStatus::Doing]));
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create(['status' => ActivityStatus::Doing]));
 
     $baseTime = now()->subMinutes(120);
 
     // Inbox for 30 minutes
-    TaskStatusChange::create([
-        'task_id' => $task->id,
+    ActivityStatusChange::create([
+        'activity_id' => $task->id,
         'from_status' => null,
-        'to_status' => TaskStatus::Inbox,
+        'to_status' => ActivityStatus::Inbox,
         'changed_at' => $baseTime,
     ]);
 
     // Backlog for 30 minutes
-    TaskStatusChange::create([
-        'task_id' => $task->id,
-        'from_status' => TaskStatus::Inbox,
-        'to_status' => TaskStatus::Backlog,
+    ActivityStatusChange::create([
+        'activity_id' => $task->id,
+        'from_status' => ActivityStatus::Inbox,
+        'to_status' => ActivityStatus::Backlog,
         'changed_at' => $baseTime->copy()->addMinutes(30),
     ]);
 
     // Doing for ~60 minutes (until now)
-    TaskStatusChange::create([
-        'task_id' => $task->id,
-        'from_status' => TaskStatus::Backlog,
-        'to_status' => TaskStatus::Doing,
+    ActivityStatusChange::create([
+        'activity_id' => $task->id,
+        'from_status' => ActivityStatus::Backlog,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => $baseTime->copy()->addMinutes(60),
     ]);
 
@@ -84,12 +84,12 @@ test('timeInStatus calculates accumulated time per status correctly', function (
 });
 
 test('currentStatusDuration returns duration in current status', function () {
-    $task = Task::withoutEvents(fn () => Task::factory()->create(['status' => TaskStatus::Doing]));
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create(['status' => ActivityStatus::Doing]));
 
-    TaskStatusChange::create([
-        'task_id' => $task->id,
-        'from_status' => TaskStatus::Todo,
-        'to_status' => TaskStatus::Doing,
+    ActivityStatusChange::create([
+        'activity_id' => $task->id,
+        'from_status' => ActivityStatus::Todo,
+        'to_status' => ActivityStatus::Doing,
         'changed_at' => now()->subMinutes(45),
     ]);
 
@@ -100,31 +100,31 @@ test('currentStatusDuration returns duration in current status', function () {
 });
 
 test('deleting a task cascades deletion to status changes', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
-    expect(TaskStatusChange::where('task_id', $task->id)->count())->toBe(1);
+    expect(ActivityStatusChange::where('activity_id', $task->id)->count())->toBe(1);
 
     $task->delete();
 
-    expect(TaskStatusChange::where('task_id', $task->id)->count())->toBe(0);
+    expect(ActivityStatusChange::where('activity_id', $task->id)->count())->toBe(0);
 });
 
 test('forTask scope filters by task id', function () {
-    $task1 = Task::factory()->create();
-    $task2 = Task::factory()->create();
+    $task1 = Activity::factory()->create();
+    $task2 = Activity::factory()->create();
 
-    $results = TaskStatusChange::query()->forTask($task1->id)->get();
+    $results = ActivityStatusChange::query()->forActivity($task1->id)->get();
 
     expect($results)->toHaveCount(1)
-        ->and($results->first()->task_id)->toBe($task1->id);
+        ->and($results->first()->activity_id)->toBe($task1->id);
 });
 
 test('forStatus scope filters by to_status', function () {
-    $task = Task::factory()->create(['status' => TaskStatus::Inbox]);
-    $task->update(['status' => TaskStatus::Doing]);
+    $task = Activity::factory()->create(['status' => ActivityStatus::Inbox]);
+    $task->update(['status' => ActivityStatus::Doing]);
 
-    $inboxChanges = TaskStatusChange::query()->forStatus(TaskStatus::Inbox)->get();
-    $doingChanges = TaskStatusChange::query()->forStatus(TaskStatus::Doing)->get();
+    $inboxChanges = ActivityStatusChange::query()->forStatus(ActivityStatus::Inbox)->get();
+    $doingChanges = ActivityStatusChange::query()->forStatus(ActivityStatus::Doing)->get();
 
     expect($inboxChanges)->toHaveCount(1)
         ->and($doingChanges)->toHaveCount(1);

@@ -1,11 +1,9 @@
 <?php
 
-use App\Enums\FeaturePriority;
-use App\Enums\FeatureStatus;
-use App\Enums\TaskStatus;
-use App\Models\Feature;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -33,10 +31,10 @@ describe('Features Kanban Page', function () {
 
     test('displays features in correct columns by explicit status', function () {
         // Features now use explicit status (not derived from tasks)
-        $backlogFeature = Feature::factory()->backlog()->create(['title' => 'Backlog Feature']);
-        $todoFeature = Feature::factory()->todo()->create(['title' => 'Todo Feature']);
-        $doingFeature = Feature::factory()->doing()->create(['title' => 'Doing Feature']);
-        $doneFeature = Feature::factory()->done()->create(['title' => 'Done Feature']);
+        $backlogFeature = Activity::factory()->epic()->backlog()->create(['title' => 'Backlog Feature']);
+        $todoFeature = Activity::factory()->epic()->todo()->create(['title' => 'Todo Feature']);
+        $doingFeature = Activity::factory()->epic()->doing()->create(['title' => 'Doing Feature']);
+        $doneFeature = Activity::factory()->epic()->done()->create(['title' => 'Done Feature']);
 
         $this->get(route('work'))
             ->assertSee('Backlog Feature')
@@ -46,13 +44,13 @@ describe('Features Kanban Page', function () {
     });
 
     test('displays feature progress correctly', function () {
-        $feature = Feature::factory()->todo()->create(['title' => 'Progress Feature']);
+        $feature = Activity::factory()->epic()->todo()->create(['title' => 'Progress Feature']);
 
         // 2 done, 2 not done = 50%
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Done]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Done]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Doing]);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Done]);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Done]);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Todo]);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Doing]);
 
         $this->get(route('work'))
             ->assertSee('Progress Feature')
@@ -63,12 +61,12 @@ describe('Features Kanban Page', function () {
         $project1 = Project::factory()->create(['name' => 'Project Alpha']);
         $project2 = Project::factory()->create(['name' => 'Project Beta']);
 
-        Feature::factory()->todo()->create([
+        Activity::factory()->epic()->todo()->create([
             'title' => 'Feature Alpha',
             'project_id' => $project1->id,
         ]);
 
-        Feature::factory()->todo()->create([
+        Activity::factory()->epic()->todo()->create([
             'title' => 'Feature Beta',
             'project_id' => $project2->id,
         ]);
@@ -79,14 +77,14 @@ describe('Features Kanban Page', function () {
     });
 
     test('filters features by priority', function () {
-        Feature::factory()->todo()->create([
+        Activity::factory()->epic()->todo()->create([
             'title' => 'High Priority Feature',
-            'priority' => FeaturePriority::High,
+            'priority' => ActivityPriority::High,
         ]);
 
-        Feature::factory()->todo()->create([
+        Activity::factory()->epic()->todo()->create([
             'title' => 'Low Priority Feature',
-            'priority' => FeaturePriority::Low,
+            'priority' => ActivityPriority::Low,
         ]);
 
         $this->get(route('work', ['filterPriority' => 'high']))
@@ -100,7 +98,7 @@ describe('Features Kanban Page', function () {
             'emoji' => '🚀',
         ]);
 
-        Feature::factory()->todo()->create([
+        Activity::factory()->epic()->todo()->create([
             'title' => 'Feature with Project',
             'project_id' => $project->id,
         ]);
@@ -136,7 +134,7 @@ describe('Feature Modal', function () {
             ->call('save')
             ->assertDispatched('feature-created');
 
-        $this->assertDatabaseHas('features', [
+        $this->assertDatabaseHas('activities', [
             'title' => 'New Feature',
             'project_id' => $project->id,
             'priority' => 'high',
@@ -144,9 +142,9 @@ describe('Feature Modal', function () {
     });
 
     test('can open edit feature modal', function () {
-        $feature = Feature::factory()->create([
+        $feature = Activity::factory()->epic()->create([
             'title' => 'Existing Feature',
-            'priority' => FeaturePriority::Medium,
+            'priority' => ActivityPriority::Medium,
         ]);
 
         Livewire::test('feature-modal')
@@ -157,7 +155,7 @@ describe('Feature Modal', function () {
     });
 
     test('can update a feature', function () {
-        $feature = Feature::factory()->create([
+        $feature = Activity::factory()->epic()->create([
             'title' => 'Old Title',
         ]);
 
@@ -168,7 +166,7 @@ describe('Feature Modal', function () {
             ->call('save')
             ->assertDispatched('feature-updated');
 
-        $this->assertDatabaseHas('features', [
+        $this->assertDatabaseHas('activities', [
             'id' => $feature->id,
             'title' => 'New Title',
             'priority' => 'urgent',
@@ -176,7 +174,7 @@ describe('Feature Modal', function () {
     });
 
     test('can delete a feature', function () {
-        $feature = Feature::factory()->create();
+        $feature = Activity::factory()->epic()->create();
 
         Livewire::test('feature-modal')
             ->call('open', $feature->id)
@@ -185,29 +183,29 @@ describe('Feature Modal', function () {
             ->call('delete')
             ->assertDispatched('feature-updated');
 
-        $this->assertDatabaseMissing('features', ['id' => $feature->id]);
+        $this->assertDatabaseMissing('activities', ['id' => $feature->id]);
     });
 
     test('delete unlinks tasks but does not delete them', function () {
-        $feature = Feature::factory()->create();
-        $task = Task::factory()->create(['feature_id' => $feature->id]);
+        $feature = Activity::factory()->epic()->create();
+        $task = Activity::factory()->create(['parent_id' => $feature->id]);
 
         Livewire::test('feature-modal')
             ->call('open', $feature->id)
             ->call('confirmDelete')
             ->call('delete');
 
-        $this->assertDatabaseMissing('features', ['id' => $feature->id]);
-        $this->assertDatabaseHas('tasks', [
+        $this->assertDatabaseMissing('activities', ['id' => $feature->id]);
+        $this->assertDatabaseHas('activities', [
             'id' => $task->id,
-            'feature_id' => null,
+            'parent_id' => null,
         ]);
     });
 
     test('displays feature status and progress when editing', function () {
-        $feature = Feature::factory()->todo()->create(['title' => 'Feature with Tasks']);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Done]);
-        Task::factory()->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
+        $feature = Activity::factory()->epic()->todo()->create(['title' => 'Feature with Tasks']);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Done]);
+        Activity::factory()->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('feature-modal')
             ->call('open', $feature->id)
@@ -217,7 +215,7 @@ describe('Feature Modal', function () {
     });
 
     test('can start timer on feature', function () {
-        $feature = Feature::factory()->create();
+        $feature = Activity::factory()->epic()->create();
 
         Livewire::test('feature-modal')
             ->call('open', $feature->id)
@@ -226,7 +224,7 @@ describe('Feature Modal', function () {
             ->assertDispatched('feature-updated');
 
         $this->assertDatabaseHas('time_entries', [
-            'feature_id' => $feature->id,
+            'activity_id' => $feature->id,
             'stopped_at' => null,
         ]);
     });
@@ -242,8 +240,8 @@ describe('Feature Modal', function () {
 
 describe('Features Kanban Expandable Tasks', function () {
     test('can toggle task list expansion', function () {
-        $feature = Feature::factory()->todo()->create();
-        Task::factory()->count(3)->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
+        $feature = Activity::factory()->epic()->todo()->create();
+        Activity::factory()->count(3)->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Todo]);
 
         Livewire::test('pages::features')
             ->assertSet('expanded', [])
@@ -254,8 +252,8 @@ describe('Features Kanban Expandable Tasks', function () {
     });
 
     test('displays task count on feature card', function () {
-        $feature = Feature::factory()->todo()->create(['title' => 'Multi Task Feature']);
-        Task::factory()->count(5)->create(['feature_id' => $feature->id, 'status' => TaskStatus::Todo]);
+        $feature = Activity::factory()->epic()->todo()->create(['title' => 'Multi Task Feature']);
+        Activity::factory()->count(5)->create(['parent_id' => $feature->id, 'status' => ActivityStatus::Todo]);
 
         $this->get(route('work'))
             ->assertSee('5 tasks');
@@ -264,8 +262,8 @@ describe('Features Kanban Expandable Tasks', function () {
 
 describe('Feature Kanban Sort', function () {
     test('handleFeatureSort persists new status and sort_order', function () {
-        $feature = Feature::factory()->create([
-            'status' => FeatureStatus::Backlog,
+        $feature = Activity::factory()->epic()->create([
+            'status' => ActivityStatus::Backlog,
             'sort_order' => 0,
         ]);
 
@@ -273,7 +271,7 @@ describe('Feature Kanban Sort', function () {
             ->call('handleFeatureSort', $feature->id, 1, 'todo')
             ->assertDispatched('feature-updated');
 
-        $this->assertDatabaseHas('features', [
+        $this->assertDatabaseHas('activities', [
             'id' => $feature->id,
             'status' => 'todo',
             'sort_order' => 0,
@@ -281,8 +279,8 @@ describe('Feature Kanban Sort', function () {
     });
 
     test('handleFeatureSort moves feature to done column', function () {
-        $feature = Feature::factory()->create([
-            'status' => FeatureStatus::Doing,
+        $feature = Activity::factory()->epic()->create([
+            'status' => ActivityStatus::Doing,
             'sort_order' => 0,
         ]);
 
@@ -290,7 +288,7 @@ describe('Feature Kanban Sort', function () {
             ->call('handleFeatureSort', $feature->id, 0, 'done')
             ->assertDispatched('feature-updated');
 
-        $this->assertDatabaseHas('features', [
+        $this->assertDatabaseHas('activities', [
             'id' => $feature->id,
             'status' => 'done',
         ]);

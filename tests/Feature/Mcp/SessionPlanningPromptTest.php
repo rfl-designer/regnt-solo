@@ -2,12 +2,12 @@
 
 use App\Mcp\Prompts\SessionPlanningPrompt;
 use App\Mcp\Servers\SoloBoardServer;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 
 test('session planning prompt returns context for session task', function () {
     $project = Project::factory()->create();
-    $task = Task::factory()->session()->doing()->create([
+    $task = Activity::factory()->session()->doing()->create([
         'project_id' => $project->id,
     ]);
 
@@ -29,10 +29,10 @@ test('session planning prompt fails for non-existent task', function () {
 
 test('session planning prompt includes related tasks', function () {
     $project = Project::factory()->create();
-    $task = Task::factory()->session()->doing()->create([
+    $task = Activity::factory()->session()->doing()->create([
         'project_id' => $project->id,
     ]);
-    $relatedTask = Task::factory()->todo()->create([
+    $relatedTask = Activity::factory()->todo()->create([
         'project_id' => $project->id,
     ]);
 

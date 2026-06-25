@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -30,17 +30,17 @@ test('inbox component renders successfully', function () {
 });
 
 test('inbox lists tasks with inbox status', function () {
-    $task = Task::factory()->create(['title' => 'Minha task inbox']);
+    $task = Activity::factory()->create(['title' => 'Minha task inbox']);
 
     Livewire::test('pages::inbox')
         ->assertSee('Minha task inbox');
 });
 
 test('inbox does not list tasks with other statuses', function () {
-    Task::factory()->backlog()->create(['title' => 'Task backlog']);
-    Task::factory()->todo()->create(['title' => 'Task todo']);
-    Task::factory()->doing()->create(['title' => 'Task doing']);
-    Task::factory()->done()->create(['title' => 'Task done']);
+    Activity::factory()->backlog()->create(['title' => 'Task backlog']);
+    Activity::factory()->todo()->create(['title' => 'Task todo']);
+    Activity::factory()->doing()->create(['title' => 'Task doing']);
+    Activity::factory()->done()->create(['title' => 'Task done']);
 
     Livewire::test('pages::inbox')
         ->assertDontSee('Task backlog')
@@ -56,7 +56,7 @@ test('inbox shows empty state when no tasks exist', function () {
 
 test('inbox shows project info when task has a project', function () {
     $project = Project::factory()->create(['name' => 'Meu Projeto', 'emoji' => '🚀']);
-    Task::factory()->create(['project_id' => $project->id]);
+    Activity::factory()->create(['project_id' => $project->id]);
 
     Livewire::test('pages::inbox')
         ->assertSee('🚀')
@@ -64,17 +64,17 @@ test('inbox shows project info when task has a project', function () {
 });
 
 test('move to status updates task status', function () {
-    $task = Task::factory()->create(['title' => 'Task para backlog']);
+    $task = Activity::factory()->create(['title' => 'Task para backlog']);
 
     Livewire::test('pages::inbox')
         ->call('moveToStatus', $task->id, 'backlog')
         ->assertDispatched('task-moved');
 
-    expect($task->fresh()->status)->toBe(TaskStatus::Backlog);
+    expect($task->fresh()->status)->toBe(ActivityStatus::Backlog);
 });
 
 test('move to status only works for inbox tasks', function () {
-    $task = Task::factory()->backlog()->create();
+    $task = Activity::factory()->backlog()->create();
 
     $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
 
@@ -83,7 +83,7 @@ test('move to status only works for inbox tasks', function () {
 });
 
 test('assign project updates task project', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     $project = Project::factory()->create();
 
     Livewire::test('pages::inbox')
@@ -94,7 +94,7 @@ test('assign project updates task project', function () {
 
 test('assign project with empty string removes project', function () {
     $project = Project::factory()->create();
-    $task = Task::factory()->create(['project_id' => $project->id]);
+    $task = Activity::factory()->create(['project_id' => $project->id]);
 
     Livewire::test('pages::inbox')
         ->call('assignProject', $task->id, '');
@@ -103,7 +103,7 @@ test('assign project with empty string removes project', function () {
 });
 
 test('confirm delete sets task info and opens modal', function () {
-    $task = Task::factory()->create(['title' => 'Task para excluir']);
+    $task = Activity::factory()->create(['title' => 'Task para excluir']);
 
     Livewire::test('pages::inbox')
         ->call('confirmDelete', $task->id)
@@ -113,18 +113,18 @@ test('confirm delete sets task info and opens modal', function () {
 });
 
 test('delete task removes it from database', function () {
-    $task = Task::factory()->create(['title' => 'Task para excluir']);
+    $task = Activity::factory()->create(['title' => 'Task para excluir']);
 
     Livewire::test('pages::inbox')
         ->call('confirmDelete', $task->id)
         ->call('deleteTask')
         ->assertDispatched('task-moved');
 
-    expect(Task::find($task->id))->toBeNull();
+    expect(Activity::find($task->id))->toBeNull();
 });
 
 test('delete task only works for inbox tasks', function () {
-    $task = Task::factory()->backlog()->create();
+    $task = Activity::factory()->backlog()->create();
 
     $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
 
@@ -137,15 +137,15 @@ test('inbox listens to task-created event', function () {
     $component = Livewire::test('pages::inbox')
         ->assertSee('Nenhuma task no inbox');
 
-    Task::factory()->create(['title' => 'Nova task criada']);
+    Activity::factory()->create(['title' => 'Nova task criada']);
 
     $component->dispatch('task-created')
         ->assertSee('Nova task criada');
 });
 
 test('inbox badge shows count of inbox tasks', function () {
-    Task::factory()->count(3)->create();
-    Task::factory()->backlog()->create();
+    Activity::factory()->count(3)->create();
+    Activity::factory()->backlog()->create();
 
     Livewire::test('inbox-badge')
         ->assertSee('3');
@@ -160,7 +160,7 @@ test('inbox badge updates on task-created event', function () {
     Livewire::test('inbox-badge')
         ->assertDontSeeHtml('data-flux-badge');
 
-    Task::factory()->create();
+    Activity::factory()->create();
 
     Livewire::test('inbox-badge')
         ->dispatch('task-created')
@@ -168,28 +168,28 @@ test('inbox badge updates on task-created event', function () {
 });
 
 test('inbox badge updates on task-moved event', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     $badge = Livewire::test('inbox-badge')
         ->assertSee('1');
 
-    $task->update(['status' => TaskStatus::Backlog]);
+    $task->update(['status' => ActivityStatus::Backlog]);
 
     $badge->dispatch('task-moved')
         ->assertDontSeeHtml('data-flux-badge');
 });
 
 test('update priority changes task priority', function () {
-    $task = Task::factory()->create(['priority' => TaskPriority::Medium]);
+    $task = Activity::factory()->create(['priority' => ActivityPriority::Medium]);
 
     Livewire::test('pages::inbox')
         ->call('updatePriority', $task->id, 'high');
 
-    expect($task->fresh()->priority)->toBe(TaskPriority::High);
+    expect($task->fresh()->priority)->toBe(ActivityPriority::High);
 });
 
 test('update priority only works for inbox tasks', function () {
-    $task = Task::factory()->backlog()->create();
+    $task = Activity::factory()->backlog()->create();
 
     $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
 
@@ -198,7 +198,7 @@ test('update priority only works for inbox tasks', function () {
 });
 
 test('inbox shows priority dropdown for each task', function () {
-    Task::factory()->create(['priority' => TaskPriority::High]);
+    Activity::factory()->create(['priority' => ActivityPriority::High]);
 
     Livewire::test('pages::inbox')
         ->assertSee('Alta')

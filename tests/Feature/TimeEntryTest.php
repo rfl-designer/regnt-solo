@@ -1,23 +1,23 @@
 <?php
 
-use App\Models\Task;
+use App\Models\Activity;
 use App\Models\TimeEntry;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 
 test('can create a time entry', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->create(['activity_id' => $task->id]);
 
-    expect($entry->task->id)->toBe($task->id)
+    expect($entry->activity->id)->toBe($task->id)
         ->and($entry->started_at)->toBeInstanceOf(CarbonImmutable::class)
         ->and($entry->stopped_at)->toBeInstanceOf(CarbonImmutable::class);
 });
 
 test('duration_minutes calculates difference between started and stopped', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     $entry = TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subMinutes(30),
         'stopped_at' => now(),
     ]);
@@ -27,9 +27,9 @@ test('duration_minutes calculates difference between started and stopped', funct
 });
 
 test('duration_minutes uses now when still running', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     $entry = TimeEntry::factory()->running()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subMinutes(15),
     ]);
 
@@ -38,9 +38,9 @@ test('duration_minutes uses now when still running', function () {
 });
 
 test('running scope returns only entries without stopped_at', function () {
-    $task = Task::factory()->create();
-    TimeEntry::factory()->create(['task_id' => $task->id]);
-    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    TimeEntry::factory()->create(['activity_id' => $task->id]);
+    TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     $running = TimeEntry::query()->running()->get();
 
@@ -49,16 +49,16 @@ test('running scope returns only entries without stopped_at', function () {
 });
 
 test('forDate scope returns entries for a specific date', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     $today = Carbon::today();
 
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => $today->copy()->setHour(10),
         'stopped_at' => $today->copy()->setHour(11),
     ]);
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => $today->copy()->subDays(2)->setHour(10),
         'stopped_at' => $today->copy()->subDays(2)->setHour(11),
     ]);
@@ -69,9 +69,9 @@ test('forDate scope returns entries for a specific date', function () {
 });
 
 test('stopAllRunning stops all running entries', function () {
-    $task = Task::factory()->create();
-    TimeEntry::factory()->running()->count(3)->create(['task_id' => $task->id]);
-    TimeEntry::factory()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    TimeEntry::factory()->running()->count(3)->create(['activity_id' => $task->id]);
+    TimeEntry::factory()->create(['activity_id' => $task->id]);
 
     $stopped = TimeEntry::stopAllRunning();
 
@@ -80,16 +80,16 @@ test('stopAllRunning stops all running entries', function () {
 });
 
 test('forWeek scope returns entries for current week', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
     $startOfWeek = Carbon::now()->startOfWeek();
 
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => $startOfWeek->copy()->addDay()->setHour(10),
         'stopped_at' => $startOfWeek->copy()->addDay()->setHour(11),
     ]);
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => $startOfWeek->copy()->subWeek()->setHour(10),
         'stopped_at' => $startOfWeek->copy()->subWeek()->setHour(11),
     ]);

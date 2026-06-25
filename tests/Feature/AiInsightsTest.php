@@ -1,8 +1,8 @@
 <?php
 
+use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
@@ -287,28 +287,28 @@ test('weekly data is correctly built from database', function () {
     ]);
 
     // Create tasks in various statuses
-    Task::factory()->todo()->count(3)->create();
-    Task::factory()->doing()->count(2)->create();
-    Task::factory()->done()->count(1)->create();
-    Task::factory()->backlog()->create([
+    Activity::factory()->todo()->count(3)->create();
+    Activity::factory()->doing()->count(2)->create();
+    Activity::factory()->done()->count(1)->create();
+    Activity::factory()->backlog()->create([
         'created_at' => now()->subDays(20),
     ]);
 
     // Create a project with activity
     $project = Project::factory()->create();
-    Task::factory()->todo()->create(['project_id' => $project->id]);
+    Activity::factory()->todo()->create(['project_id' => $project->id]);
 
     // Create time entries for the last 7 days
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => now()->subDays(1)->setHour(10),
         'stopped_at' => now()->subDays(1)->setHour(12),
     ]);
 
     // Create a daily plan with completion
     $plan = DailyPlan::factory()->today()->create();
-    $doneTask = Task::factory()->done()->create();
+    $doneTask = Activity::factory()->done()->create();
     $plan->tasks()->attach($doneTask->id, [
         'sort_order' => 0,
         'completed_at' => now(),

@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Task;
+use App\Models\Activity;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -17,7 +17,7 @@ it('shows welcome section for user without any tasks', function () {
 
 it('hides welcome section when user has tasks', function () {
     $user = User::factory()->create();
-    Task::factory()->create();
+    Activity::factory()->create();
 
     $this->actingAs($user)
         ->get('/dashboard')

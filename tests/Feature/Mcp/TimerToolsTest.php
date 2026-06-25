@@ -4,12 +4,12 @@ use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\StartTimerTool;
 use App\Mcp\Tools\StopTimerTool;
 use App\Mcp\Tools\TimerStatusTool;
-use App\Models\Task;
+use App\Models\Activity;
 use App\Models\TimeEntry;
 
 // StartTimerTool tests
 test('start-timer creates a new time entry', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     $response = SoloBoardServer::tool(StartTimerTool::class, [
         'task_id' => $task->id,
@@ -20,15 +20,15 @@ test('start-timer creates a new time entry', function () {
     $response->assertSee('Timer started');
 
     $this->assertDatabaseHas('time_entries', [
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'stopped_at' => null,
     ]);
 });
 
 test('start-timer stops existing running timer', function () {
-    $task1 = Task::factory()->create();
-    $task2 = Task::factory()->create();
-    $existingEntry = TimeEntry::factory()->running()->create(['task_id' => $task1->id]);
+    $task1 = Activity::factory()->create();
+    $task2 = Activity::factory()->create();
+    $existingEntry = TimeEntry::factory()->running()->create(['activity_id' => $task1->id]);
 
     $response = SoloBoardServer::tool(StartTimerTool::class, [
         'task_id' => $task2->id,
@@ -40,7 +40,7 @@ test('start-timer stops existing running timer', function () {
     expect($existingEntry->stopped_at)->not->toBeNull();
 
     $this->assertDatabaseHas('time_entries', [
-        'task_id' => $task2->id,
+        'activity_id' => $task2->id,
         'stopped_at' => null,
     ]);
 });
@@ -54,19 +54,19 @@ test('start-timer fails for non-existent task', function () {
 });
 
 test('start-timer changes task status to doing', function () {
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
 
     SoloBoardServer::tool(StartTimerTool::class, [
         'task_id' => $task->id,
     ]);
 
     $task->refresh();
-    expect($task->status)->toBe(\App\Enums\TaskStatus::Doing);
+    expect($task->status)->toBe(\App\Enums\ActivityStatus::Doing);
 });
 
 test('start-timer does not change status if already doing or done', function () {
-    $doingTask = Task::factory()->doing()->create();
-    $doneTask = Task::factory()->done()->create();
+    $doingTask = Activity::factory()->doing()->create();
+    $doneTask = Activity::factory()->done()->create();
 
     SoloBoardServer::tool(StartTimerTool::class, ['task_id' => $doingTask->id]);
     SoloBoardServer::tool(StartTimerTool::class, ['task_id' => $doneTask->id]);
@@ -74,14 +74,14 @@ test('start-timer does not change status if already doing or done', function () 
     $doingTask->refresh();
     $doneTask->refresh();
 
-    expect($doingTask->status)->toBe(\App\Enums\TaskStatus::Doing)
-        ->and($doneTask->status)->toBe(\App\Enums\TaskStatus::Done);
+    expect($doingTask->status)->toBe(\App\Enums\ActivityStatus::Doing)
+        ->and($doneTask->status)->toBe(\App\Enums\ActivityStatus::Done);
 });
 
 // StopTimerTool tests
 test('stop-timer stops running timer with notes', function () {
-    $task = Task::factory()->create();
-    $entry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     $response = SoloBoardServer::tool(StopTimerTool::class, [
         'task_id' => $task->id,
@@ -98,7 +98,7 @@ test('stop-timer stops running timer with notes', function () {
 });
 
 test('stop-timer returns error when no running timer', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     $response = SoloBoardServer::tool(StopTimerTool::class, [
         'task_id' => $task->id,
@@ -109,8 +109,8 @@ test('stop-timer returns error when no running timer', function () {
 
 // TimerStatusTool tests
 test('timer-status shows running timer', function () {
-    $task = Task::factory()->create();
-    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     $response = SoloBoardServer::tool(TimerStatusTool::class, []);
 
@@ -129,7 +129,7 @@ test('timer-status shows no timer message', function () {
 
 // Feature Timer Tests
 test('start-timer creates entry for feature', function () {
-    $feature = \App\Models\Feature::factory()->create();
+    $feature = \App\Models\Activity::factory()->epic()->create();
 
     $response = SoloBoardServer::tool(StartTimerTool::class, [
         'feature_id' => $feature->id,
@@ -140,16 +140,15 @@ test('start-timer creates entry for feature', function () {
     $response->assertSee('Timer started for feature');
 
     $this->assertDatabaseHas('time_entries', [
-        'feature_id' => $feature->id,
-        'task_id' => null,
+        'activity_id' => $feature->id,
         'stopped_at' => null,
     ]);
 });
 
 test('start-timer with feature_id stops existing running timers', function () {
-    $task = Task::factory()->create();
-    $feature = \App\Models\Feature::factory()->create();
-    $existingEntry = TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->create();
+    $feature = \App\Models\Activity::factory()->epic()->create();
+    $existingEntry = TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     $response = SoloBoardServer::tool(StartTimerTool::class, [
         'feature_id' => $feature->id,
@@ -168,8 +167,8 @@ test('start-timer fails without task_id or feature_id', function () {
 });
 
 test('stop-timer stops running feature timer with notes', function () {
-    $feature = \App\Models\Feature::factory()->create();
-    $entry = TimeEntry::factory()->running()->create(['feature_id' => $feature->id, 'task_id' => null]);
+    $feature = \App\Models\Activity::factory()->epic()->create();
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $feature->id]);
 
     $response = SoloBoardServer::tool(StopTimerTool::class, [
         'feature_id' => $feature->id,
@@ -186,7 +185,7 @@ test('stop-timer stops running feature timer with notes', function () {
 });
 
 test('stop-timer returns error when no running feature timer', function () {
-    $feature = \App\Models\Feature::factory()->create();
+    $feature = \App\Models\Activity::factory()->epic()->create();
 
     $response = SoloBoardServer::tool(StopTimerTool::class, [
         'feature_id' => $feature->id,
@@ -202,8 +201,8 @@ test('stop-timer fails without task_id or feature_id', function () {
 });
 
 test('timer-status shows running feature timer', function () {
-    $feature = \App\Models\Feature::factory()->create();
-    TimeEntry::factory()->running()->create(['feature_id' => $feature->id, 'task_id' => null]);
+    $feature = \App\Models\Activity::factory()->epic()->create();
+    TimeEntry::factory()->running()->create(['activity_id' => $feature->id]);
 
     $response = SoloBoardServer::tool(TimerStatusTool::class, []);
 

@@ -61,6 +61,10 @@ class CreateFeatureTool extends Tool
                 ['github_issue_number' => $validated['github_issue_number']],
                 $payload,
             );
+
+            if ($feature->wasRecentlyCreated && $feature->status === null) {
+                $feature->update(['status' => ActivityStatus::Backlog]);
+            }
         } else {
             $payload['status'] = ActivityStatus::Backlog;
             $feature = Activity::create($payload);

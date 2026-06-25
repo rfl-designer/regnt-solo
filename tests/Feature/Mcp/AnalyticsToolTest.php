@@ -1,11 +1,11 @@
 <?php
 
-use App\Enums\TaskStatus;
+use App\Enums\ActivityStatus;
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\GetAnalyticsTool;
+use App\Models\Activity;
+use App\Models\ActivityStatusChange;
 use App\Models\Project;
-use App\Models\Task;
-use App\Models\TaskStatusChange;
 use App\Models\TimeEntry;
 use Carbon\Carbon;
 
@@ -35,10 +35,10 @@ test('get-analytics returns specific metric when metric is provided', function (
 });
 
 test('get-analytics returns heatmap metric', function () {
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     TimeEntry::factory()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->addHours(9),
         'stopped_at' => Carbon::today()->addHours(11),
     ]);
@@ -55,10 +55,10 @@ test('get-analytics returns heatmap metric', function () {
 });
 
 test('get-analytics returns focus_ratio metric', function () {
-    $task = Task::withoutEvents(fn () => Task::factory()->create());
+    $task = Activity::withoutEvents(fn () => Activity::factory()->create());
 
     TimeEntry::factory()->focus()->create([
-        'task_id' => $task->id,
+        'activity_id' => $task->id,
         'started_at' => Carbon::today()->addHours(9),
         'stopped_at' => Carbon::today()->addHours(11),
     ]);
@@ -85,7 +85,7 @@ test('get-analytics returns health_scores metric', function () {
 });
 
 test('get-analytics returns velocity metric', function () {
-    Task::withoutEvents(fn () => Task::factory()->done()->create([
+    Activity::withoutEvents(fn () => Activity::factory()->done()->create([
         'completed_at' => Carbon::today(),
     ]));
 
@@ -113,21 +113,21 @@ test('get-analytics returns patterns metric', function () {
 });
 
 test('get-analytics returns cycle_time metric', function () {
-    $task = Task::withoutEvents(fn () => Task::factory()->done()->create([
+    $task = Activity::withoutEvents(fn () => Activity::factory()->done()->create([
         'completed_at' => Carbon::today(),
     ]));
 
-    TaskStatusChange::factory()->create([
-        'task_id' => $task->id,
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $task->id,
         'from_status' => null,
-        'to_status' => TaskStatus::Inbox,
+        'to_status' => ActivityStatus::Inbox,
         'changed_at' => Carbon::today()->subHours(3),
     ]);
 
-    TaskStatusChange::factory()->create([
-        'task_id' => $task->id,
-        'from_status' => TaskStatus::Inbox,
-        'to_status' => TaskStatus::Done,
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $task->id,
+        'from_status' => ActivityStatus::Inbox,
+        'to_status' => ActivityStatus::Done,
         'changed_at' => Carbon::today(),
     ]);
 

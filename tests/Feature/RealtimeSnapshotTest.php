@@ -1,11 +1,10 @@
 <?php
 
+use App\Models\Activity;
 use App\Models\Document;
-use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Stakeholder;
 use App\Models\StakeholderIssue;
-use App\Models\Task;
 
 test('realtime snapshot route returns tracked entity counters', function () {
     $response = $this->getJson(route('realtime.snapshot'))
@@ -27,10 +26,10 @@ test('realtime snapshot counters are incremented when tracked entities change', 
         ->json();
 
     $project = Project::factory()->create();
-    $feature = Feature::factory()->create(['project_id' => $project->id]);
-    Task::factory()->create([
+    $feature = Activity::factory()->epic()->create(['project_id' => $project->id]);
+    Activity::factory()->create([
         'project_id' => $project->id,
-        'feature_id' => $feature->id,
+        'parent_id' => $feature->id,
     ]);
     Document::factory()->create(['project_id' => $project->id]);
 

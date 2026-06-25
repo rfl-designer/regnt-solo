@@ -1,10 +1,10 @@
 <?php
 
-use App\Enums\TaskPriority;
-use App\Enums\TaskStatus;
+use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Livewire\Livewire;
@@ -20,8 +20,8 @@ test('component renders successfully', function () {
 
 test('search returns matching tasks', function () {
     $project = Project::factory()->create(['name' => 'API Gateway']);
-    Task::factory()->create(['title' => 'Implementar autenticação', 'project_id' => $project->id]);
-    Task::factory()->create(['title' => 'Corrigir bug no login']);
+    Activity::factory()->create(['title' => 'Implementar autenticação', 'project_id' => $project->id]);
+    Activity::factory()->create(['title' => 'Corrigir bug no login']);
 
     Livewire::test('command-palette')
         ->set('search', 'autenticação')
@@ -40,7 +40,7 @@ test('search returns matching projects', function () {
 });
 
 test('empty search shows no results', function () {
-    Task::factory()->create(['title' => 'Some task']);
+    Activity::factory()->create(['title' => 'Some task']);
 
     Livewire::test('command-palette')
         ->set('search', '')
@@ -59,57 +59,57 @@ test('command prefix shows available commands', function () {
 });
 
 test('command mover changes task status', function () {
-    $task = Task::factory()->todo()->create(['title' => 'Minha task']);
+    $task = Activity::factory()->todo()->create(['title' => 'Minha task']);
 
     Livewire::test('command-palette')
         ->call('executeCommand', 'mover:'.$task->id.':doing');
 
     $task->refresh();
-    expect($task->status)->toBe(TaskStatus::Doing);
+    expect($task->status)->toBe(ActivityStatus::Doing);
 });
 
 test('command mover to done marks task as done', function () {
-    $task = Task::factory()->todo()->create(['title' => 'Minha task']);
+    $task = Activity::factory()->todo()->create(['title' => 'Minha task']);
 
     Livewire::test('command-palette')
         ->call('executeCommand', 'mover:'.$task->id.':done');
 
     $task->refresh();
-    expect($task->status)->toBe(TaskStatus::Done);
+    expect($task->status)->toBe(ActivityStatus::Done);
     expect($task->completed_at)->not->toBeNull();
 });
 
 test('command timer starts timer for task', function () {
-    $task = Task::factory()->doing()->create();
+    $task = Activity::factory()->doing()->create();
 
     Livewire::test('command-palette')
         ->call('executeCommand', 'timer:'.$task->id);
 
-    expect(TimeEntry::where('task_id', $task->id)->running()->count())->toBe(1);
+    expect(TimeEntry::where('activity_id', $task->id)->running()->count())->toBe(1);
 });
 
 test('command timer stops running timer', function () {
-    $task = Task::factory()->doing()->create();
-    TimeEntry::factory()->running()->create(['task_id' => $task->id]);
+    $task = Activity::factory()->doing()->create();
+    TimeEntry::factory()->running()->create(['activity_id' => $task->id]);
 
     Livewire::test('command-palette')
         ->call('executeCommand', 'timer:'.$task->id);
 
-    expect(TimeEntry::where('task_id', $task->id)->running()->count())->toBe(0);
+    expect(TimeEntry::where('activity_id', $task->id)->running()->count())->toBe(0);
 });
 
 test('command deletar removes task', function () {
-    $task = Task::factory()->create(['title' => 'Task para deletar']);
+    $task = Activity::factory()->create(['title' => 'Task para deletar']);
 
     Livewire::test('command-palette')
         ->call('executeCommand', 'deletar:'.$task->id);
 
-    expect(Task::find($task->id))->toBeNull();
+    expect(Activity::find($task->id))->toBeNull();
 });
 
 test('command projeto assigns task to project', function () {
     $project = Project::factory()->create(['slug' => 'meu-projeto']);
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('command-palette')
         ->call('executeCommand', 'projeto:'.$task->id.':'.$project->slug);
@@ -119,39 +119,39 @@ test('command projeto assigns task to project', function () {
 });
 
 test('command prioridade changes task priority', function () {
-    $task = Task::factory()->create(['priority' => TaskPriority::Low]);
+    $task = Activity::factory()->create(['priority' => ActivityPriority::Low]);
 
     Livewire::test('command-palette')
         ->call('executeCommand', 'prioridade:'.$task->id.':urgent');
 
     $task->refresh();
-    expect($task->priority)->toBe(TaskPriority::Urgent);
+    expect($task->priority)->toBe(ActivityPriority::Urgent);
 });
 
 test('command planejar adds task to today plan', function () {
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
 
     Livewire::test('command-palette')
         ->call('executeCommand', 'planejar:'.$task->id);
 
     $plan = DailyPlan::whereDate('date', now()->toDateString())->first();
     expect($plan)->not->toBeNull();
-    expect($plan->tasks()->where('task_id', $task->id)->exists())->toBeTrue();
+    expect($plan->tasks()->where('activity_id', $task->id)->exists())->toBeTrue();
 });
 
 test('command planejar does not duplicate task in plan', function () {
-    $task = Task::factory()->todo()->create();
+    $task = Activity::factory()->todo()->create();
     $plan = DailyPlan::create(['date' => now()->toDateString()]);
     $plan->tasks()->attach($task->id, ['sort_order' => 0]);
 
     Livewire::test('command-palette')
         ->call('executeCommand', 'planejar:'.$task->id);
 
-    expect($plan->tasks()->where('task_id', $task->id)->count())->toBe(1);
+    expect($plan->tasks()->where('activity_id', $task->id)->count())->toBe(1);
 });
 
 test('open task dispatches event and resets search', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('command-palette')
         ->set('search', 'something')
@@ -176,17 +176,17 @@ test('invalid command shows warning', function () {
 });
 
 test('mover with invalid status shows warning', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('command-palette')
         ->call('executeCommand', 'mover:'.$task->id.':invalid');
 
     $task->refresh();
-    expect($task->status)->toBe(TaskStatus::Inbox);
+    expect($task->status)->toBe(ActivityStatus::Inbox);
 });
 
 test('projeto with invalid slug shows warning', function () {
-    $task = Task::factory()->create();
+    $task = Activity::factory()->create();
 
     Livewire::test('command-palette')
         ->call('executeCommand', 'projeto:'.$task->id.':nonexistent');
@@ -196,11 +196,11 @@ test('projeto with invalid slug shows warning', function () {
 });
 
 test('prioridade with invalid value shows warning', function () {
-    $task = Task::factory()->create(['priority' => TaskPriority::Medium]);
+    $task = Activity::factory()->create(['priority' => ActivityPriority::Medium]);
 
     Livewire::test('command-palette')
         ->call('executeCommand', 'prioridade:'.$task->id.':invalid');
 
     $task->refresh();
-    expect($task->priority)->toBe(TaskPriority::Medium);
+    expect($task->priority)->toBe(ActivityPriority::Medium);
 });

@@ -26,7 +26,7 @@ class ProjectOverviewResource extends Resource
     {
         $withCounts = [];
         foreach (ActivityStatus::cases() as $status) {
-            $withCounts["activities as tasks_{$status->value}_count"] = fn ($q) => $q->where('status', $status);
+            $withCounts["tasks as tasks_{$status->value}_count"] = fn ($q) => $q->where('status', $status);
         }
 
         $projects = Project::query()

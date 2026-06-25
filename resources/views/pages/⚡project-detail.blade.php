@@ -733,10 +733,13 @@ new class extends Component
                 {{-- Drill-down: Task Kanban --}}
                 <div
                     x-data="{
-                        drillDoneCollapsed: localStorage.getItem('project-drill-done-collapsed') === 'true',
-                        toggleDrillDoneColumn() {
-                            this.drillDoneCollapsed = !this.drillDoneCollapsed;
-                            localStorage.setItem('project-drill-done-collapsed', this.drillDoneCollapsed);
+                        collapsed: JSON.parse(localStorage.getItem('project-drill-collapsed') || '{}'),
+                        toggleColumn(status) {
+                            this.collapsed[status] = ! this.collapsed[status];
+                            localStorage.setItem('project-drill-collapsed', JSON.stringify(this.collapsed));
+                        },
+                        isCollapsed(status) {
+                            return !! this.collapsed[status];
                         }
                     }"
                     class="-mx-4 flex flex-1 gap-3 overflow-x-auto px-4 pb-4 sm:mx-0 sm:gap-4 sm:px-0"
@@ -747,63 +750,51 @@ new class extends Component
                             $total = $this->getDrillColumnTotal($status);
                             $limit = $drillLimits[$status->value];
                             $hasMore = $total > $limit;
-                            $isDone = $status === ActivityStatus::Done;
                         @endphp
 
                         <div
-                            @if ($isDone)
-                                x-bind:class="drillDoneCollapsed ? 'w-14' : 'w-72 sm:w-80'"
-                            @endif
-                            class="{{ $isDone ? '' : 'w-72 sm:w-80' }} flex shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50 transition-all duration-300 ease-in-out"
+                            x-bind:class="isCollapsed('{{ $status->value }}') ? 'w-14' : 'w-72 sm:w-80'"
+                            class="flex shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50 transition-all duration-300 ease-in-out"
                         >
                             {{-- Column Header --}}
-                            @if ($isDone)
-                                <div
-                                    @click="toggleDrillDoneColumn()"
-                                    x-bind:class="drillDoneCollapsed ? 'flex-col items-center py-4 cursor-pointer hover:bg-zinc-800/50' : 'flex-row items-center justify-between'"
-                                    class="flex border-b border-zinc-700 px-4 py-3 transition-all duration-200"
-                                >
-                                    <template x-if="!drillDoneCollapsed">
-                                        <div class="flex w-full items-center justify-between">
-                                            <div class="flex items-center gap-2">
-                                                <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
-                                                <flux:heading size="sm">{{ $status->label() }}</flux:heading>
-                                            </div>
-                                            <div class="flex items-center gap-2">
-                                                <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
-                                                <button
-                                                    type="button"
-                                                    @click.stop="toggleDrillDoneColumn()"
-                                                    class="rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
-                                                    title="Colapsar coluna"
-                                                >
-                                                    <flux:icon name="chevron-left" class="size-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </template>
-
-                                    <template x-if="drillDoneCollapsed">
-                                        <div class="flex flex-col items-center gap-2">
+                            <div
+                                @click="toggleColumn('{{ $status->value }}')"
+                                x-bind:class="isCollapsed('{{ $status->value }}') ? 'flex-col items-center py-4' : 'flex-row items-center justify-between'"
+                                class="flex cursor-pointer border-b border-zinc-700 px-4 py-3 transition-all duration-200 hover:bg-zinc-800/50"
+                            >
+                                <template x-if="!isCollapsed('{{ $status->value }}')">
+                                    <div class="flex w-full items-center justify-between">
+                                        <div class="flex items-center gap-2">
                                             <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
-                                            <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
-                                            <flux:icon name="chevron-right" class="size-4 text-zinc-500" />
+                                            <flux:heading size="sm">{{ $status->label() }}</flux:heading>
                                         </div>
-                                    </template>
-                                </div>
-                            @else
-                                <div class="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
-                                    <div class="flex items-center gap-2">
-                                        <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
-                                        <flux:heading size="sm">{{ $status->label() }}</flux:heading>
+                                        <div class="flex items-center gap-2">
+                                            <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                                            <button
+                                                type="button"
+                                                @click.stop="toggleColumn('{{ $status->value }}')"
+                                                class="rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
+                                                title="Colapsar coluna"
+                                            >
+                                                <flux:icon name="chevron-left" class="size-4" />
+                                            </button>
+                                        </div>
                                     </div>
-                                    <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
-                                </div>
-                            @endif
+                                </template>
+
+                                <template x-if="isCollapsed('{{ $status->value }}')">
+                                    <div class="flex flex-col items-center gap-2">
+                                        <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
+                                        <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                                        <flux:icon name="chevron-right" class="size-4 text-zinc-500" />
+                                    </div>
+                                </template>
+                            </div>
 
                             {{-- Tasks List --}}
                             <div
-                                @if ($isDone) x-show="!drillDoneCollapsed" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif
+                                x-show="!isCollapsed('{{ $status->value }}')"
+                                x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
                                 class="flex-1 overflow-y-auto p-2"
                             >
                                 <ul
@@ -915,10 +906,13 @@ new class extends Component
 
                 <div
                     x-data="{
-                        doneCollapsed: localStorage.getItem('project-feature-done-collapsed') === 'true',
-                        toggleDoneColumn() {
-                            this.doneCollapsed = !this.doneCollapsed;
-                            localStorage.setItem('project-feature-done-collapsed', this.doneCollapsed);
+                        collapsed: JSON.parse(localStorage.getItem('project-feature-collapsed') || '{}'),
+                        toggleColumn(status) {
+                            this.collapsed[status] = ! this.collapsed[status];
+                            localStorage.setItem('project-feature-collapsed', JSON.stringify(this.collapsed));
+                        },
+                        isCollapsed(status) {
+                            return !! this.collapsed[status];
                         }
                     }"
                     class="-mx-4 flex flex-1 gap-3 overflow-x-auto px-4 pb-4 sm:mx-0 sm:gap-4 sm:px-0"
@@ -929,77 +923,62 @@ new class extends Component
                             $total = $this->getColumnTotal($status);
                             $limit = $limits[$status->value];
                             $hasMore = $total > $limit;
-                            $isDone = $status === ActivityStatus::Done;
                         @endphp
 
                         <div
-                            @if ($isDone)
-                                x-bind:class="doneCollapsed ? 'w-14' : 'w-72 sm:w-80'"
-                            @endif
-                            class="{{ $isDone ? '' : 'w-72 sm:w-80' }} flex shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50 transition-all duration-300 ease-in-out"
+                            x-bind:class="isCollapsed('{{ $status->value }}') ? 'w-14' : 'w-72 sm:w-80'"
+                            class="flex shrink-0 flex-col rounded-xl border border-zinc-700 bg-zinc-900/50 transition-all duration-300 ease-in-out"
                         >
                             {{-- Column Header --}}
-                            @if ($isDone)
-                                {{-- Done column header with collapse support --}}
-                                <div
-                                    @click="toggleDoneColumn()"
-                                    x-bind:class="doneCollapsed ? 'flex-col items-center py-4 cursor-pointer hover:bg-zinc-800/50' : 'flex-row items-center justify-between'"
-                                    class="flex border-b border-zinc-700 px-4 py-3 transition-all duration-200"
-                                >
-                                    {{-- Expanded state --}}
-                                    <template x-if="!doneCollapsed">
-                                        <div class="flex w-full items-center justify-between">
-                                            <div class="flex items-center gap-2">
-                                                <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
-                                                <flux:heading size="sm">{{ $status->label() }}</flux:heading>
-                                            </div>
-                                            <div class="flex items-center gap-2">
-                                                <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
-                                                <button
-                                                    type="button"
-                                                    @click.stop="toggleDoneColumn()"
-                                                    class="rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
-                                                    title="Colapsar coluna"
-                                                >
-                                                    <flux:icon name="chevron-left" class="size-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </template>
-
-                                    {{-- Collapsed state --}}
-                                    <template x-if="doneCollapsed">
-                                        <div class="flex flex-col items-center gap-2">
+                            <div
+                                @click="toggleColumn('{{ $status->value }}')"
+                                x-bind:class="isCollapsed('{{ $status->value }}') ? 'flex-col items-center py-4' : 'flex-row items-center justify-between'"
+                                class="flex cursor-pointer border-b border-zinc-700 px-4 py-3 transition-all duration-200 hover:bg-zinc-800/50"
+                            >
+                                {{-- Expanded state --}}
+                                <template x-if="!isCollapsed('{{ $status->value }}')">
+                                    <div class="flex w-full items-center justify-between">
+                                        <div class="flex items-center gap-2">
                                             <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
-                                            <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
-                                            <flux:icon name="chevron-right" class="size-4 text-zinc-500" />
+                                            <flux:heading size="sm">{{ $status->label() }}</flux:heading>
                                         </div>
-                                    </template>
-                                </div>
-                            @else
-                                {{-- Regular column header --}}
-                                <div class="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
-                                    <div class="flex items-center gap-2">
+                                        <div class="flex items-center gap-2">
+                                            <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                                            <flux:button
+                                                wire:click="$dispatch('open-feature-modal')"
+                                                @click.stop
+                                                variant="ghost"
+                                                size="sm"
+                                                icon="plus"
+                                                class="ml-1 !p-1"
+                                                title="Nova feature"
+                                            />
+                                            <button
+                                                type="button"
+                                                @click.stop="toggleColumn('{{ $status->value }}')"
+                                                class="rounded p-1 text-zinc-500 transition hover:bg-zinc-700 hover:text-zinc-300"
+                                                title="Colapsar coluna"
+                                            >
+                                                <flux:icon name="chevron-left" class="size-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                {{-- Collapsed state --}}
+                                <template x-if="isCollapsed('{{ $status->value }}')">
+                                    <div class="flex flex-col items-center gap-2">
                                         <flux:icon :name="$status->icon()" class="size-5 text-{{ $status->color() }}-400" />
-                                        <flux:heading size="sm">{{ $status->label() }}</flux:heading>
-                                    </div>
-                                    <div class="flex items-center gap-2">
                                         <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
-                                        <flux:button
-                                            wire:click="$dispatch('open-feature-modal')"
-                                            variant="ghost"
-                                            size="sm"
-                                            icon="plus"
-                                            class="ml-1 !p-1"
-                                            title="Nova feature"
-                                        />
+                                        <flux:icon name="chevron-right" class="size-4 text-zinc-500" />
                                     </div>
-                                </div>
-                            @endif
+                                </template>
+                            </div>
 
                             {{-- Features List --}}
                             <div
-                                @if ($isDone) x-show="!doneCollapsed" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif
+                                x-show="!isCollapsed('{{ $status->value }}')"
+                                x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
                                 class="flex-1 space-y-3 overflow-y-auto p-3"
                             >
                                 <ul

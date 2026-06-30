@@ -63,7 +63,7 @@ class CreateIssueTool extends Tool
 
         if (! empty($validated['github_issue_number'])) {
             $issue = Activity::updateOrCreate(
-                ['github_issue_number' => $validated['github_issue_number'], 'type' => ActivityType::Issue],
+                ['project_id' => $payload['project_id'], 'github_issue_number' => $validated['github_issue_number']],
                 $payload,
             );
         } else {

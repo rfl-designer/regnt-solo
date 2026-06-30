@@ -176,6 +176,29 @@ test('create-epic upserts by github_issue_number without duplicating', function 
     ]);
 });
 
+test('create-epic allows the same github_issue_number across different projects', function () {
+    $projectA = Project::factory()->create();
+    $projectB = Project::factory()->create();
+
+    SoloBoardServer::tool(CreateEpicTool::class, [
+        'title' => 'Epic A Five',
+        'project_id' => $projectA->id,
+        'github_issue_number' => 5,
+    ]);
+
+    $response = SoloBoardServer::tool(CreateEpicTool::class, [
+        'title' => 'Epic B Five',
+        'project_id' => $projectB->id,
+        'github_issue_number' => 5,
+    ]);
+
+    $response->assertOk();
+
+    expect(Activity::query()->epics()->where('github_issue_number', 5)->count())->toBe(2);
+    $this->assertDatabaseHas('activities', ['project_id' => $projectA->id, 'github_issue_number' => 5, 'title' => 'Epic A Five']);
+    $this->assertDatabaseHas('activities', ['project_id' => $projectB->id, 'github_issue_number' => 5, 'title' => 'Epic B Five']);
+});
+
 test('create-epic fails without title', function () {
     $response = SoloBoardServer::tool(CreateEpicTool::class, []);
 

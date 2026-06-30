@@ -52,7 +52,7 @@ class CreateEpicTool extends Tool
 
         if (! empty($validated['github_issue_number'])) {
             $epic = Activity::updateOrCreate(
-                ['github_issue_number' => $validated['github_issue_number'], 'type' => ActivityType::Epic],
+                ['project_id' => $payload['project_id'], 'github_issue_number' => $validated['github_issue_number']],
                 $payload,
             );
 

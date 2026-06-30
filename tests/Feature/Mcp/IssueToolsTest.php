@@ -150,6 +150,46 @@ test('create-issue upserts by github_issue_number without duplicating', function
     ]);
 });
 
+test('create-issue allows the same github_issue_number across different projects', function () {
+    $projectA = Project::factory()->create();
+    $projectB = Project::factory()->create();
+
+    SoloBoardServer::tool(CreateIssueTool::class, [
+        'title' => 'Project A Issue Five',
+        'project_id' => $projectA->id,
+        'github_issue_number' => 5,
+    ]);
+
+    SoloBoardServer::tool(CreateIssueTool::class, [
+        'title' => 'Project B Issue Five',
+        'project_id' => $projectB->id,
+        'github_issue_number' => 5,
+    ]);
+
+    expect(Activity::query()->issues()->where('github_issue_number', 5)->count())->toBe(2);
+    $this->assertDatabaseHas('activities', ['project_id' => $projectA->id, 'github_issue_number' => 5, 'title' => 'Project A Issue Five']);
+    $this->assertDatabaseHas('activities', ['project_id' => $projectB->id, 'github_issue_number' => 5, 'title' => 'Project B Issue Five']);
+});
+
+test('create-issue upserts by github_issue_number scoped to project', function () {
+    $project = Project::factory()->create();
+
+    SoloBoardServer::tool(CreateIssueTool::class, [
+        'title' => 'Original Title',
+        'project_id' => $project->id,
+        'github_issue_number' => 7,
+    ]);
+
+    SoloBoardServer::tool(CreateIssueTool::class, [
+        'title' => 'Resynced Title',
+        'project_id' => $project->id,
+        'github_issue_number' => 7,
+    ]);
+
+    expect(Activity::query()->issues()->where('project_id', $project->id)->where('github_issue_number', 7)->count())->toBe(1);
+    $this->assertDatabaseHas('activities', ['project_id' => $project->id, 'github_issue_number' => 7, 'title' => 'Resynced Title']);
+});
+
 test('create-issue fails without title', function () {
     $response = SoloBoardServer::tool(CreateIssueTool::class, []);
 

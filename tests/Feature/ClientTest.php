@@ -57,10 +57,15 @@ test('update day label returns pt-br weekday name', function () {
     expect($client->updateDayLabel())->toBe('Segunda-feira');
 });
 
-test('update day label returns null when no update day set', function () {
-    $client = Client::factory()->create(['update_day' => null]);
+test('update day label returns domingo for day 7', function () {
+    $client = Client::factory()->create(['update_day' => 7]);
 
-    expect($client->updateDayLabel())->toBeNull();
+    expect($client->updateDayLabel())->toBe('Domingo');
+});
+
+test('week day label is a static, reusable source of truth', function () {
+    expect(Client::weekDayLabel(1))->toBe('Segunda-feira');
+    expect(Client::weekDayLabel(7))->toBe('Domingo');
 });
 
 test('deleting a client nullifies the client_id on projects and activities', function () {

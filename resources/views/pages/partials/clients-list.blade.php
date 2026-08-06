@@ -7,6 +7,11 @@
                 <flux:text class="mt-1">
                     {{ $tab === 'archived' ? 'Nenhum cliente arquivado.' : 'Cadastre clientes para organizar projetos e tasks.' }}
                 </flux:text>
+                @if ($tab !== 'archived')
+                    <flux:button wire:click="openForm" icon="plus" size="sm" class="mt-4">
+                        Novo cliente
+                    </flux:button>
+                @endif
             </div>
         </div>
     @else

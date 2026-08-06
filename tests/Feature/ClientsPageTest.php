@@ -96,6 +96,33 @@ describe('Clients Form', function (): void {
             ->assertHasErrors(['name' => 'required']);
     });
 
+    test('rejects an invalid hex color', function (): void {
+        Livewire::test('pages::clients')
+            ->call('openForm')
+            ->set('name', 'Cliente Cor Inválida')
+            ->set('color', 'not-a-color')
+            ->call('saveClient')
+            ->assertHasErrors(['color' => 'regex']);
+
+        expect(Client::count())->toBe(0);
+    });
+
+    test('requires an update day between 1 and 7', function (): void {
+        Livewire::test('pages::clients')
+            ->call('openForm')
+            ->set('name', 'Cliente Sem Dia')
+            ->set('updateDay', 0)
+            ->call('saveClient')
+            ->assertHasErrors(['updateDay' => 'between']);
+
+        Livewire::test('pages::clients')
+            ->call('openForm')
+            ->set('name', 'Cliente Sem Dia')
+            ->set('updateDay', 8)
+            ->call('saveClient')
+            ->assertHasErrors(['updateDay' => 'between']);
+    });
+
     test('prevents duplicate slugs', function (): void {
         Client::factory()->create(['name' => 'Cliente Teste', 'slug' => 'cliente-teste']);
 

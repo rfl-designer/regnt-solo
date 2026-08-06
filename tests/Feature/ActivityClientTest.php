@@ -3,6 +3,7 @@
 use App\Models\Activity;
 use App\Models\Client;
 use App\Models\Project;
+use Illuminate\Database\QueryException;
 
 test('effective client resolves to the project client when activity has a project', function () {
     $client = Client::factory()->create();
@@ -64,4 +65,25 @@ test('an activity created directly with both project and client keeps only the p
     expect($activity->fresh())
         ->project_id->toBe($project->id)
         ->client_id->toBeNull();
+});
+
+test('database rejects an activity with both project_id and client_id set via a query builder update that bypasses the observer', function () {
+    $client = Client::factory()->create();
+    $project = Project::factory()->create();
+    $activity = Activity::factory()->create(['project_id' => $project->id, 'client_id' => null]);
+
+    expect(fn () => Activity::query()->where('id', $activity->id)->update(['client_id' => $client->id]))
+        ->toThrow(QueryException::class);
+
+    expect($activity->fresh())->client_id->toBeNull();
+});
+
+test('database rejects an activity with both project_id and client_id set via saveQuietly', function () {
+    $client = Client::factory()->create();
+    $project = Project::factory()->create();
+    $activity = Activity::factory()->create(['project_id' => null, 'client_id' => $client->id]);
+
+    $activity->project_id = $project->id;
+
+    expect(fn () => $activity->saveQuietly())->toThrow(QueryException::class);
 });

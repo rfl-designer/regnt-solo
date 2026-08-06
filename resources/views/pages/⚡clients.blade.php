@@ -21,7 +21,7 @@ new class extends Component
 
     public string $color = '#3b82f6';
 
-    public ?int $updateDay = null;
+    public int $updateDay = 1;
 
     public ?string $updateTime = null;
 
@@ -56,15 +56,9 @@ new class extends Component
      */
     public function getDaysOfWeek(): array
     {
-        return [
-            1 => 'Segunda-feira',
-            2 => 'Terça-feira',
-            3 => 'Quarta-feira',
-            4 => 'Quinta-feira',
-            5 => 'Sexta-feira',
-            6 => 'Sábado',
-            7 => 'Domingo',
-        ];
+        return collect(range(1, 7))
+            ->mapWithKeys(fn (int $day) => [$day => Client::weekDayLabel($day)])
+            ->all();
     }
 
     public function openForm(?int $clientId = null): void
@@ -91,8 +85,8 @@ new class extends Component
     {
         $this->validate([
             'name' => 'required|string|max:255',
-            'color' => 'required|string|max:7',
-            'updateDay' => 'nullable|integer|min:1|max:7',
+            'color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'updateDay' => 'required|integer|between:1,7',
             'updateTime' => 'nullable|date_format:H:i',
             'channel' => 'required|in:'.implode(',', array_column(ClientChannel::cases(), 'value')),
             'responseAgreement' => 'nullable|string',
@@ -177,6 +171,7 @@ new class extends Component
     {
         $this->reset('editingClientId', 'name', 'color', 'updateDay', 'updateTime', 'channel', 'responseAgreement', 'notes');
         $this->color = '#3b82f6';
+        $this->updateDay = 1;
         $this->channel = 'other';
     }
 };
@@ -219,7 +214,7 @@ new class extends Component
                 <flux:error name="name" />
             </flux:field>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <flux:field>
                     <flux:label>Cor</flux:label>
                     <input
@@ -240,15 +235,15 @@ new class extends Component
                 </flux:field>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <flux:field>
                     <flux:label>Dia da semana (update)</flux:label>
-                    <flux:select wire:model="updateDay" placeholder="Nenhum">
-                        <option value="">Nenhum</option>
+                    <flux:select wire:model="updateDay">
                         @foreach ($this->getDaysOfWeek() as $value => $label)
-                            <option value="{{ $value }}">{{ $label }}</option>
+                            <option value="{{ $value }}" wire:key="update-day-{{ $value }}">{{ $label }}</option>
                         @endforeach
                     </flux:select>
+                    <flux:error name="updateDay" />
                 </flux:field>
 
                 <flux:field>

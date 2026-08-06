@@ -426,7 +426,7 @@ new class extends Component
                         <flux:select wire:model.live="projectId" label="Projeto" placeholder="Sem projeto">
                             <flux:select.option value="">Sem projeto</flux:select.option>
                             @foreach ($this->projects as $project)
-                                <flux:select.option :value="$project->id">
+                                <flux:select.option :value="$project->id" wire:key="project-{{ $project->id }}">
                                     {{ $project->emoji }} {{ $project->name }}
                                 </flux:select.option>
                             @endforeach
@@ -442,7 +442,7 @@ new class extends Component
                         >
                             <flux:select.option value="">Sem cliente</flux:select.option>
                             @foreach ($this->clients as $client)
-                                <flux:select.option :value="$client->id">
+                                <flux:select.option :value="$client->id" wire:key="client-{{ $client->id }}">
                                     {{ $client->name }}
                                 </flux:select.option>
                             @endforeach

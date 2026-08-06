@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('slug')->unique();
             $table->string('color', 7)->default('#3b82f6');
-            $table->unsignedTinyInteger('update_day')->nullable();
+            $table->unsignedTinyInteger('update_day')->default(1);
             $table->time('update_time')->nullable();
             $table->string('channel')->default('other');
             $table->text('response_agreement')->nullable();

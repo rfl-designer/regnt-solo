@@ -191,7 +191,7 @@ new class extends Component
                         <flux:select wire:model="clientId" placeholder="Interno" class="flex-1">
                             <flux:select.option value="">Interno</flux:select.option>
                             @foreach ($this->clients as $client)
-                                <flux:select.option :value="$client->id">
+                                <flux:select.option :value="$client->id" wire:key="client-{{ $client->id }}">
                                     {{ $client->name }}
                                 </flux:select.option>
                             @endforeach

@@ -88,21 +88,27 @@ class Client extends Model
     /**
      * Get the ISO weekday label for the update day (1 = Monday ... 7 = Sunday).
      */
-    public function updateDayLabel(): ?string
+    public function updateDayLabel(): string
     {
-        if ($this->update_day === null) {
-            return null;
-        }
+        return self::weekDayLabel($this->update_day);
+    }
 
-        return match ($this->update_day) {
+    /**
+     * Get the PT-BR label for an ISO weekday (1 = Monday ... 7 = Sunday).
+     *
+     * Single source of truth for the weekday label, shared by the model
+     * accessor and the client form/listing views.
+     */
+    public static function weekDayLabel(int $day): string
+    {
+        return match ($day) {
             1 => 'Segunda-feira',
             2 => 'Terça-feira',
             3 => 'Quarta-feira',
             4 => 'Quinta-feira',
             5 => 'Sexta-feira',
             6 => 'Sábado',
-            7 => 'Domingo',
-            default => null,
+            default => 'Domingo',
         };
     }
 }

@@ -3,6 +3,7 @@
 use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Models\Activity;
+use App\Models\Client;
 use App\Models\DailyPlan;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -182,6 +183,23 @@ test('kanban shows project info on task cards', function () {
     Livewire::test('pages::kanban')
         ->assertSee('🚀')
         ->assertSee('Meu Projeto');
+});
+
+test('kanban shows the client dot inherited via the project', function () {
+    $client = Client::factory()->create(['name' => 'Acme Corp']);
+    $project = Project::factory()->create(['client_id' => $client->id]);
+    Activity::factory()->issue()->backlog()->create(['project_id' => $project->id]);
+
+    Livewire::test('pages::kanban')
+        ->assertSee('Acme Corp');
+});
+
+test('kanban shows the client dot for a task linked directly to a client', function () {
+    $client = Client::factory()->create(['name' => 'Direct Client Co']);
+    Activity::factory()->issue()->backlog()->create(['project_id' => null, 'client_id' => $client->id]);
+
+    Livewire::test('pages::kanban')
+        ->assertSee('Direct Client Co');
 });
 
 test('kanban shows priority badges', function () {

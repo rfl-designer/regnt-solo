@@ -1,6 +1,7 @@
 <?php
 
 use App\Mail\StakeholderAccessLink;
+use App\Models\Client;
 use App\Models\Project;
 use App\Models\Stakeholder;
 use Illuminate\Support\Facades\Mail;
@@ -215,4 +216,76 @@ it('only lists stakeholders from the specific project', function () {
         ->dispatch('open-stakeholders-modal', projectId: $this->project->id)
         ->assertSee('Own Stakeholder')
         ->assertDontSee('Other Stakeholder');
+});
+
+it('can add a stakeholder with a client link', function () {
+    $client = Client::factory()->create(['name' => 'Acme Corp']);
+
+    Livewire::test('project-stakeholders-modal')
+        ->dispatch('open-stakeholders-modal', projectId: $this->project->id)
+        ->set('name', 'Grace Hopper')
+        ->set('email', 'grace@example.com')
+        ->set('clientId', $client->id)
+        ->call('addStakeholder')
+        ->assertHasNoErrors();
+
+    expect(Stakeholder::where('email', 'grace@example.com')->first())
+        ->client_id->toBe($client->id);
+});
+
+it('can add a stakeholder without a client link', function () {
+    Livewire::test('project-stakeholders-modal')
+        ->dispatch('open-stakeholders-modal', projectId: $this->project->id)
+        ->set('name', 'Henry Ford')
+        ->set('email', 'henry@example.com')
+        ->call('addStakeholder')
+        ->assertHasNoErrors();
+
+    expect(Stakeholder::where('email', 'henry@example.com')->first())
+        ->client_id->toBeNull();
+});
+
+it('validates the client link exists', function () {
+    Livewire::test('project-stakeholders-modal')
+        ->dispatch('open-stakeholders-modal', projectId: $this->project->id)
+        ->set('name', 'Ida Tarbell')
+        ->set('email', 'ida@example.com')
+        ->set('clientId', 999999)
+        ->call('addStakeholder')
+        ->assertHasErrors(['clientId' => 'exists']);
+});
+
+it('can update the client link of an existing stakeholder without touching its access token', function () {
+    $client = Client::factory()->create();
+    $stakeholder = Stakeholder::factory()->create([
+        'project_id' => $this->project->id,
+        'client_id' => null,
+    ]);
+    $originalToken = $stakeholder->access_token;
+
+    Livewire::test('project-stakeholders-modal')
+        ->dispatch('open-stakeholders-modal', projectId: $this->project->id)
+        ->set("stakeholderClientIds.{$stakeholder->id}", $client->id)
+        ->call('updateStakeholderClient', $stakeholder->id)
+        ->assertHasNoErrors();
+
+    expect($stakeholder->fresh())
+        ->client_id->toBe($client->id)
+        ->access_token->toBe($originalToken);
+});
+
+it('can clear the client link of an existing stakeholder', function () {
+    $client = Client::factory()->create();
+    $stakeholder = Stakeholder::factory()->create([
+        'project_id' => $this->project->id,
+        'client_id' => $client->id,
+    ]);
+
+    Livewire::test('project-stakeholders-modal')
+        ->dispatch('open-stakeholders-modal', projectId: $this->project->id)
+        ->set("stakeholderClientIds.{$stakeholder->id}", '')
+        ->call('updateStakeholderClient', $stakeholder->id)
+        ->assertHasNoErrors();
+
+    expect($stakeholder->fresh())->client_id->toBeNull();
 });

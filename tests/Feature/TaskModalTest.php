@@ -3,6 +3,7 @@
 use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Models\Activity;
+use App\Models\Client;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -149,6 +150,57 @@ test('can remove project from task', function () {
         ->call('saveTask');
 
     expect($task->fresh()->project_id)->toBeNull();
+});
+
+test('can link a client directly to a task without a project', function () {
+    $client = Client::factory()->create();
+    $task = Activity::factory()->create(['project_id' => null, 'client_id' => null]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->set('clientId', (string) $client->id)
+        ->call('saveTask');
+
+    expect($task->fresh())
+        ->client_id->toBe($client->id)
+        ->project_id->toBeNull();
+});
+
+test('updatedProjectId clears the direct client selection client-side when a project is chosen', function () {
+    $client = Client::factory()->create();
+    $project = Project::factory()->create();
+    $task = Activity::factory()->create(['project_id' => null, 'client_id' => $client->id]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->assertSet('clientId', (string) $client->id)
+        ->set('projectId', (string) $project->id)
+        ->assertSet('clientId', null);
+});
+
+test('saving with a project clears any direct client link', function () {
+    $client = Client::factory()->create();
+    $project = Project::factory()->create();
+    $task = Activity::factory()->create(['project_id' => null, 'client_id' => $client->id]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->set('projectId', (string) $project->id)
+        ->call('saveTask');
+
+    expect($task->fresh())
+        ->project_id->toBe($project->id)
+        ->client_id->toBeNull();
+});
+
+test('validates client must exist', function () {
+    $task = Activity::factory()->create(['project_id' => null]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->set('clientId', '999999')
+        ->call('saveTask')
+        ->assertHasErrors(['clientId' => 'exists']);
 });
 
 test('can update due date', function () {

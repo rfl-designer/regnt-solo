@@ -187,7 +187,7 @@ new class extends Component
     </div>
 
     <flux:tab.group>
-        <flux:tabs wire:model="tab">
+        <flux:tabs wire:model.live="tab">
             <flux:tab name="active" icon="building-office-2">Ativos</flux:tab>
             <flux:tab name="archived" icon="archive-box">Arquivados</flux:tab>
         </flux:tabs>

@@ -53,6 +53,19 @@ describe('Clients List', function (): void {
             ->assertSee('Arquivado Ltda')
             ->assertDontSee('Ativo Ltda');
     });
+
+    test('switching back to active tab re-renders the list', function (): void {
+        Client::factory()->create(['name' => 'Ativo Ltda']);
+        Client::factory()->archived()->create(['name' => 'Arquivado Ltda']);
+
+        Livewire::test('pages::clients')
+            ->set('tab', 'archived')
+            ->assertSee('Arquivado Ltda')
+            ->assertDontSee('Ativo Ltda')
+            ->set('tab', 'active')
+            ->assertSee('Ativo Ltda')
+            ->assertDontSee('Arquivado Ltda');
+    });
 });
 
 describe('Clients Form', function (): void {

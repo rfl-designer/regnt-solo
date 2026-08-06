@@ -423,30 +423,38 @@ new class extends Component
                     {{-- Two-column grid for selects --}}
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         {{-- Project --}}
-                        <flux:select wire:model.live="projectId" label="Projeto" placeholder="Sem projeto">
-                            <flux:select.option value="">Sem projeto</flux:select.option>
-                            @foreach ($this->projects as $project)
-                                <flux:select.option :value="$project->id" wire:key="project-{{ $project->id }}">
-                                    {{ $project->emoji }} {{ $project->name }}
-                                </flux:select.option>
-                            @endforeach
-                        </flux:select>
+                        <div>
+                            <flux:select wire:model.live="projectId" label="Projeto">
+                                <flux:select.option value="">Sem projeto</flux:select.option>
+                                @foreach ($this->projects as $project)
+                                    <flux:select.option :value="$project->id" wire:key="project-{{ $project->id }}">
+                                        {{ $project->emoji }} {{ $project->name }}
+                                    </flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <div class="mt-1 h-4"></div>
+                        </div>
 
                         {{-- Client (only when there is no project) --}}
-                        <flux:select
-                            wire:model="clientId"
-                            label="Cliente"
-                            placeholder="Sem cliente"
-                            :disabled="filled($projectId)"
-                            description="{{ filled($projectId) ? 'Herdado do projeto' : null }}"
-                        >
-                            <flux:select.option value="">Sem cliente</flux:select.option>
-                            @foreach ($this->clients as $client)
-                                <flux:select.option :value="$client->id" wire:key="client-{{ $client->id }}">
-                                    {{ $client->name }}
-                                </flux:select.option>
-                            @endforeach
-                        </flux:select>
+                        <div>
+                            <flux:select
+                                wire:model="clientId"
+                                label="Cliente"
+                                :disabled="filled($projectId)"
+                            >
+                                <flux:select.option value="">Sem cliente</flux:select.option>
+                                @foreach ($this->clients as $client)
+                                    <flux:select.option :value="$client->id" wire:key="client-{{ $client->id }}">
+                                        {{ $client->name }}
+                                    </flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <div class="mt-1 h-4 text-xs text-zinc-500">
+                                @if (filled($projectId))
+                                    Herdado do projeto
+                                @endif
+                            </div>
+                        </div>
 
                         {{-- Priority --}}
                         <flux:select wire:model="priority" label="Prioridade">

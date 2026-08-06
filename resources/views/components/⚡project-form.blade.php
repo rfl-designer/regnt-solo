@@ -188,7 +188,7 @@ new class extends Component
                     </div>
                 @else
                     <div class="flex items-center gap-2">
-                        <flux:select wire:model="clientId" placeholder="Interno" class="flex-1">
+                        <flux:select wire:model="clientId" class="flex-1">
                             <flux:select.option value="">Interno</flux:select.option>
                             @foreach ($this->clients as $client)
                                 <flux:select.option :value="$client->id" wire:key="client-{{ $client->id }}">

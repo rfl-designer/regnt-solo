@@ -169,7 +169,7 @@ new class extends Component
     {
         $query = Activity::query()
             ->leaf()
-            ->with('project', 'parent', 'timeEntries')
+            ->with('project.client', 'client', 'parent', 'timeEntries')
             ->withCount('commits')
             ->where('status', $status);
 
@@ -415,6 +415,11 @@ new class extends Component
                                             <flux:icon name="grip-vertical" class="size-4" />
                                         </div>
                                         <span class="line-clamp-2 flex-1 text-sm font-medium text-zinc-200">{{ $task->title }}</span>
+                                        @if ($task->effective_client)
+                                            <flux:tooltip :content="$task->effective_client->name">
+                                                <div class="mt-1 size-2.5 shrink-0 rounded-full" style="background-color: {{ $task->effective_client->color }}"></div>
+                                            </flux:tooltip>
+                                        @endif
                                     </div>
 
                                     {{-- Project Info --}}
@@ -512,6 +517,11 @@ new class extends Component
                                                     <flux:icon name="grip-vertical" class="size-4" />
                                                 </div>
                                                 <span class="line-clamp-2 flex-1 text-sm font-medium text-zinc-300">{{ $task->title }}</span>
+                                                @if ($task->effective_client)
+                                                    <flux:tooltip :content="$task->effective_client->name">
+                                                        <div class="mt-1 size-2.5 shrink-0 rounded-full" style="background-color: {{ $task->effective_client->color }}"></div>
+                                                    </flux:tooltip>
+                                                @endif
                                             </div>
 
                                             {{-- Badges Row --}}

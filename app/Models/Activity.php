@@ -32,6 +32,7 @@ class Activity extends Model
     protected $fillable = [
         'type',
         'project_id',
+        'client_id',
         'parent_id',
         'title',
         'slug',
@@ -86,6 +87,32 @@ class Activity extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * Get the client this activity is directly linked to (only meaningful
+     * when the activity has no project).
+     */
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
+    }
+
+    /**
+     * Get the effective client for this activity: the project's client if
+     * the activity has a project, otherwise the directly linked client.
+     */
+    protected function effectiveClient(): Attribute
+    {
+        return Attribute::get(function (): ?Client {
+            if ($this->project_id !== null) {
+                return $this->relationLoaded('project')
+                    ? $this->project?->client
+                    : $this->project()->first()?->client;
+            }
+
+            return $this->relationLoaded('client') ? $this->client : $this->client()->first();
+        });
     }
 
     /**

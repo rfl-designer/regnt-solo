@@ -1,6 +1,7 @@
 <?php
 
 use App\Mail\StakeholderAccessLink;
+use App\Models\Client;
 use App\Models\Project;
 use App\Models\Stakeholder;
 use Flux\Flux;
@@ -20,13 +21,29 @@ new class extends Component
     #[Validate('required|email|max:255')]
     public string $email = '';
 
+    #[Validate('nullable|exists:clients,id')]
+    public ?int $clientId = null;
+
+    /** @var array<int, int|null> */
+    public array $stakeholderClientIds = [];
+
     #[On('open-stakeholders-modal')]
     public function open(int $projectId): void
     {
         $this->projectId = $projectId;
-        $this->reset('name', 'email');
+        $this->reset('name', 'email', 'clientId');
+        $this->syncStakeholderClientIds();
 
         Flux::modal('project-stakeholders')->show();
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, Client>
+     */
+    #[Computed]
+    public function clients(): \Illuminate\Database\Eloquent\Collection
+    {
+        return Client::active()->orderBy('name')->get();
     }
 
     #[Computed]
@@ -45,20 +62,55 @@ new class extends Component
 
         $stakeholder = Stakeholder::create([
             'project_id' => $this->projectId,
+            'client_id' => $this->clientId,
             'name' => $this->name,
             'email' => $this->email,
         ]);
 
         Mail::to($stakeholder->email)->send(new StakeholderAccessLink($stakeholder));
 
-        $this->reset('name', 'email');
+        $this->reset('name', 'email', 'clientId');
         unset($this->project);
+        $this->syncStakeholderClientIds();
 
         Flux::toast(
             variant: 'success',
             heading: 'Stakeholder adicionado',
             text: 'Email de acesso enviado para '.$stakeholder->email,
         );
+    }
+
+    /**
+     * Update the client linked to an existing stakeholder, without touching
+     * its access_token or the portal mechanism.
+     */
+    public function updateStakeholderClient(int $stakeholderId): void
+    {
+        $this->validate([
+            "stakeholderClientIds.{$stakeholderId}" => 'nullable|exists:clients,id',
+        ]);
+
+        $stakeholder = Stakeholder::findOrFail($stakeholderId);
+        $stakeholder->update(['client_id' => $this->stakeholderClientIds[$stakeholderId] ?: null]);
+
+        unset($this->project);
+
+        Flux::toast(
+            variant: 'success',
+            heading: 'Cliente atualizado',
+            text: 'Vínculo de cliente atualizado para '.$stakeholder->name,
+        );
+    }
+
+    /**
+     * Refresh the per-stakeholder client select values from the database.
+     */
+    private function syncStakeholderClientIds(): void
+    {
+        $this->stakeholderClientIds = Stakeholder::query()
+            ->where('project_id', $this->projectId)
+            ->pluck('client_id', 'id')
+            ->all();
     }
 
     public function resendEmail(int $stakeholderId): void
@@ -122,6 +174,19 @@ new class extends Component
                         />
                     </div>
 
+                    <flux:field>
+                        <flux:label>Cliente</flux:label>
+                        <flux:select wire:model="clientId" placeholder="Sem cliente">
+                            <flux:select.option value="">Sem cliente</flux:select.option>
+                            @foreach ($this->clients as $client)
+                                <flux:select.option :value="$client->id" wire:key="stakeholder-form-client-{{ $client->id }}">
+                                    {{ $client->name }}
+                                </flux:select.option>
+                            @endforeach
+                        </flux:select>
+                        <flux:error name="clientId" />
+                    </flux:field>
+
                     <div class="flex justify-end">
                         <flux:button
                             type="submit"
@@ -160,6 +225,22 @@ new class extends Component
                             </div>
 
                             <div class="flex items-center gap-3">
+                                {{-- Client Link --}}
+                                <flux:select
+                                    wire:model.live="stakeholderClientIds.{{ $stakeholder->id }}"
+                                    wire:change="updateStakeholderClient({{ $stakeholder->id }})"
+                                    size="sm"
+                                    placeholder="Sem cliente"
+                                    class="w-40"
+                                >
+                                    <flux:select.option value="">Sem cliente</flux:select.option>
+                                    @foreach ($this->clients as $client)
+                                        <flux:select.option :value="$client->id" wire:key="stakeholder-{{ $stakeholder->id }}-client-{{ $client->id }}">
+                                            {{ $client->name }}
+                                        </flux:select.option>
+                                    @endforeach
+                                </flux:select>
+
                                 {{-- Access Status --}}
                                 @if ($stakeholder->last_accessed_at)
                                     <flux:badge size="sm" color="emerald" icon="check-circle">

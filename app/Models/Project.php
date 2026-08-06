@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[ObservedBy([ProjectRealtimeObserver::class])]
@@ -24,6 +25,7 @@ class Project extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'client_id',
         'name',
         'slug',
         'color',
@@ -44,6 +46,14 @@ class Project extends Model
             'status' => ProjectStatus::class,
             'priority' => ProjectPriority::class,
         ];
+    }
+
+    /**
+     * Get the client this project belongs to.
+     */
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
     }
 
     /**

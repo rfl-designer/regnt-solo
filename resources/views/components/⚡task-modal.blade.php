@@ -5,6 +5,7 @@ use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
 use App\Models\Activity;
 use App\Models\ActivityCommit;
+use App\Models\Client;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use Flux\Flux;
@@ -23,6 +24,8 @@ new class extends Component
     public string $title = '';
 
     public ?string $projectId = null;
+
+    public ?string $clientId = null;
 
     public string $priority = 'medium';
 
@@ -65,6 +68,25 @@ new class extends Component
         return Project::active()->orderBy('name')->get();
     }
 
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, Client>
+     */
+    #[Computed]
+    public function clients(): \Illuminate\Database\Eloquent\Collection
+    {
+        return Client::active()->orderBy('name')->get();
+    }
+
+    /**
+     * The direct client select is only meaningful when the task has no project.
+     */
+    public function updatedProjectId(): void
+    {
+        if ($this->projectId) {
+            $this->clientId = null;
+        }
+    }
+
     #[Computed]
     public function isSessionTask(): bool
     {
@@ -89,6 +111,7 @@ new class extends Component
         $this->taskId = $task->id;
         $this->title = $task->title;
         $this->projectId = $task->project_id ? (string) $task->project_id : null;
+        $this->clientId = $task->client_id ? (string) $task->client_id : null;
         $this->priority = $task->priority->value;
         $this->status = $task->status->value;
         $this->dueDate = $task->due_date?->format('Y-m-d');
@@ -223,6 +246,7 @@ new class extends Component
         $this->validate([
             'title' => 'required|string|max:255',
             'projectId' => 'nullable|exists:projects,id',
+            'clientId' => 'nullable|exists:clients,id',
             'priority' => 'required|in:'.implode(',', array_column(ActivityPriority::cases(), 'value')),
             'status' => 'required|in:'.implode(',', array_column(ActivityStatus::cases(), 'value')),
             'dueDate' => 'nullable|date',
@@ -237,6 +261,7 @@ new class extends Component
             $task->update([
                 'title' => $this->title,
                 'project_id' => $this->projectId ? (int) $this->projectId : null,
+                'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
                 'priority' => $this->priority,
                 'due_date' => $this->dueDate ?: null,
                 'estimated_minutes' => $this->estimatedMinutes,
@@ -250,6 +275,7 @@ new class extends Component
             $task->update([
                 'title' => $this->title,
                 'project_id' => $this->projectId ? (int) $this->projectId : null,
+                'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
                 'status' => $this->status,
                 'priority' => $this->priority,
                 'due_date' => $this->dueDate ?: null,
@@ -314,7 +340,7 @@ new class extends Component
 
         $this->showDeleteConfirm = false;
         $this->showModal = false;
-        $this->reset('taskId', 'title', 'projectId', 'priority', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'editingPrUrl', 'activeTab', 'commits', 'sessionPrompt', 'sessionResult', 'projectDocuments');
+        $this->reset('taskId', 'title', 'projectId', 'clientId', 'priority', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'editingPrUrl', 'activeTab', 'commits', 'sessionPrompt', 'sessionResult', 'projectDocuments');
 
         $this->dispatch('task-updated');
 
@@ -397,14 +423,38 @@ new class extends Component
                     {{-- Two-column grid for selects --}}
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         {{-- Project --}}
-                        <flux:select wire:model="projectId" label="Projeto" placeholder="Sem projeto">
-                            <flux:select.option value="">Sem projeto</flux:select.option>
-                            @foreach ($this->projects as $project)
-                                <flux:select.option :value="$project->id">
-                                    {{ $project->emoji }} {{ $project->name }}
-                                </flux:select.option>
-                            @endforeach
-                        </flux:select>
+                        <div>
+                            <flux:select wire:model.live="projectId" label="Projeto">
+                                <flux:select.option value="">Sem projeto</flux:select.option>
+                                @foreach ($this->projects as $project)
+                                    <flux:select.option :value="$project->id" wire:key="project-{{ $project->id }}">
+                                        {{ $project->emoji }} {{ $project->name }}
+                                    </flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <div class="mt-1 h-4"></div>
+                        </div>
+
+                        {{-- Client (only when there is no project) --}}
+                        <div>
+                            <flux:select
+                                wire:model="clientId"
+                                label="Cliente"
+                                :disabled="filled($projectId)"
+                            >
+                                <flux:select.option value="">Sem cliente</flux:select.option>
+                                @foreach ($this->clients as $client)
+                                    <flux:select.option :value="$client->id" wire:key="client-{{ $client->id }}">
+                                        {{ $client->name }}
+                                    </flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <div class="mt-1 h-4 text-xs text-zinc-500">
+                                @if (filled($projectId))
+                                    Herdado do projeto
+                                @endif
+                            </div>
+                        </div>
 
                         {{-- Priority --}}
                         <flux:select wire:model="priority" label="Prioridade">

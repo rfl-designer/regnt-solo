@@ -20,6 +20,7 @@ class Stakeholder extends Model
      */
     protected $fillable = [
         'project_id',
+        'client_id',
         'name',
         'email',
         'access_token',
@@ -58,6 +59,14 @@ class Stakeholder extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * Get the client this stakeholder is linked to.
+     */
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
     }
 
     /**

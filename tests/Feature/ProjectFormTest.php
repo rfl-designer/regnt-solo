@@ -2,6 +2,7 @@
 
 use App\Enums\ProjectPriority;
 use App\Enums\ProjectStatus;
+use App\Models\Client;
 use App\Models\Project;
 use App\Models\User;
 use Livewire\Livewire;
@@ -201,4 +202,53 @@ test('project form allows same slug when updating same project', function () {
         ->dispatch('edit-project', projectId: $project->id)
         ->call('saveProject')
         ->assertHasNoErrors();
+});
+
+test('project form creates a project linked to an existing client', function () {
+    $client = Client::factory()->create();
+
+    Livewire::test('project-form')
+        ->dispatch('open-project-form')
+        ->set('name', 'Projeto com Cliente')
+        ->set('emoji', '📋')
+        ->set('color', '#3b82f6')
+        ->set('clientId', $client->id)
+        ->call('saveProject')
+        ->assertHasNoErrors();
+
+    expect(Project::first())->client_id->toBe($client->id);
+});
+
+test('project form updates the client link of an existing project', function () {
+    $client = Client::factory()->create();
+    $project = Project::factory()->create(['client_id' => null]);
+
+    Livewire::test('project-form')
+        ->dispatch('edit-project', projectId: $project->id)
+        ->assertSet('clientId', null)
+        ->set('clientId', $client->id)
+        ->call('saveProject');
+
+    expect($project->fresh()->client_id)->toBe($client->id);
+});
+
+test('project form creates a client inline and links it to the project', function () {
+    Livewire::test('project-form')
+        ->dispatch('open-project-form')
+        ->set('showInlineClientForm', true)
+        ->set('newClientName', 'Novo Cliente Inline')
+        ->call('createInlineClient')
+        ->assertHasNoErrors()
+        ->assertSet('showInlineClientForm', false);
+
+    $client = Client::where('name', 'Novo Cliente Inline')->first();
+
+    expect($client)->not->toBeNull();
+
+    Livewire::test('project-form')
+        ->dispatch('open-project-form')
+        ->set('showInlineClientForm', true)
+        ->set('newClientName', 'Novo Cliente Inline')
+        ->call('createInlineClient')
+        ->assertHasErrors(['newClientName']);
 });

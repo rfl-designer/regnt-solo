@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Client;
 use App\Models\Project;
 use App\Models\Stakeholder;
 
@@ -104,4 +105,30 @@ it('same email can exist in different projects', function () {
 
     expect($stakeholder1->email)->toBe($stakeholder2->email);
     expect($stakeholder1->id)->not->toBe($stakeholder2->id);
+});
+
+it('accepts an optional client link without altering the portal mechanism', function () {
+    $client = Client::factory()->create();
+
+    $stakeholder = Stakeholder::factory()->create([
+        'project_id' => $this->project->id,
+        'client_id' => $client->id,
+    ]);
+
+    expect($stakeholder->client)
+        ->toBeInstanceOf(Client::class)
+        ->id->toBe($client->id);
+
+    expect($stakeholder->access_token)->not->toBeNull();
+    expect($stakeholder->public_url)->toContain("/projects/shared/{$stakeholder->access_token}");
+});
+
+it('stakeholder client link is nullable', function () {
+    $stakeholder = Stakeholder::factory()->create([
+        'project_id' => $this->project->id,
+        'client_id' => null,
+    ]);
+
+    expect($stakeholder->client_id)->toBeNull();
+    expect($stakeholder->client)->toBeNull();
 });

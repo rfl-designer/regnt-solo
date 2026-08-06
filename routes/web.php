@@ -40,6 +40,10 @@ Route::livewire('projects', 'pages::projects')
     ->middleware(['auth'])
     ->name('projects');
 
+Route::livewire('clients', 'pages::clients')
+    ->middleware(['auth'])
+    ->name('clients');
+
 Route::livewire('projects/{slug}', 'pages::project-detail')
     ->middleware(['auth'])
     ->name('project.detail');

@@ -40,6 +40,9 @@
                     <flux:sidebar.item icon="folder" :href="route('projects')" :current="request()->routeIs('projects') || request()->routeIs('project.*') || request()->routeIs('document.*')" wire:navigate>
                         Projetos
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="building-office-2" :href="route('clients')" :current="request()->routeIs('clients')" wire:navigate>
+                        Clientes
+                    </flux:sidebar.item>
                     <flux:sidebar.item icon="clock" :href="route('time')" :current="request()->routeIs('time')" wire:navigate>
                         Tempo
                     </flux:sidebar.item>

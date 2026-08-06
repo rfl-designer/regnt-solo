@@ -20,6 +20,8 @@ class ActivityObserver
         if ($activity->status === ActivityStatus::Done && $activity->completed_at === null) {
             $activity->completed_at = now();
         }
+
+        $this->clearDirectClientWhenProjectPresent($activity);
     }
 
     /**
@@ -51,6 +53,8 @@ class ActivityObserver
      */
     public function updating(Activity $activity): void
     {
+        $this->clearDirectClientWhenProjectPresent($activity);
+
         if ($activity->isDirty('status') && $activity->status !== null) {
             ActivityStatusChange::create([
                 'activity_id' => $activity->id,
@@ -111,5 +115,16 @@ class ActivityObserver
 
         $maxOrder = $plan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
         $plan->tasks()->attach($activity->id, ['sort_order' => $maxOrder + 1]);
+    }
+
+    /**
+     * Enforce the invariant that an activity's project link and direct client
+     * link never coexist: whenever a project is set, clear the direct client.
+     */
+    private function clearDirectClientWhenProjectPresent(Activity $activity): void
+    {
+        if ($activity->project_id !== null && $activity->client_id !== null) {
+            $activity->client_id = null;
+        }
     }
 }

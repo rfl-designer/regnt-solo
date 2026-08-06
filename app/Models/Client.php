@@ -1,0 +1,108 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\ClientChannel;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Client extends Model
+{
+    /** @use HasFactory<\Database\Factories\ClientFactory> */
+    use HasFactory;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'name',
+        'slug',
+        'color',
+        'update_day',
+        'update_time',
+        'channel',
+        'response_agreement',
+        'notes',
+        'is_active',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'channel' => ClientChannel::class,
+            'update_day' => 'integer',
+            'update_time' => 'datetime:H:i',
+            'is_active' => 'boolean',
+        ];
+    }
+
+    /**
+     * Get the projects linked to this client.
+     */
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
+
+    /**
+     * Get the activities directly linked to this client (no project).
+     */
+    public function activities(): HasMany
+    {
+        return $this->hasMany(Activity::class);
+    }
+
+    /**
+     * Get the stakeholders linked to this client.
+     */
+    public function stakeholders(): HasMany
+    {
+        return $this->hasMany(Stakeholder::class);
+    }
+
+    /**
+     * Scope to only active (non-archived) clients.
+     */
+    public function scopeActive(Builder $query): void
+    {
+        $query->where('is_active', true);
+    }
+
+    /**
+     * Scope to only archived clients.
+     */
+    public function scopeArchived(Builder $query): void
+    {
+        $query->where('is_active', false);
+    }
+
+    /**
+     * Get the ISO weekday label for the update day (1 = Monday ... 7 = Sunday).
+     */
+    public function updateDayLabel(): ?string
+    {
+        if ($this->update_day === null) {
+            return null;
+        }
+
+        return match ($this->update_day) {
+            1 => 'Segunda-feira',
+            2 => 'Terça-feira',
+            3 => 'Quarta-feira',
+            4 => 'Quinta-feira',
+            5 => 'Sexta-feira',
+            6 => 'Sábado',
+            7 => 'Domingo',
+            default => null,
+        };
+    }
+}

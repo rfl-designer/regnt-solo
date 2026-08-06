@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Enums\ActivityStatus;
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -15,7 +16,7 @@ class ListTasksTool extends Tool
 {
     protected string $name = 'list-tasks';
 
-    protected string $description = 'Lists personal tasks (type=Task) with optional filtering by project id, status, and limit. Personal tasks are local operational/personal to-dos ("email the designer", "chase the brand manual"); they have no GitHub mirror and never appear on the stakeholder board. Returns task id, title, status, priority, project, parent_id and due_date.';
+    protected string $description = 'Lists personal tasks (type=Task) with optional filtering by project id, status, and limit. Personal tasks are local operational/personal to-dos ("email the designer", "chase the brand manual"); they have no GitHub mirror and never appear on the stakeholder board. Returns task id, title, status, priority, project, parent_id, client (resolved from the project, or the task\'s direct link) and due_date.';
 
     /**
      * Handle the tool request.
@@ -31,7 +32,7 @@ class ListTasksTool extends Tool
             'status.in' => 'Invalid status. Valid values: inbox, backlog, todo, doing, done.',
         ]);
 
-        $query = Activity::query()->tasks()->with('project');
+        $query = Activity::query()->tasks()->with(['project.client', 'client']);
 
         if (! empty($validated['project_id'])) {
             $query->where('project_id', $validated['project_id']);
@@ -52,6 +53,7 @@ class ListTasksTool extends Tool
             'priority' => $task->priority->value,
             'project' => $task->project?->name,
             'parent_id' => $task->parent_id,
+            'client' => $task->effective_client?->name,
             'due_date' => $task->due_date?->toDateString(),
             'is_overdue' => $task->isOverdue(),
             'is_running' => $task->isRunning(),
@@ -63,7 +65,7 @@ class ListTasksTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\JsonSchema\Types\Type>
+     * @return array<string, Type>
      */
     public function schema(JsonSchema $schema): array
     {

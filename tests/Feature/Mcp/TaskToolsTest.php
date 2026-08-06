@@ -6,6 +6,7 @@ use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\CreateTaskTool;
 use App\Mcp\Tools\ListTasksTool;
 use App\Models\Activity;
+use App\Models\Client;
 use App\Models\Project;
 
 // ListTasksTool tests
@@ -59,6 +60,27 @@ test('list-tasks does not expose github fields', function () {
     $response->assertOk();
     $response->assertDontSee('github_issue_number');
     $response->assertDontSee('github_synced_hash');
+});
+
+test('list-tasks resolves the effective client from a direct link', function () {
+    $client = Client::factory()->create(['name' => 'Direct Client Co']);
+    Activity::factory()->task()->create(['project_id' => null, 'client_id' => $client->id, 'title' => 'Direct Client Task']);
+
+    $response = SoloBoardServer::tool(ListTasksTool::class, []);
+
+    $response->assertOk();
+    $response->assertSee('"client": "Direct Client Co"');
+});
+
+test('list-tasks resolves the effective client inherited via the project', function () {
+    $client = Client::factory()->create(['name' => 'Project Client Co']);
+    $project = Project::factory()->create(['client_id' => $client->id]);
+    Activity::factory()->task()->create(['project_id' => $project->id, 'title' => 'Project Client Task']);
+
+    $response = SoloBoardServer::tool(ListTasksTool::class, []);
+
+    $response->assertOk();
+    $response->assertSee('"client": "Project Client Co"');
 });
 
 // CreateTaskTool tests
@@ -122,6 +144,52 @@ test('create-task marks done when status is done', function () {
 
 test('create-task fails without title', function () {
     $response = SoloBoardServer::tool(CreateTaskTool::class, []);
+
+    $response->assertHasErrors();
+});
+
+test('create-task accepts an optional direct client link', function () {
+    $client = Client::factory()->create(['name' => 'MCP Client Co']);
+
+    $response = SoloBoardServer::tool(CreateTaskTool::class, [
+        'title' => 'Client Linked Task',
+        'client_id' => $client->id,
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('"client": "MCP Client Co"');
+
+    $this->assertDatabaseHas('activities', [
+        'title' => 'Client Linked Task',
+        'client_id' => $client->id,
+        'project_id' => null,
+    ]);
+});
+
+test('create-task with both project and client keeps only the project link', function () {
+    $client = Client::factory()->create();
+    $project = Project::factory()->create();
+
+    $response = SoloBoardServer::tool(CreateTaskTool::class, [
+        'title' => 'Project Wins Task',
+        'project_id' => $project->id,
+        'client_id' => $client->id,
+    ]);
+
+    $response->assertOk();
+
+    $this->assertDatabaseHas('activities', [
+        'title' => 'Project Wins Task',
+        'project_id' => $project->id,
+        'client_id' => null,
+    ]);
+});
+
+test('create-task fails with an unknown client id', function () {
+    $response = SoloBoardServer::tool(CreateTaskTool::class, [
+        'title' => 'Bad Client Task',
+        'client_id' => 999999,
+    ]);
 
     $response->assertHasErrors();
 });

@@ -2,9 +2,11 @@
 
 use App\Enums\ProjectPriority;
 use App\Enums\ProjectStatus;
+use App\Models\Client;
 use App\Models\Project;
 use Flux\Flux;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
@@ -13,6 +15,8 @@ new class extends Component
     public bool $showModal = false;
 
     public ?int $projectId = null;
+
+    public ?int $clientId = null;
 
     public string $name = '';
 
@@ -25,6 +29,19 @@ new class extends Component
     public string $status = 'active';
 
     public string $description = '';
+
+    public bool $showInlineClientForm = false;
+
+    public string $newClientName = '';
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection<int, Client>
+     */
+    #[Computed]
+    public function clients(): \Illuminate\Database\Eloquent\Collection
+    {
+        return Client::active()->orderBy('name')->get();
+    }
 
     #[On('open-project-form')]
     public function openForm(): void
@@ -39,6 +56,7 @@ new class extends Component
         $project = Project::findOrFail($projectId);
 
         $this->projectId = $project->id;
+        $this->clientId = $project->client_id;
         $this->name = $project->name;
         $this->emoji = $project->emoji;
         $this->color = $project->color;
@@ -49,10 +67,40 @@ new class extends Component
         $this->showModal = true;
     }
 
+    public function createInlineClient(): void
+    {
+        $this->validate([
+            'newClientName' => 'required|string|max:255',
+        ]);
+
+        $slug = Str::slug($this->newClientName);
+
+        if (Client::where('slug', $slug)->exists()) {
+            $this->addError('newClientName', 'Já existe um cliente com este nome.');
+
+            return;
+        }
+
+        $client = Client::create([
+            'name' => $this->newClientName,
+            'slug' => $slug,
+            'color' => '#3b82f6',
+            'channel' => 'other',
+        ]);
+
+        $this->clientId = $client->id;
+        $this->newClientName = '';
+        $this->showInlineClientForm = false;
+        unset($this->clients);
+
+        Flux::toast(variant: 'success', heading: 'Cliente criado', text: $client->name);
+    }
+
     public function saveProject(): void
     {
         $this->validate([
             'name' => 'required|string|max:255',
+            'clientId' => 'nullable|exists:clients,id',
             'emoji' => 'required|string|max:10',
             'color' => 'required|string|max:7',
             'priority' => 'required|in:'.implode(',', array_column(ProjectPriority::cases(), 'value')),
@@ -73,6 +121,7 @@ new class extends Component
         }
 
         $data = [
+            'client_id' => $this->clientId,
             'name' => $this->name,
             'slug' => $slug,
             'emoji' => $this->emoji,
@@ -100,7 +149,7 @@ new class extends Component
 
     private function resetForm(): void
     {
-        $this->reset('projectId', 'name', 'emoji', 'color', 'priority', 'status', 'description');
+        $this->reset('projectId', 'clientId', 'name', 'emoji', 'color', 'priority', 'status', 'description', 'showInlineClientForm', 'newClientName');
     }
 };
 
@@ -123,6 +172,37 @@ new class extends Component
                 label="Nome"
                 placeholder="Nome do projeto"
             />
+
+            {{-- Cliente --}}
+            <flux:field>
+                <flux:label>Cliente</flux:label>
+
+                @if ($showInlineClientForm)
+                    <div class="flex items-start gap-2">
+                        <div class="flex-1">
+                            <flux:input wire:model="newClientName" placeholder="Nome do novo cliente" />
+                            <flux:error name="newClientName" />
+                        </div>
+                        <flux:button wire:click="createInlineClient" size="sm" variant="primary" icon="check" />
+                        <flux:button wire:click="$set('showInlineClientForm', false)" size="sm" variant="ghost" icon="x-mark" />
+                    </div>
+                @else
+                    <div class="flex items-center gap-2">
+                        <flux:select wire:model="clientId" placeholder="Interno" class="flex-1">
+                            <flux:select.option value="">Interno</flux:select.option>
+                            @foreach ($this->clients as $client)
+                                <flux:select.option :value="$client->id">
+                                    {{ $client->name }}
+                                </flux:select.option>
+                            @endforeach
+                        </flux:select>
+                        <flux:button wire:click="$set('showInlineClientForm', true)" size="sm" variant="ghost" icon="plus">
+                            Novo
+                        </flux:button>
+                    </div>
+                @endif
+                <flux:error name="clientId" />
+            </flux:field>
 
             {{-- Two-column grid for emoji and color --}}
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -566,10 +566,10 @@ new class extends Component
                                                     </div>
                                                 @endif
 
-                                                {{-- Priority badge --}}
-                                                @if ($task->priority)
-                                                    <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
-                                                        {{ $task->priority->label() }}
+                                                {{-- Service class badge --}}
+                                                @if ($task->service_class)
+                                                    <flux:badge size="sm" color="{{ $task->service_class->color() }}" icon="{{ $task->service_class->icon() }}">
+                                                        {{ $task->service_class->label() }}
                                                     </flux:badge>
                                                 @endif
 
@@ -685,10 +685,10 @@ new class extends Component
                                                             </div>
                                                         @endif
 
-                                                        {{-- Priority badge --}}
-                                                        @if ($task->priority)
-                                                            <flux:badge size="sm" color="zinc" icon="{{ $task->priority->icon() }}">
-                                                                {{ $task->priority->label() }}
+                                                        {{-- Service class badge --}}
+                                                        @if ($task->service_class)
+                                                            <flux:badge size="sm" color="zinc" icon="{{ $task->service_class->icon() }}">
+                                                                {{ $task->service_class->label() }}
                                                             </flux:badge>
                                                         @endif
                                                     </div>
@@ -809,10 +809,10 @@ new class extends Component
                                                 </div>
                                             @endif
 
-                                            {{-- Priority badge --}}
-                                            @if ($task->priority)
-                                                <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
-                                                    {{ $task->priority->label() }}
+                                            {{-- Service class badge --}}
+                                            @if ($task->service_class)
+                                                <flux:badge size="sm" color="{{ $task->service_class->color() }}" icon="{{ $task->service_class->icon() }}">
+                                                    {{ $task->service_class->label() }}
                                                 </flux:badge>
                                             @endif
 
@@ -872,10 +872,10 @@ new class extends Component
                                                 </div>
                                             @endif
 
-                                            {{-- Priority badge --}}
-                                            @if ($task->priority)
-                                                <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
-                                                    {{ $task->priority->label() }}
+                                            {{-- Service class badge --}}
+                                            @if ($task->service_class)
+                                                <flux:badge size="sm" color="{{ $task->service_class->color() }}" icon="{{ $task->service_class->icon() }}">
+                                                    {{ $task->service_class->label() }}
                                                 </flux:badge>
                                             @endif
 

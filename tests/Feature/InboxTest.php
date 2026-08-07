@@ -1,10 +1,11 @@
 <?php
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Models\Project;
 use App\Models\User;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -76,7 +77,7 @@ test('move to status updates task status', function () {
 test('move to status only works for inbox tasks', function () {
     $task = Activity::factory()->backlog()->create();
 
-    $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    $this->expectException(ModelNotFoundException::class);
 
     Livewire::test('pages::inbox')
         ->call('moveToStatus', $task->id, 'todo');
@@ -126,7 +127,7 @@ test('delete task removes it from database', function () {
 test('delete task only works for inbox tasks', function () {
     $task = Activity::factory()->backlog()->create();
 
-    $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    $this->expectException(ModelNotFoundException::class);
 
     Livewire::test('pages::inbox')
         ->set('deletingTaskId', $task->id)
@@ -179,28 +180,37 @@ test('inbox badge updates on task-moved event', function () {
         ->assertDontSeeHtml('data-flux-badge');
 });
 
-test('update priority changes task priority', function () {
-    $task = Activity::factory()->create(['priority' => ActivityPriority::Medium]);
+test('update service class changes task service class', function () {
+    $task = Activity::factory()->create(['service_class' => ServiceClass::Standard]);
 
     Livewire::test('pages::inbox')
-        ->call('updatePriority', $task->id, 'high');
+        ->call('updateServiceClass', $task->id, 'intangible');
 
-    expect($task->fresh()->priority)->toBe(ActivityPriority::High);
+    expect($task->fresh()->service_class)->toBe(ServiceClass::Intangible);
 });
 
-test('update priority only works for inbox tasks', function () {
+test('update service class only works for inbox tasks', function () {
     $task = Activity::factory()->backlog()->create();
 
-    $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    $this->expectException(ModelNotFoundException::class);
 
     Livewire::test('pages::inbox')
-        ->call('updatePriority', $task->id, 'urgent');
+        ->call('updateServiceClass', $task->id, 'emergency');
 });
 
-test('inbox shows priority dropdown for each task', function () {
-    Activity::factory()->create(['priority' => ActivityPriority::High]);
+test('update service class to fixed_date without a due date is refused with a toast', function () {
+    $task = Activity::factory()->create(['service_class' => ServiceClass::Standard, 'due_date' => null]);
 
     Livewire::test('pages::inbox')
-        ->assertSee('Alta')
-        ->assertSee('Prioridade');
+        ->call('updateServiceClass', $task->id, 'fixed_date');
+
+    expect($task->fresh()->service_class)->toBe(ServiceClass::Standard);
+});
+
+test('inbox shows service class dropdown for each task', function () {
+    Activity::factory()->create(['service_class' => ServiceClass::Emergency]);
+
+    Livewire::test('pages::inbox')
+        ->assertSee('Emergência')
+        ->assertSee('Classe de serviço');
 });

@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
 use App\Enums\ActivityType;
 use App\Models\Activity;
 use App\Models\Project;
@@ -18,7 +18,7 @@ new class extends Component
 
     public ?int $selectedProjectId = null;
 
-    public ?string $selectedPriority = null;
+    public ?string $selectedServiceClass = null;
 
     public ?string $selectedDueDate = null;
 
@@ -86,11 +86,11 @@ new class extends Component
                 ->values()
                 ->all(),
 
-            '!' => collect(ActivityPriority::cases())
-                ->filter(fn (ActivityPriority $priority) => $search === '' || str_contains($priority->value, $search))
-                ->map(fn (ActivityPriority $priority) => [
-                    'value' => $priority->value,
-                    'label' => $priority->label(),
+            '!' => collect(ServiceClass::cases())
+                ->filter(fn (ServiceClass $serviceClass) => $search === '' || str_contains($serviceClass->value, $search))
+                ->map(fn (ServiceClass $serviceClass) => [
+                    'value' => $serviceClass->value,
+                    'label' => $serviceClass->label(),
                 ])
                 ->values()
                 ->all(),
@@ -128,7 +128,7 @@ new class extends Component
         }
 
         $projectSlug = null;
-        $priority = null;
+        $serviceClass = null;
         $dateAlias = null;
 
         if (preg_match('/#(\S+)/', $input, $matches)) {
@@ -136,7 +136,7 @@ new class extends Component
         }
 
         if (preg_match('/!(\S+)/', $input, $matches)) {
-            $priority = $matches[1];
+            $serviceClass = $matches[1];
         }
 
         if (preg_match('/@(\S+)/', $input, $matches)) {
@@ -171,9 +171,11 @@ new class extends Component
             }
         }
 
-        $taskPriority = null;
-        if ($priority !== null) {
-            $taskPriority = ActivityPriority::tryFrom($priority);
+        $taskServiceClass = null;
+        $invalidServiceClass = false;
+        if ($serviceClass !== null) {
+            $taskServiceClass = ServiceClass::tryFrom($serviceClass);
+            $invalidServiceClass = $taskServiceClass === null;
         }
 
         $dueDate = $this->parseDateAlias($dateAlias);
@@ -182,22 +184,32 @@ new class extends Component
             ? ActivityStatus::tryFrom($this->initialStatus) ?? ActivityStatus::Inbox
             : ActivityStatus::Inbox;
 
-        Activity::create([
-            'type' => ActivityType::Task,
-            'title' => $title,
-            'project_id' => $projectId,
-            'status' => $taskStatus,
-            'priority' => $taskPriority ?? ActivityPriority::Medium,
-            'due_date' => $dueDate,
-            'session_prompt' => $sessionPrompt,
-        ]);
+        if ($invalidServiceClass) {
+            Flux::toast(variant: 'warning', heading: 'Classe de serviço inválida', text: "\"!{$serviceClass}\" não é uma classe válida. Task criada como Padrão.");
+        }
+
+        try {
+            Activity::create([
+                'type' => ActivityType::Task,
+                'title' => $title,
+                'project_id' => $projectId,
+                'status' => $taskStatus,
+                'service_class' => $taskServiceClass ?? ServiceClass::Standard,
+                'due_date' => $dueDate,
+                'session_prompt' => $sessionPrompt,
+            ]);
+        } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível criar a task', text: $e->getMessage());
+
+            return;
+        }
 
         $statusLabel = $taskStatus->label();
         Flux::toast(variant: 'success', heading: 'Task criada', text: "{$title} → {$statusLabel}");
 
         $this->dispatch('task-created');
 
-        $this->reset('rawInput', 'selectedProjectId', 'selectedPriority', 'selectedDueDate', 'activePrefix', 'prefixSearch', 'isSessionMode', 'sessionPromptInput', 'initialStatus');
+        $this->reset('rawInput', 'selectedProjectId', 'selectedServiceClass', 'selectedDueDate', 'activePrefix', 'prefixSearch', 'isSessionMode', 'sessionPromptInput', 'initialStatus');
 
         Flux::modal('quick-add')->close();
     }
@@ -297,7 +309,7 @@ new class extends Component
                 </div>
                 <flux:text class="mt-1">
                     Use <code class="rounded bg-zinc-700 px-1 py-0.5 text-xs">#projeto</code>
-                    <code class="rounded bg-zinc-700 px-1 py-0.5 text-xs">!prioridade</code>
+                    <code class="rounded bg-zinc-700 px-1 py-0.5 text-xs">!classe</code>
                     <code class="rounded bg-zinc-700 px-1 py-0.5 text-xs">@data</code>
                 </flux:text>
             </div>

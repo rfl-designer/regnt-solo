@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
 use App\Enums\ActivityType;
 use App\Models\Activity;
 use App\Models\DailyPlan;
@@ -88,7 +88,7 @@ new class extends Component
             'timer' => $this->toggleTimer($task),
             'deletar' => $this->deleteTask($task),
             'projeto' => $this->assignProject($task, $param),
-            'prioridade' => $this->changePriority($task, $param),
+            'classe' => $this->changeServiceClass($task, $param),
             'planejar' => $this->planTask($task),
             default => Flux::toast(variant: 'warning', heading: 'Comando desconhecido', text: "Comando '{$command}' não reconhecido."),
         };
@@ -200,7 +200,7 @@ new class extends Component
             ['label' => 'timer', 'description' => 'Iniciar/parar timer da task', 'icon' => 'clock', 'action' => ''],
             ['label' => 'deletar', 'description' => 'Excluir task (com confirmação)', 'icon' => 'trash', 'action' => ''],
             ['label' => 'projeto', 'description' => 'Atribuir task a um projeto', 'icon' => 'folder', 'action' => ''],
-            ['label' => 'prioridade', 'description' => 'Alterar prioridade da task', 'icon' => 'flag', 'action' => ''],
+            ['label' => 'classe', 'description' => 'Alterar classe de serviço da task', 'icon' => 'flag', 'action' => ''],
             ['label' => 'planejar', 'description' => 'Adicionar task ao plano de hoje', 'icon' => 'calendar-days', 'action' => ''],
         ];
     }
@@ -287,22 +287,28 @@ new class extends Component
     }
 
     /**
-     * Change the priority of a task.
+     * Change the service class of a task.
      */
-    private function changePriority(Activity $task, ?string $priorityValue): void
+    private function changeServiceClass(Activity $task, ?string $serviceClassValue): void
     {
-        $priority = ActivityPriority::tryFrom($priorityValue ?? '');
+        $serviceClass = ServiceClass::tryFrom($serviceClassValue ?? '');
 
-        if (! $priority) {
-            Flux::toast(variant: 'warning', heading: 'Prioridade inválida', text: 'Use: urgent, high, medium, low');
+        if (! $serviceClass) {
+            Flux::toast(variant: 'warning', heading: 'Classe de serviço inválida', text: 'Use: emergency, fixed_date, standard, intangible');
 
             return;
         }
 
-        $task->update(['priority' => $priority]);
+        try {
+            $task->update(['service_class' => $serviceClass]);
+        } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível alterar', text: $e->getMessage());
+
+            return;
+        }
 
         $this->dispatch('task-updated');
-        Flux::toast(variant: 'success', heading: 'Prioridade alterada', text: "{$task->title} → {$priority->label()}");
+        Flux::toast(variant: 'success', heading: 'Classe de serviço alterada', text: "{$task->title} → {$serviceClass->label()}");
     }
 
     /**
@@ -375,9 +381,9 @@ new class extends Component
                                     <span class="text-zinc-500">inbox, backlog, todo, doing, done</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <code class="text-emerald-400">> prioridade "task" urgent</code>
+                                    <code class="text-emerald-400">> classe "task" emergency</code>
                                     <span class="text-zinc-600">•</span>
-                                    <span class="text-zinc-500">urgent, high, medium, low</span>
+                                    <span class="text-zinc-500">emergency, fixed_date, standard, intangible</span>
                                 </div>
                             </div>
                         </div>
@@ -398,7 +404,7 @@ new class extends Component
                         <div class="px-4 py-6 text-center text-sm text-zinc-500">
                             Nenhum comando encontrado.
                             <div class="mt-2 text-xs">
-                                Comandos: <code>mover</code>, <code>timer</code>, <code>deletar</code>, <code>projeto</code>, <code>prioridade</code>, <code>planejar</code>
+                                Comandos: <code>mover</code>, <code>timer</code>, <code>deletar</code>, <code>projeto</code>, <code>classe</code>, <code>planejar</code>
                             </div>
                         </div>
                     @else

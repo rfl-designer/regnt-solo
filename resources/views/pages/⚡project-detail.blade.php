@@ -823,9 +823,9 @@ new class extends Component
                                                         {{ $task->derivedLabel() }}
                                                     </flux:badge>
 
-                                                    @if ($task->priority)
-                                                        <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
-                                                            {{ $task->priority->label() }}
+                                                    @if ($task->service_class)
+                                                        <flux:badge size="sm" color="{{ $task->service_class->color() }}" icon="{{ $task->service_class->icon() }}">
+                                                            {{ $task->service_class->label() }}
                                                         </flux:badge>
                                                     @endif
 
@@ -1062,9 +1062,9 @@ new class extends Component
                                     <flux:badge size="sm" color="{{ $task->status->color() }}" icon="{{ $task->status->icon() }}">
                                         {{ $task->status->label() }}
                                     </flux:badge>
-                                    @if ($task->priority)
-                                        <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
-                                            {{ $task->priority->label() }}
+                                    @if ($task->service_class)
+                                        <flux:badge size="sm" color="{{ $task->service_class->color() }}" icon="{{ $task->service_class->icon() }}">
+                                            {{ $task->service_class->label() }}
                                         </flux:badge>
                                     @endif
                                     @if ($task->isOverdue())

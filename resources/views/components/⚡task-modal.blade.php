@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
 use App\Enums\ActivityType;
 use App\Models\Activity;
 use App\Models\ActivityCommit;
@@ -27,7 +27,7 @@ new class extends Component
 
     public ?string $clientId = null;
 
-    public string $priority = 'medium';
+    public string $serviceClass = 'standard';
 
     public string $status = 'inbox';
 
@@ -112,7 +112,7 @@ new class extends Component
         $this->title = $task->title;
         $this->projectId = $task->project_id ? (string) $task->project_id : null;
         $this->clientId = $task->client_id ? (string) $task->client_id : null;
-        $this->priority = $task->priority->value;
+        $this->serviceClass = $task->service_class->value;
         $this->status = $task->status->value;
         $this->dueDate = $task->due_date?->format('Y-m-d');
         $this->estimatedMinutes = $task->estimated_minutes;
@@ -247,7 +247,7 @@ new class extends Component
             'title' => 'required|string|max:255',
             'projectId' => 'nullable|exists:projects,id',
             'clientId' => 'nullable|exists:clients,id',
-            'priority' => 'required|in:'.implode(',', array_column(ActivityPriority::cases(), 'value')),
+            'serviceClass' => 'required|in:'.implode(',', array_column(ServiceClass::cases(), 'value')),
             'status' => 'required|in:'.implode(',', array_column(ActivityStatus::cases(), 'value')),
             'dueDate' => 'nullable|date',
             'estimatedMinutes' => 'nullable|integer|min:1',
@@ -257,34 +257,40 @@ new class extends Component
 
         $newStatus = ActivityStatus::from($this->status);
 
-        if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
-            $task->update([
-                'title' => $this->title,
-                'project_id' => $this->projectId ? (int) $this->projectId : null,
-                'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
-                'priority' => $this->priority,
-                'due_date' => $this->dueDate ?: null,
-                'estimated_minutes' => $this->estimatedMinutes,
-                'pr_url' => $this->prUrl ?: null,
-                'session_prompt' => $this->sessionPrompt ?: null,
-                'session_result' => $this->sessionResult ?: null,
-            ]);
-            $task->markAsDone();
-            $this->status = ActivityStatus::Done->value;
-        } else {
-            $task->update([
-                'title' => $this->title,
-                'project_id' => $this->projectId ? (int) $this->projectId : null,
-                'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
-                'status' => $this->status,
-                'priority' => $this->priority,
-                'due_date' => $this->dueDate ?: null,
-                'estimated_minutes' => $this->estimatedMinutes,
-                'completed_at' => $newStatus === ActivityStatus::Done ? $task->completed_at : null,
-                'pr_url' => $this->prUrl ?: null,
-                'session_prompt' => $this->sessionPrompt ?: null,
-                'session_result' => $this->sessionResult ?: null,
-            ]);
+        try {
+            if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
+                $task->update([
+                    'title' => $this->title,
+                    'project_id' => $this->projectId ? (int) $this->projectId : null,
+                    'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
+                    'service_class' => $this->serviceClass,
+                    'due_date' => $this->dueDate ?: null,
+                    'estimated_minutes' => $this->estimatedMinutes,
+                    'pr_url' => $this->prUrl ?: null,
+                    'session_prompt' => $this->sessionPrompt ?: null,
+                    'session_result' => $this->sessionResult ?: null,
+                ]);
+                $task->markAsDone();
+                $this->status = ActivityStatus::Done->value;
+            } else {
+                $task->update([
+                    'title' => $this->title,
+                    'project_id' => $this->projectId ? (int) $this->projectId : null,
+                    'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
+                    'status' => $this->status,
+                    'service_class' => $this->serviceClass,
+                    'due_date' => $this->dueDate ?: null,
+                    'estimated_minutes' => $this->estimatedMinutes,
+                    'completed_at' => $newStatus === ActivityStatus::Done ? $task->completed_at : null,
+                    'pr_url' => $this->prUrl ?: null,
+                    'session_prompt' => $this->sessionPrompt ?: null,
+                    'session_result' => $this->sessionResult ?: null,
+                ]);
+            }
+        } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível salvar', text: $e->getMessage());
+
+            return;
         }
 
         foreach ($this->timeEntries as $entryData) {
@@ -340,7 +346,7 @@ new class extends Component
 
         $this->showDeleteConfirm = false;
         $this->showModal = false;
-        $this->reset('taskId', 'title', 'projectId', 'clientId', 'priority', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'editingPrUrl', 'activeTab', 'commits', 'sessionPrompt', 'sessionResult', 'projectDocuments');
+        $this->reset('taskId', 'title', 'projectId', 'clientId', 'serviceClass', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'editingPrUrl', 'activeTab', 'commits', 'sessionPrompt', 'sessionResult', 'projectDocuments');
 
         $this->dispatch('task-updated');
 
@@ -456,14 +462,20 @@ new class extends Component
                             </div>
                         </div>
 
-                        {{-- Priority --}}
-                        <flux:select wire:model="priority" label="Prioridade">
-                            @foreach (ActivityPriority::cases() as $p)
-                                <flux:select.option :value="$p->value">
-                                    {{ $p->label() }}
+                        {{-- Service Class --}}
+                        <flux:select wire:model="serviceClass" label="Classe de serviço">
+                            @foreach (ServiceClass::cases() as $sc)
+                                <flux:select.option :value="$sc->value">
+                                    {{ $sc->label() }}
                                 </flux:select.option>
                             @endforeach
                         </flux:select>
+
+                        @if ($serviceClass === \App\Enums\ServiceClass::FixedDate->value && !$dueDate)
+                            <flux:text size="sm" class="text-amber-400">
+                                Classificar como Data fixa exige uma data de vencimento.
+                            </flux:text>
+                        @endif
 
                         {{-- Status --}}
                         <flux:select wire:model="status" label="Status">

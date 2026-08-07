@@ -1,8 +1,8 @@
 <?php
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
+use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Models\Project;
 use App\Models\User;
@@ -30,7 +30,7 @@ test('can create a task with a simple title', function () {
         ->title->toBe('Minha nova tarefa')
         ->type->toBe(ActivityType::Task)
         ->status->toBe(ActivityStatus::Inbox)
-        ->priority->toBe(ActivityPriority::Medium)
+        ->service_class->toBe(ServiceClass::Standard)
         ->project_id->toBeNull()
         ->due_date->toBeNull();
 });
@@ -39,7 +39,7 @@ test('can create a task with full inline syntax', function () {
     $project = Project::factory()->create(['slug' => 'meu-projeto']);
 
     Livewire::test('task-quick-add')
-        ->set('rawInput', 'Revisar PR #meu-projeto !high @hoje')
+        ->set('rawInput', 'Revisar PR #meu-projeto !intangible @hoje')
         ->call('createTask');
 
     expect(Activity::count())->toBe(1);
@@ -48,7 +48,7 @@ test('can create a task with full inline syntax', function () {
     expect($task)
         ->title->toBe('Revisar PR')
         ->project_id->toBe($project->id)
-        ->priority->toBe(ActivityPriority::High)
+        ->service_class->toBe(ServiceClass::Intangible)
         ->due_date->toEqual(now()->startOfDay());
 });
 
@@ -145,13 +145,22 @@ test('can create task with date alias amanha', function () {
     expect($task->due_date)->toEqual(now()->addDay()->startOfDay());
 });
 
-test('can create task with priority urgent', function () {
+test('can create task with service class emergency', function () {
     Livewire::test('task-quick-add')
-        ->set('rawInput', 'Tarefa urgente !urgent')
+        ->set('rawInput', 'Tarefa urgente !emergency')
         ->call('createTask');
 
     $task = Activity::first();
-    expect($task->priority)->toBe(ActivityPriority::Urgent);
+    expect($task->service_class)->toBe(ServiceClass::Emergency);
+});
+
+test('invalid service class token falls back to standard with a toast', function () {
+    Livewire::test('task-quick-add')
+        ->set('rawInput', 'Tarefa qualquer !nao-existe')
+        ->call('createTask');
+
+    $task = Activity::first();
+    expect($task->service_class)->toBe(ServiceClass::Standard);
 });
 
 test('quick add creates session task with > prefix', function () {

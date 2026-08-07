@@ -209,16 +209,16 @@ test('weekly review shows stale tasks positive empty state', function () {
         ->assertSee('Todas as tasks tiveram progresso!');
 });
 
-test('weekly review shows task priority badge in completed tasks', function () {
+test('weekly review shows task service class badge in completed tasks', function () {
     Activity::withoutEvents(fn () => Activity::factory()->done()->create([
-        'title' => 'Task urgente',
-        'priority' => 'urgent',
+        'title' => 'Task emergencial',
+        'service_class' => 'emergency',
         'completed_at' => now()->startOfWeek()->addDay(),
     ]));
 
     Livewire::test('pages::weekly-review')
-        ->assertSee('Task urgente')
-        ->assertSee('Urgente');
+        ->assertSee('Task emergencial')
+        ->assertSee('Emergência');
 });
 
 test('weekly review shows task status badge in stale tasks', function () {

@@ -1,6 +1,8 @@
 <?php
 
+use App\Enums\ServiceClass;
 use App\Models\Activity;
+use App\Models\Project;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -83,7 +85,7 @@ test('kanban filters tasks due in next 30 days', function () {
 });
 
 test('kanban due date filter works with project filter', function () {
-    $project = \App\Models\Project::factory()->create();
+    $project = Project::factory()->create();
 
     Activity::factory()->issue()->todo()->create([
         'title' => 'Project task due today',
@@ -103,22 +105,22 @@ test('kanban due date filter works with project filter', function () {
         ->assertDontSee('Other task due today');
 });
 
-test('kanban due date filter works with priority filter', function () {
-    Activity::factory()->issue()->todo()->urgent()->create([
-        'title' => 'Urgent due today',
+test('kanban due date filter works with service class filter', function () {
+    Activity::factory()->issue()->todo()->emergency()->create([
+        'title' => 'Emergency due today',
         'due_date' => today(),
     ]);
     Activity::factory()->issue()->todo()->create([
-        'title' => 'Low due today',
+        'title' => 'Intangible due today',
         'due_date' => today(),
-        'priority' => \App\Enums\ActivityPriority::Low,
+        'service_class' => ServiceClass::Intangible,
     ]);
 
     Livewire::test('pages::kanban')
         ->set('filterDueDate', 'today')
-        ->set('filterPriority', \App\Enums\ActivityPriority::Urgent->value)
-        ->assertSee('Urgent due today')
-        ->assertDontSee('Low due today');
+        ->set('filterServiceClass', ServiceClass::Emergency->value)
+        ->assertSee('Emergency due today')
+        ->assertDontSee('Intangible due today');
 });
 
 test('kanban due date filter works with overdue filter', function () {

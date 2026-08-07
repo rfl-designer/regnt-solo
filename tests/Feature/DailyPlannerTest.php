@@ -162,13 +162,13 @@ test('daily planner shows project info on tasks', function () {
         ->assertSee('Projeto Alpha');
 });
 
-test('daily planner shows priority badges', function () {
+test('daily planner shows service class badges', function () {
     $plan = DailyPlan::factory()->today()->create();
-    $task = Activity::factory()->todo()->urgent()->create();
+    $task = Activity::factory()->todo()->emergency()->create();
     $plan->tasks()->attach($task, ['sort_order' => 0]);
 
     Livewire::test('pages::daily-planner')
-        ->assertSee('Urgente');
+        ->assertSee('Emergência');
 });
 
 test('daily planner can reorder tasks', function () {

@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
 use App\Models\User;
 
 beforeEach(function (): void {
@@ -60,14 +60,14 @@ describe('Color Legend Component', function (): void {
         }
     });
 
-    it('displays all priority labels in legend', function (): void {
+    it('displays all service class labels in legend', function (): void {
         $response = $this->get(route('dashboard'));
 
         $response->assertSuccessful();
 
-        // Verifica que todas as labels de prioridade estão disponíveis
-        foreach (ActivityPriority::cases() as $priority) {
-            $response->assertSee($priority->label());
+        // Verifica que todas as labels de classe de serviço estão disponíveis
+        foreach (ServiceClass::cases() as $serviceClass) {
+            $response->assertSee($serviceClass->label());
         }
     });
 });
@@ -95,17 +95,17 @@ describe('Enum Color Methods', function (): void {
             ->and($icon)->not->toBeEmpty();
     })->with(ActivityStatus::cases());
 
-    it('returns valid color for each task priority', function (ActivityPriority $priority): void {
-        $color = $priority->color();
+    it('returns valid color for each service class', function (ServiceClass $serviceClass): void {
+        $color = $serviceClass->color();
 
         expect($color)->toBeString()
             ->and($color)->not->toBeEmpty();
-    })->with(ActivityPriority::cases());
+    })->with(ServiceClass::cases());
 
-    it('returns valid icon for each task priority', function (ActivityPriority $priority): void {
-        $icon = $priority->icon();
+    it('returns valid icon for each service class', function (ServiceClass $serviceClass): void {
+        $icon = $serviceClass->icon();
 
         expect($icon)->toBeString()
             ->and($icon)->not->toBeEmpty();
-    })->with(ActivityPriority::cases());
+    })->with(ServiceClass::cases());
 });

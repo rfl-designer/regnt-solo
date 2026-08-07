@@ -476,9 +476,9 @@ new class extends Component
                                                 </div>
                                             @endif
 
-                                            @if ($task->priority)
-                                                <flux:badge size="sm" color="{{ $task->priority->color() }}">
-                                                    {{ $task->priority->label() }}
+                                            @if ($task->service_class)
+                                                <flux:badge size="sm" color="{{ $task->service_class->color() }}">
+                                                    {{ $task->service_class->label() }}
                                                 </flux:badge>
                                             @endif
 
@@ -628,8 +628,8 @@ new class extends Component
                                                     </div>
                                                 @endif
 
-                                                @if ($task->priority)
-                                                    <div class="size-2 rounded-full bg-{{ $task->priority->color() }}-500"></div>
+                                                @if ($task->service_class)
+                                                    <div class="size-2 rounded-full bg-{{ $task->service_class->color() }}-500"></div>
                                                 @endif
 
                                                 @if ($task->estimated_minutes)
@@ -684,8 +684,8 @@ new class extends Component
                                     <span class="text-xs text-zinc-400">{{ Str::limit($task->project->name, 15) }}</span>
                                 </div>
                             @endif
-                            @if ($task->priority)
-                                <flux:badge size="sm" color="{{ $task->priority->color() }}">{{ $task->priority->label() }}</flux:badge>
+                            @if ($task->service_class)
+                                <flux:badge size="sm" color="{{ $task->service_class->color() }}">{{ $task->service_class->label() }}</flux:badge>
                             @endif
                             @if ($task->estimated_minutes)
                                 <flux:badge size="sm" color="zinc">{{ $task->estimated_minutes }}m</flux:badge>

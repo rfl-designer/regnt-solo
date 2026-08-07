@@ -81,19 +81,19 @@ new class extends Component
             ['key' => 'validada', 'label' => 'Validada', 'icon' => 'check-badge', 'at' => $feature->spec_validada],
         ];
 
-        $currentIndex = match (true) {
-            $feature->isSpecPending() => 0,
-            $feature->spec_validada !== null => 3,
-            $feature->spec_entregue !== null => 2,
-            $feature->spec_aprovada !== null => 1,
-            $feature->spec_enviada !== null => 0,
-            default => -1,
-        };
+        // The lit step comes from Activity::specStage(), which walks the
+        // history in order. Inferring it from "which timestamps exist" would
+        // keep Validada lit on an Épico that was validated, reopened and
+        // delivered again — the date stays true, the stage does not.
+        $currentIndex = array_search($feature->specStage(), Activity::SPEC_STAGES, true);
+        $currentIndex = $currentIndex === false ? -1 : $currentIndex;
 
         return collect($steps)
             ->map(fn (array $step, int $index): array => [
                 ...$step,
-                'done' => $step['at'] !== null && $index !== $currentIndex,
+                // Only the steps already left behind are ticked. A date that
+                // sits *ahead* of the current stage is history, not progress.
+                'done' => $step['at'] !== null && $index < $currentIndex,
                 'current' => $index === $currentIndex,
             ])
             ->all();

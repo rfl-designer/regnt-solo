@@ -409,19 +409,83 @@ class Activity extends Model
     }
 
     /**
+     * The four stages, in order. The single source of truth for "which step
+     * is the Spec on" — the modal's timeline renders these, and nothing
+     * else may enumerate them.
+     *
+     * @var list<string>
+     */
+    public const array SPEC_STAGES = ['enviada', 'aprovada', 'entregue', 'validada'];
+
+    /**
+     * Which stage the Spec is *on right now*, or null when it has no
+     * lifecycle at all.
+     *
+     * This is decided by walking the history **in order**, not by asking
+     * which of the four timestamps exist. The difference is the whole point:
+     * the four dates are historical facts that never stop being true, so a
+     * Spec that was validated, reopened and delivered again has a validation
+     * date *and* a later delivery date, and reading "it has a validated
+     * date, therefore it is validated" would leave the last stage lit while
+     * the work is back in the client's hands.
+     *
+     * Order also settles the ties. `activity_status_changes.changed_at` only
+     * has second precision, so an approval and a re-send recorded in the
+     * same second are indistinguishable by timestamp; the ordering here is
+     * (changed_at, id), which is the sequence the moves actually happened
+     * in.
+     *
+     * Two moves are lifecycle events without producing a stage of their own,
+     * and both are handled after the walk: leaving Feito (reaberto) and
+     * leaving Aguardando validação backwards (rejeitado na validação) both
+     * put the Spec back on Aprovada, which is where "approved and being
+     * worked on" lives.
+     */
+    public function specStage(): ?string
+    {
+        $changes = $this->orderedStatusChanges();
+        $stage = null;
+
+        foreach ($changes as $change) {
+            $stage = match (true) {
+                $change->to_status === ActivityStatus::AwaitingApproval => 'enviada',
+                $change->from_status === ActivityStatus::AwaitingApproval
+                    && $change->to_status?->isAheadOf(ActivityStatus::AwaitingApproval) === true => 'aprovada',
+                $change->to_status === ActivityStatus::AwaitingValidation => 'entregue',
+                $change->to_status === ActivityStatus::Done => 'validada',
+                default => $stage,
+            };
+        }
+
+        $current = $changes->last()?->to_status;
+
+        // Reaberto, ou rejeitado na validação: a data continua no histórico,
+        // mas a Spec voltou a ser trabalho em andamento.
+        if ($stage === 'validada' && $current !== ActivityStatus::Done) {
+            return 'aprovada';
+        }
+
+        if ($stage === 'entregue'
+            && ! in_array($current, [ActivityStatus::AwaitingValidation, ActivityStatus::Done], true)) {
+            return 'aprovada';
+        }
+
+        return $stage;
+    }
+
+    /**
      * Whether the Spec is currently in the client's hands, waiting for a
-     * yes.
+     * yes — which is exactly "the stage it is on is Enviada".
      *
      * The question is asked against the **last** send, not the first: a
      * Spec that was approved, changed and sent again is pending once more,
-     * and its earlier approval no longer covers it. So the standing
-     * approval only counts when it came *after* the last send.
+     * and its earlier approval no longer covers it.
      *
      * This is what makes a reprovação read correctly too. Reproving sends
      * the Épico backwards (typically to Backlog) without producing an
-     * approval, so the last send stays unanswered and the Spec stays
-     * pending — asking only "is it sitting in Aguardando aprovação right
-     * now" would have called a reproved Spec approved.
+     * approval, so the last send is still the last lifecycle event and the
+     * Spec stays pending — asking only "is it sitting in Aguardando
+     * aprovação right now" would have called a reproved Spec approved.
      *
      * There is no hard lock behind this (that was the decision in #124):
      * children of an Épico in this state keep moving freely, they just
@@ -429,17 +493,16 @@ class Activity extends Model
      */
     public function isSpecPending(): bool
     {
-        $lastSentAt = $this->orderedStatusChanges()
-            ->last(fn (ActivityStatusChange $change): bool => $change->to_status === ActivityStatus::AwaitingApproval)
-            ?->changed_at;
+        return $this->specStage() === 'enviada';
+    }
 
-        if ($lastSentAt === null) {
-            return false;
-        }
-
-        $approvedAt = $this->spec_aprovada;
-
-        return $approvedAt === null || $approvedAt->lessThan($lastSentAt);
+    /**
+     * Whether the Spec is validated *and has stayed that way* — the only
+     * state in which its flow-efficiency window is closed.
+     */
+    public function isSpecValidated(): bool
+    {
+        return $this->specStage() === 'validada';
     }
 
     /**

@@ -2,6 +2,7 @@
 
 use App\Enums\ActivityStatus;
 use App\Models\Activity;
+use App\Models\ActivityStatusChange;
 use Carbon\Carbon;
 
 /**
@@ -154,4 +155,97 @@ test('a child of an Épico that never used the approval flow is never blocked', 
     $child = Activity::factory()->issue()->todo()->create(['parent_id' => $epic->id]);
 
     expect($child->isBlockedBySpecApproval())->toBeFalse();
+});
+
+test('an Épico that never entered Aguardando aprovação is deliberately not gated', function () {
+    // Documented decision (#124 / review of #146): the lifecycle only
+    // constrains an Épico once it has *started*. Treating "never sent" as
+    // "not approved" would gate every legacy Épico on the board — every
+    // slice of every plan made before the Spec lifecycle existed — behind
+    // an approval nobody was ever asked for.
+    $legacy = withSpecHistory(Activity::factory()->epic()->doing()->create(), [
+        [ActivityStatus::Backlog, '2026-07-01 09:00'],
+        [ActivityStatus::Todo, '2026-07-02 09:00'],
+        [ActivityStatus::Doing, '2026-07-03 09:00'],
+    ]);
+
+    expect($legacy->specStage())->toBeNull()
+        ->and($legacy->isSpecPending())->toBeFalse()
+        ->and($legacy->hasSpecLifecycle())->toBeFalse();
+});
+
+test('an approval and a re-send in the same second are ordered by the history, not by the clock', function (bool $approvalFirst) {
+    $epic = Activity::factory()->epic()->create();
+
+    ActivityStatusChange::query()->where('activity_id', $epic->id)->delete();
+
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $epic->id,
+        'to_status' => ActivityStatus::AwaitingApproval,
+        'changed_at' => Carbon::parse('2026-07-01 09:00:00'),
+    ]);
+
+    // Both recorded in the same second: `changed_at` cannot tell them
+    // apart, so only the insertion order can. Approval-then-resend leaves
+    // the Spec pending; resend-then-approval leaves it approved.
+    $moves = [
+        ['from' => ActivityStatus::AwaitingApproval, 'to' => ActivityStatus::Todo],
+        ['from' => ActivityStatus::Todo, 'to' => ActivityStatus::AwaitingApproval],
+    ];
+
+    foreach ($approvalFirst ? $moves : array_reverse($moves) as $move) {
+        ActivityStatusChange::factory()->create([
+            'activity_id' => $epic->id,
+            'from_status' => $move['from'],
+            'to_status' => $move['to'],
+            'changed_at' => Carbon::parse('2026-07-02 09:00:00'),
+        ]);
+    }
+
+    expect($epic->fresh()->isSpecPending())->toBe($approvalFirst);
+})->with([
+    'approval then re-send — still waiting on the client' => [true],
+    're-send then approval — answered' => [false],
+]);
+
+test('a validated Épico that is reopened goes back to being work in progress', function () {
+    $epic = withSpecHistory(Activity::factory()->epic()->doing()->create(), [
+        [ActivityStatus::AwaitingApproval, '2026-07-01 09:00'],
+        [ActivityStatus::Todo, '2026-07-02 09:00'],
+        [ActivityStatus::AwaitingValidation, '2026-07-04 09:00'],
+        [ActivityStatus::Done, '2026-07-05 09:00'],
+        [ActivityStatus::Doing, '2026-07-06 09:00'],
+    ]);
+
+    // The validation date is a fact and stays readable; the *stage* is not
+    // "validada" any more, because the work is open again.
+    expect($epic->spec_validada->toDateTimeString())->toBe('2026-07-05 09:00:00')
+        ->and($epic->specStage())->toBe('aprovada')
+        ->and($epic->isSpecValidated())->toBeFalse();
+});
+
+test('a reopened Épico delivered again is back on Entregue, not on Validada', function () {
+    $epic = withSpecHistory(Activity::factory()->epic()->awaitingValidation()->create(), [
+        [ActivityStatus::AwaitingApproval, '2026-07-01 09:00'],
+        [ActivityStatus::Todo, '2026-07-02 09:00'],
+        [ActivityStatus::AwaitingValidation, '2026-07-04 09:00'],
+        [ActivityStatus::Done, '2026-07-05 09:00'],
+        [ActivityStatus::Doing, '2026-07-06 09:00'],
+        [ActivityStatus::AwaitingValidation, '2026-07-08 09:00'],
+    ]);
+
+    expect($epic->specStage())->toBe('entregue')
+        ->and($epic->isSpecValidated())->toBeFalse();
+});
+
+test('a delivery rejected at validation goes back to Aprovada', function () {
+    $epic = withSpecHistory(Activity::factory()->epic()->doing()->create(), [
+        [ActivityStatus::AwaitingApproval, '2026-07-01 09:00'],
+        [ActivityStatus::Todo, '2026-07-02 09:00'],
+        [ActivityStatus::AwaitingValidation, '2026-07-04 09:00'],
+        [ActivityStatus::Doing, '2026-07-05 09:00'],
+    ]);
+
+    expect($epic->spec_entregue->toDateTimeString())->toBe('2026-07-04 09:00:00')
+        ->and($epic->specStage())->toBe('aprovada');
 });

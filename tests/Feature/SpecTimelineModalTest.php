@@ -122,3 +122,48 @@ test('a Spec never approved shows no efficiency at all', function () {
     expect($component->get('specEfficiency'))->toBeNull();
     $component->assertDontSee('Eficiência de fluxo');
 });
+
+test('a reopened Épico does not keep Validada lit', function (array $history, string $current) {
+    $epic = withSpecHistory(Activity::factory()->epic()->create(), $history);
+
+    $timeline = collect(
+        Livewire::test('feature-modal')->call('open', $epic->id)->get('specTimeline')
+    )->keyBy('key');
+
+    expect($timeline[$current]['current'])->toBeTrue()
+        // Exactly one step is lit — the timeline shows a state, not a set.
+        ->and($timeline->where('current', true)->count())->toBe(1)
+        // A date ahead of the current step is history, not progress.
+        ->and($timeline->where('done', true)->keys()->every(
+            fn (string $key) => array_search($key, Activity::SPEC_STAGES, true)
+                < array_search($current, Activity::SPEC_STAGES, true)
+        ))->toBeTrue();
+})->with([
+    'reaberto depois de validado' => [[
+        [ActivityStatus::AwaitingApproval, '2026-07-01 09:00'],
+        [ActivityStatus::Todo, '2026-07-02 09:00'],
+        [ActivityStatus::AwaitingValidation, '2026-07-03 09:00'],
+        [ActivityStatus::Done, '2026-07-04 09:00'],
+        [ActivityStatus::Doing, '2026-07-05 09:00'],
+    ], 'aprovada'],
+    'reaberto e reentregue' => [[
+        [ActivityStatus::AwaitingApproval, '2026-07-01 09:00'],
+        [ActivityStatus::Todo, '2026-07-02 09:00'],
+        [ActivityStatus::AwaitingValidation, '2026-07-03 09:00'],
+        [ActivityStatus::Done, '2026-07-04 09:00'],
+        [ActivityStatus::Doing, '2026-07-05 09:00'],
+        [ActivityStatus::AwaitingValidation, '2026-07-06 09:00'],
+    ], 'entregue'],
+    'rejeitado na validação' => [[
+        [ActivityStatus::AwaitingApproval, '2026-07-01 09:00'],
+        [ActivityStatus::Todo, '2026-07-02 09:00'],
+        [ActivityStatus::AwaitingValidation, '2026-07-03 09:00'],
+        [ActivityStatus::Doing, '2026-07-04 09:00'],
+    ], 'aprovada'],
+    'reprovado depois de aprovado' => [[
+        [ActivityStatus::AwaitingApproval, '2026-07-01 09:00'],
+        [ActivityStatus::Todo, '2026-07-02 09:00'],
+        [ActivityStatus::AwaitingApproval, '2026-07-03 09:00'],
+        [ActivityStatus::Backlog, '2026-07-04 09:00'],
+    ], 'enviada'],
+]);

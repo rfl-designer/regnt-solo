@@ -489,12 +489,17 @@ class FlowMetricsService
             return null;
         }
 
-        $end = $epic->spec_validada;
-        $open = $end === null || $end->lessThan($start);
-
-        if ($open) {
-            $end = now();
-        }
+        // The window closes on the validation only while the Spec is
+        // *still* validated. A validated Épico that was reopened — or
+        // delivered again after being rejected — has a validation date in
+        // its past and live work in its present, and closing on that stale
+        // date would throw away every hour since it and every day of the
+        // wait that is running right now. {@see Activity::specStage()} is
+        // what tells the two apart, by walking the history in order rather
+        // than asking which timestamps exist.
+        $validatedAt = $epic->isSpecValidated() ? $epic->spec_validada : null;
+        $open = $validatedAt === null || $validatedAt->lessThan($start);
+        $end = $open ? now() : $validatedAt;
 
         $windowMinutes = max(0.0, $start->floatDiffInMinutes($end));
 
@@ -562,11 +567,31 @@ class FlowMetricsService
             fn (ActivityStatus $status): bool => $status->isClientWaiting(),
         ));
 
+        $waitingValues = array_map(fn (ActivityStatus $status): string => $status->value, $statuses);
+
+        // Only the activities that can possibly contribute to *this* window.
+        // Reading every activity that has ever waited would grow the cost of
+        // a 30-day question with the whole history of the board.
+        //
+        // Two ways in, and both are needed. A wait that started or ended
+        // inside the window leaves a change inside it — hence the
+        // `from_status` half, which is what catches a wait that began before
+        // the window and was answered during it. A wait that began before
+        // the window and is *still* open leaves no change inside it at all,
+        // and is caught by the activity sitting in the status right now.
         $candidateIds = ActivityStatusChange::query()
-            ->whereIn('to_status', array_map(fn (ActivityStatus $s): string => $s->value, $statuses))
+            ->where('changed_at', '>=', $windowStart)
+            ->where(fn ($query) => $query
+                ->whereIn('to_status', $waitingValues)
+                ->orWhereIn('from_status', $waitingValues))
             ->distinct()
             ->pluck('activity_id')
             ->all();
+
+        $candidateIds = array_values(array_unique(array_merge(
+            $candidateIds,
+            Activity::query()->whereIn('status', $waitingValues)->pluck('id')->all(),
+        )));
 
         if ($candidateIds === []) {
             return collect();

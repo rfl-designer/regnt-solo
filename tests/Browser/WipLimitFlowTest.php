@@ -66,6 +66,82 @@ function dropCardScript(int $id, string $column): string
     JS;
 }
 
+/**
+ * The classes on the "n/2" badge. The colour is the whole point of the
+ * indicator — red is what says "full" at a glance — so it is read off the
+ * rendered element rather than trusted from the component method.
+ */
+function wipBadgeClassScript(): string
+{
+    return <<<'JS'
+    (() => {
+        const badge = Array.from(document.querySelectorAll('*'))
+            .find(el => el.children.length === 0 && /^\d+\/\d+$/.test(el.textContent.trim()));
+
+        return badge ? badge.className : 'not-rendered';
+    })()
+    JS;
+}
+
+/**
+ * The motivo travels with the Emergência card inside its badge tooltip,
+ * which Flux renders into a `<ui-tooltip data-flux-tooltip>` that stays
+ * hidden until hover — so it is read from the DOM, not from visible text.
+ */
+function emergencyTooltipTextScript(): string
+{
+    return <<<'JS'
+    (() => Array.from(document.querySelectorAll('[data-flux-tooltip]'))
+        .map(el => el.textContent.replace(/\s+/g, ' ').trim())
+        .join(' | '))()
+    JS;
+}
+
+test('the Fazendo header counts toward the limit and only turns red once it is full', function (): void {
+    Activity::factory()->issue()->doing()->create();
+
+    $page = visit('/kanban')
+        ->assertNoJavaScriptErrors()
+        ->assertSee('1/2');
+
+    // Below the limit the badge keeps the column's own colour.
+    expect($page->script(wipBadgeClassScript()))
+        ->toContain(ActivityStatus::Doing->color())
+        ->not->toContain('red');
+
+    Activity::factory()->issue()->doing()->create();
+
+    $page = visit('/kanban')
+        ->assertNoJavaScriptErrors()
+        ->assertSee('2/2');
+
+    expect($page->script(wipBadgeClassScript()))->toContain('red');
+});
+
+test('the Fazendo header stays red at 3/2 when an Emergência has furado o limite', function (): void {
+    Activity::factory()->issue()->doing()->count(2)->create();
+    Activity::factory()->issue()->doing()->emergency('Produção fora do ar')->create();
+
+    $page = visit('/kanban')
+        ->assertNoJavaScriptErrors()
+        ->assertSee('3/2');
+
+    expect($page->script(wipBadgeClassScript()))->toContain('red');
+});
+
+test('an Emergência card carries its motivo in the badge tooltip', function (): void {
+    Activity::factory()->issue()->todo()->emergency('Cliente parado desde ontem')->create([
+        'title' => 'Incêndio com motivo no card',
+    ]);
+
+    $page = visit('/kanban')
+        ->assertNoJavaScriptErrors()
+        ->assertSee('Incêndio com motivo no card')
+        ->assertSee('Emergência');
+
+    expect($page->script(emergencyTooltipTextScript()))->toContain('Cliente parado desde ontem');
+});
+
 test('a card refused by the WIP limit comes back to its column and the user is told why', function (): void {
     Activity::factory()->issue()->doing()->count(2)->create();
     $third = Activity::factory()->issue()->todo()->create(['title' => 'Terceiro item do board']);

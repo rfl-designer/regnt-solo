@@ -159,6 +159,7 @@
         <livewire:project-form />
         <livewire:timer-notes-modal />
         <livewire:waiting-for-modal />
+        <livewire:emergency-modal />
 
         {{-- flux:toast.group stacks multiple toasts fired in the same
              request instead of the last one silently replacing the first

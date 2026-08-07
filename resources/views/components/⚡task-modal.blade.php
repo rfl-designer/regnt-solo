@@ -9,6 +9,7 @@ use App\Models\Client;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use Flux\Flux;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -52,6 +53,24 @@ new class extends Component
     public int $waitingDays = 0;
 
     public bool $showWaitingForPrompt = false;
+
+    public string $emergencyReason = '';
+
+    /**
+     * Whether the blocking "por que isso é uma Emergência?" field is being
+     * shown. The Task Modal collects the motivo inline rather than stacking
+     * the shared emergency modal on top of an already-open modal.
+     */
+    public bool $showEmergencyReasonPrompt = false;
+
+    /**
+     * The Emergência already holding the board's single slot, when this
+     * save collided with it — renders the blocking "Manter a atual /
+     * Substituir" choice.
+     *
+     * @var array{id: int, title: string, reason: string|null, age_in_days: int}|null
+     */
+    public ?array $emergencyConflict = null;
 
     public ?string $dueDate = null;
 
@@ -236,6 +255,9 @@ new class extends Component
         $this->waitingForTouched = false;
         $this->waitingDays = $task->waitingDays();
         $this->showWaitingForPrompt = false;
+        $this->emergencyReason = $task->emergency_reason ?? '';
+        $this->showEmergencyReasonPrompt = false;
+        $this->emergencyConflict = null;
         $this->dueDate = $task->due_date?->format('Y-m-d');
         $this->estimatedMinutes = $task->estimated_minutes;
 
@@ -390,6 +412,17 @@ new class extends Component
 
         $this->showWaitingForPrompt = false;
 
+        // An Emergência always needs a motivo. Block the save and reveal the
+        // field instead of letting the domain guard refuse a save the user
+        // can't fix from here.
+        if ($this->serviceClass === ServiceClass::Emergency->value && trim($this->emergencyReason) === '') {
+            $this->showEmergencyReasonPrompt = true;
+
+            return;
+        }
+
+        $this->showEmergencyReasonPrompt = false;
+
         try {
             if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
                 $task->update([
@@ -397,6 +430,7 @@ new class extends Component
                     'project_id' => $this->projectId ? (int) $this->projectId : null,
                     'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
                     'service_class' => $this->serviceClass,
+                    'emergency_reason' => $this->emergencyReason ?: null,
                     'waiting_for' => $this->waitingFor ?: null,
                     'due_date' => $this->dueDate ?: null,
                     'estimated_minutes' => $this->estimatedMinutes,
@@ -417,6 +451,7 @@ new class extends Component
                     'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
                     'status' => $this->status,
                     'service_class' => $this->serviceClass,
+                    'emergency_reason' => $this->emergencyReason ?: null,
                     'waiting_for' => $this->waitingFor ?: null,
                     'due_date' => $this->dueDate ?: null,
                     'estimated_minutes' => $this->estimatedMinutes,
@@ -432,6 +467,12 @@ new class extends Component
                 $this->waitingForTouched = false;
                 $this->waitingDays = $task->waitingDays();
             }
+        } catch (\App\Exceptions\SingleActiveEmergencyException $e) {
+            // Blocking choice, not a toast: the user has to say which of the
+            // two is the Emergência before anything is written.
+            $this->emergencyConflict = $e->activeEmergencyContext();
+
+            return;
         } catch (\App\Exceptions\WaitingRequiresWaitingForException $e) {
             Flux::toast(variant: 'danger', heading: 'Não foi possível salvar', text: $e->getMessage());
 
@@ -440,7 +481,13 @@ new class extends Component
             Flux::toast(variant: 'danger', heading: 'Não foi possível salvar', text: $e->getMessage());
 
             return;
+        } catch (\App\Exceptions\DoingWipLimitExceededException $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível salvar', text: $e->getMessage());
+
+            return;
         }
+
+        $this->emergencyConflict = null;
 
         foreach ($this->timeEntries as $entryData) {
             $entry = TimeEntry::find($entryData['id']);
@@ -463,6 +510,48 @@ new class extends Component
         $this->dispatch('task-updated');
 
         Flux::toast(variant: 'success', heading: 'Task salva', text: $this->title);
+    }
+
+    /**
+     * Keep the Emergência that already holds the board's slot: this task
+     * falls back to the classification it had, and the save is retried so
+     * the user's other edits aren't lost.
+     */
+    public function keepCurrentEmergency(): void
+    {
+        $task = Activity::findOrFail($this->taskId);
+
+        $this->serviceClass = $task->service_class->value;
+        $this->emergencyReason = $task->emergency_reason ?? '';
+        $this->emergencyConflict = null;
+
+        $this->saveTask();
+    }
+
+    /**
+     * Replace the current Emergência with this task: demote the active one
+     * first, then let the normal save promote this one. Chained on purpose
+     * — the promotion is only attempted once the demotion is actually
+     * saved, and both share a transaction so the board is never left
+     * without the Emergência the user meant to have.
+     */
+    public function replaceEmergency(): void
+    {
+        $conflictId = $this->emergencyConflict['id'] ?? null;
+
+        if ($conflictId === null) {
+            return;
+        }
+
+        DB::transaction(function () use ($conflictId): void {
+            Activity::findOrFail($conflictId)->update([
+                'service_class' => ServiceClass::Standard,
+            ]);
+        });
+
+        $this->emergencyConflict = null;
+
+        $this->saveTask();
     }
 
     public function deleteTimeEntry(int $entryId): void
@@ -495,7 +584,7 @@ new class extends Component
 
         $this->showDeleteConfirm = false;
         $this->showModal = false;
-        $this->reset('taskId', 'title', 'projectId', 'clientId', 'serviceClass', 'status', 'originalStatus', 'waitingFor', 'waitingForTouched', 'waitingDays', 'showWaitingForPrompt', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'editingPrUrl', 'activeTab', 'commits', 'sessionPrompt', 'sessionResult', 'projectDocuments');
+        $this->reset('taskId', 'title', 'projectId', 'clientId', 'serviceClass', 'status', 'originalStatus', 'waitingFor', 'waitingForTouched', 'waitingDays', 'showWaitingForPrompt', 'emergencyReason', 'showEmergencyReasonPrompt', 'emergencyConflict', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'editingPrUrl', 'activeTab', 'commits', 'sessionPrompt', 'sessionResult', 'projectDocuments');
 
         $this->dispatch('task-updated');
 
@@ -654,6 +743,56 @@ new class extends Component
                                 @endif
                             </div>
                         @endif
+
+                        {{-- Emergência: motivo obrigatório + conflito com a
+                             Emergência que já ocupa a vaga do board. Shown via
+                             Alpine off the select's live client-side value, so
+                             the mandatory field appears the instant Emergência
+                             is picked — without a server round trip on every
+                             change of classification. --}}
+                        <div x-show="$wire.serviceClass === '{{ \App\Enums\ServiceClass::Emergency->value }}'" x-cloak class="sm:col-span-2">
+                            <div class="space-y-3">
+                                <flux:textarea
+                                    wire:model="emergencyReason"
+                                    label="Motivo da Emergência"
+                                    placeholder="Ex: produção fora do ar, cliente parado, prazo legal hoje..."
+                                    rows="2"
+                                />
+
+                                @if ($showEmergencyReasonPrompt)
+                                    <flux:text size="sm" class="text-amber-400">
+                                        {{ \App\Exceptions\EmergencyRequiresReasonException::MESSAGE }}
+                                    </flux:text>
+                                @endif
+
+                                @if ($emergencyConflict)
+                                    <div class="rounded-lg border border-red-500/20 bg-zinc-800/50 p-3">
+                                        <div class="flex items-start gap-2">
+                                            <flux:icon name="fire" class="mt-0.5 size-4 shrink-0 text-red-400" />
+                                            <div class="min-w-0 flex-1">
+                                                <p class="text-sm font-medium text-zinc-200">Já existe uma Emergência ativa</p>
+                                                <p class="mt-1 truncate text-sm text-zinc-300">{{ $emergencyConflict['title'] }}</p>
+                                                @if ($emergencyConflict['reason'])
+                                                    <p class="mt-1 text-xs text-zinc-400">{{ $emergencyConflict['reason'] }}</p>
+                                                @endif
+                                                <p class="mt-1 text-xs text-zinc-500">
+                                                    Emergência há {{ $emergencyConflict['age_in_days'] }} {{ $emergencyConflict['age_in_days'] === 1 ? 'dia' : 'dias' }}
+                                                </p>
+
+                                                <div class="mt-3 flex gap-2">
+                                                    <flux:button wire:click="keepCurrentEmergency" size="sm" variant="ghost">
+                                                        Manter a atual
+                                                    </flux:button>
+                                                    <flux:button wire:click="replaceEmergency" size="sm" variant="danger">
+                                                        Substituir
+                                                    </flux:button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
                     </div>
 
                     {{-- Estimated Minutes --}}

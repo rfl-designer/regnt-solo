@@ -98,6 +98,16 @@ new class extends Component
 
         $newServiceClass = ServiceClass::from($serviceClass);
 
+        // Classifying as Emergência needs a motivo, and may need a decision
+        // about the Emergência already holding the board's single slot —
+        // both are collected by the blocking modal, which then performs the
+        // write itself.
+        if ($newServiceClass === ServiceClass::Emergency) {
+            $this->dispatch('open-emergency-modal', taskId: $task->id);
+
+            return;
+        }
+
         try {
             $task->update(['service_class' => $newServiceClass]);
         } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
@@ -149,18 +159,36 @@ new class extends Component
             $updateData['completed_at'] = now();
         }
 
+        $count = 0;
+        $refusal = null;
+
+        // Moved one by one so a refusal (WIP limit on Fazendo, waiting
+        // guard) stops only the task it applies to: the ones that fit still
+        // move, and the user is told once why the rest didn't.
         Activity::inbox()
             ->whereIn('id', $this->selectedTasks)
             ->get()
-            ->each(fn (Activity $task) => $task->update($updateData));
+            ->each(function (Activity $task) use ($updateData, &$count, &$refusal): void {
+                try {
+                    $task->update($updateData);
+                    $count++;
+                } catch (\App\Exceptions\DoingWipLimitExceededException|\App\Exceptions\WaitingRequiresWaitingForException $e) {
+                    $refusal ??= $e->getMessage();
+                }
+            });
 
-        $count = count($this->selectedTasks);
         $this->selectedTasks = [];
 
         unset($this->tasks);
         $this->dispatch('task-moved');
 
-        Flux::toast(variant: 'success', heading: "{$count} tasks movidas", text: "Para: {$newStatus->label()}");
+        if ($refusal !== null) {
+            Flux::toast(variant: 'danger', heading: 'Nem todas foram movidas', text: $refusal);
+        }
+
+        if ($count > 0) {
+            Flux::toast(variant: 'success', heading: "{$count} tasks movidas", text: "Para: {$newStatus->label()}");
+        }
     }
 
     public function confirmBulkDelete(): void
@@ -203,7 +231,13 @@ new class extends Component
             $updateData['completed_at'] = now();
         }
 
-        $task->update($updateData);
+        try {
+            $task->update($updateData);
+        } catch (\App\Exceptions\DoingWipLimitExceededException|\App\Exceptions\WaitingRequiresWaitingForException $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível mover', text: $e->getMessage());
+
+            return;
+        }
 
         unset($this->tasks);
 
@@ -312,7 +346,7 @@ new class extends Component
                 'estimate' => $task->update(['status' => ActivityStatus::Todo]),
                 default => null,
             };
-        } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
+        } catch (\App\Exceptions\FixedDateRequiresDueDateException|\App\Exceptions\SingleActiveEmergencyException|\App\Exceptions\DoingWipLimitExceededException $e) {
             Flux::toast(variant: 'danger', heading: 'Não foi possível aplicar', text: $e->getMessage());
 
             return;
@@ -337,10 +371,20 @@ new class extends Component
 
         $serviceClassEnum = $serviceClass ? ServiceClass::tryFrom($serviceClass) : null;
 
-        $task->update([
+        $updates = [
             'status' => ActivityStatus::Todo,
             'service_class' => $serviceClassEnum ?? $task->service_class,
-        ]);
+        ];
+
+        // An Emergência always needs a motivo (issue #143). When the AI is
+        // the one suggesting the classification, its own justification for
+        // the suggestion is the motivo — recorded verbatim so the card says
+        // who decided and why.
+        if ($serviceClassEnum === ServiceClass::Emergency) {
+            $updates['emergency_reason'] = $suggestion['reason'] ?? 'Sugerido pelo assistente de IA.';
+        }
+
+        $task->update($updates);
     }
 
     /**

@@ -199,13 +199,20 @@ new class extends Component
             Flux::toast(variant: 'warning', heading: 'Classe de serviço inválida', text: "\"!{$serviceClass}\" não é uma classe válida. Task criada como Padrão.");
         }
 
+        // "!emergency" can't be applied inline: an Emergência needs a motivo
+        // and may collide with the one already on the board. Quick-Add has
+        // no field for either, so the task is created as Padrão and the
+        // blocking Emergência modal takes over from there — same checkpoint
+        // the Inbox and the Command Palette defer to.
+        $wantsEmergency = $taskServiceClass === ServiceClass::Emergency;
+
         try {
-            Activity::create([
+            $task = Activity::create([
                 'type' => ActivityType::Task,
                 'title' => $title,
                 'project_id' => $projectId,
                 'status' => $taskStatus,
-                'service_class' => $taskServiceClass ?? ServiceClass::Standard,
+                'service_class' => $wantsEmergency ? ServiceClass::Standard : ($taskServiceClass ?? ServiceClass::Standard),
                 'due_date' => $dueDate,
                 'session_prompt' => $sessionPrompt,
             ]);
@@ -219,6 +226,10 @@ new class extends Component
         Flux::toast(variant: 'success', heading: 'Task criada', text: "{$title} → {$statusLabel}");
 
         $this->dispatch('task-created');
+
+        if ($wantsEmergency) {
+            $this->dispatch('open-emergency-modal', taskId: $task->id);
+        }
 
         $this->reset('rawInput', 'selectedProjectId', 'selectedServiceClass', 'selectedDueDate', 'activePrefix', 'prefixSearch', 'isSessionMode', 'sessionPromptInput', 'initialStatus');
 

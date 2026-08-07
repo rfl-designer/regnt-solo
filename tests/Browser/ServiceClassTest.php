@@ -2,6 +2,7 @@
 
 use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
+use App\Exceptions\EmergencyRequiresReasonException;
 use App\Models\Activity;
 use App\Models\User;
 
@@ -46,7 +47,7 @@ test('task modal persists a new service class', function () use ($serviceClassSe
         ->click('Task para reclassificar')
         ->waitForText('Classe de serviço')
         ->assertSelected($serviceClassSelect, ServiceClass::Standard->value)
-        ->select($serviceClassSelect, ServiceClass::Emergency->value)
+        ->select($serviceClassSelect, ServiceClass::Intangible->value)
         ->click('Salvar')
         // The save round trip has no unique text of its own (every service
         // class label already sits in the filter select), so settle the
@@ -54,7 +55,34 @@ test('task modal persists a new service class', function () use ($serviceClassSe
         ->wait(1)
         ->assertNoJavaScriptErrors();
 
-    expect($task->fresh()->service_class)->toBe(ServiceClass::Emergency);
+    expect($task->fresh()->service_class)->toBe(ServiceClass::Intangible);
+});
+
+test('task modal blocks classifying as Emergência until a motivo is typed (issue #143)', function () use ($serviceClassSelect): void {
+    $task = Activity::factory()->issue()->create([
+        'title' => 'Task que virou incêndio',
+        'status' => ActivityStatus::Todo,
+        'service_class' => ServiceClass::Standard,
+    ]);
+
+    $page = visit('/kanban')
+        ->assertNoJavaScriptErrors()
+        ->click('Task que virou incêndio')
+        ->waitForText('Classe de serviço')
+        ->select($serviceClassSelect, ServiceClass::Emergency->value)
+        ->waitForText('Motivo da Emergência')
+        ->click('Salvar')
+        ->waitForText(EmergencyRequiresReasonException::MESSAGE);
+
+    expect($task->fresh()->service_class)->toBe(ServiceClass::Standard);
+
+    $page->fill('textarea[wire\\:model="emergencyReason"]', 'Produção fora do ar')
+        ->click('Salvar')
+        ->wait(1)
+        ->assertNoJavaScriptErrors();
+
+    expect($task->fresh()->service_class)->toBe(ServiceClass::Emergency)
+        ->and($task->fresh()->emergency_reason)->toBe('Produção fora do ar');
 });
 
 test('task modal refuses data fixa without a due date and shows the PT-BR error', function () use ($serviceClassSelect): void {

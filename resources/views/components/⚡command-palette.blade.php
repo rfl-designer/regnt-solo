@@ -240,7 +240,7 @@ new class extends Component
             } else {
                 $task->update(['status' => $status, 'completed_at' => null]);
             }
-        } catch (WaitingRequiresWaitingForException $e) {
+        } catch (WaitingRequiresWaitingForException|\App\Exceptions\DoingWipLimitExceededException $e) {
             Flux::toast(variant: 'danger', heading: 'Não foi possível mover', text: $e->getMessage());
 
             return;
@@ -317,6 +317,15 @@ new class extends Component
 
         if (! $serviceClass) {
             Flux::toast(variant: 'warning', heading: 'Classe de serviço inválida', text: 'Use: emergency, fixed_date, standard, intangible');
+
+            return;
+        }
+
+        // Emergência needs a motivo, and possibly a decision about the one
+        // already holding the board's slot — same blocking modal every other
+        // surface defers to, rather than a refusal the palette can't resolve.
+        if ($serviceClass === ServiceClass::Emergency) {
+            $this->dispatch('open-emergency-modal', taskId: $task->id);
 
             return;
         }

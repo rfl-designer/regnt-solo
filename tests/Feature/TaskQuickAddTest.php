@@ -145,13 +145,19 @@ test('can create task with date alias amanha', function () {
     expect($task->due_date)->toEqual(now()->addDay()->startOfDay());
 });
 
-test('can create task with service class emergency', function () {
+test('!emergency creates the task as padrão and defers to the blocking emergency modal', function () {
     Livewire::test('task-quick-add')
         ->set('rawInput', 'Tarefa urgente !emergency')
-        ->call('createTask');
+        ->call('createTask')
+        ->assertDispatched('open-emergency-modal');
 
     $task = Activity::first();
-    expect($task->service_class)->toBe(ServiceClass::Emergency);
+
+    // Quick-Add has no field for the motivo (nor for resolving a clash with
+    // the Emergência already on the board), so it hands both questions to
+    // the modal rather than classifying blind.
+    expect($task->service_class)->toBe(ServiceClass::Standard)
+        ->and($task->emergency_reason)->toBeNull();
 });
 
 test('invalid service class token falls back to standard with a toast', function () {

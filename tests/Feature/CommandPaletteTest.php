@@ -123,10 +123,20 @@ test('command classe changes task service class', function () {
     $task = Activity::factory()->create(['service_class' => ServiceClass::Intangible]);
 
     Livewire::test('command-palette')
-        ->call('executeCommand', 'classe:'.$task->id.':emergency');
+        ->call('executeCommand', 'classe:'.$task->id.':standard');
 
     $task->refresh();
-    expect($task->service_class)->toBe(ServiceClass::Emergency);
+    expect($task->service_class)->toBe(ServiceClass::Standard);
+});
+
+test('command classe emergency defers to the blocking emergency modal instead of classifying blind', function () {
+    $task = Activity::factory()->create(['service_class' => ServiceClass::Intangible]);
+
+    Livewire::test('command-palette')
+        ->call('executeCommand', 'classe:'.$task->id.':emergency')
+        ->assertDispatched('open-emergency-modal', taskId: $task->id);
+
+    expect($task->fresh()->service_class)->toBe(ServiceClass::Intangible);
 });
 
 test('command planejar adds task to today plan', function () {

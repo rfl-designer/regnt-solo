@@ -20,17 +20,18 @@ test('the migration adds archived_at to activities', function () {
 });
 
 test('getOrCreateForDate returns one record per day', function () {
-    $first = MorningRitual::getOrCreateForDate(today());
-    $second = MorningRitual::getOrCreateForDate(today());
+    $first = MorningRitual::getOrCreateForDate(MorningRitual::businessToday());
+    $second = MorningRitual::getOrCreateForDate(MorningRitual::businessToday());
 
     expect($second->id)->toBe($first->id)
         ->and(MorningRitual::query()->count())->toBe(1);
 });
 
 test('completing the ritual stamps the timestamp and keeps the notes', function () {
-    $this->travelTo('2026-08-07 08:30:00');
+    // 11:30 UTC = 08:30 em America/Recife, o fuso de negócio (issue #147).
+    $this->travelTo('2026-08-07 11:30:00');
 
-    $ritual = MorningRitual::getOrCreateForDate(today())->complete('Comecei pelo que estava esperando.');
+    $ritual = MorningRitual::getOrCreateForDate(MorningRitual::businessToday())->complete('Comecei pelo que estava esperando.');
 
     expect($ritual->isCompleted())->toBeTrue()
         ->and($ritual->completedAtLabel())->toBe('08:30')
@@ -39,10 +40,10 @@ test('completing the ritual stamps the timestamp and keeps the notes', function 
 });
 
 test('the first completion of the day is the one that counts', function () {
-    $this->travelTo('2026-08-07 08:30:00');
-    $ritual = MorningRitual::getOrCreateForDate(today())->complete('primeira');
+    $this->travelTo('2026-08-07 11:30:00'); // 08:30 local
+    $ritual = MorningRitual::getOrCreateForDate(MorningRitual::businessToday())->complete('primeira');
 
-    $this->travelTo('2026-08-07 17:45:00');
+    $this->travelTo('2026-08-07 20:45:00'); // 17:45 local, mesmo dia
     $ritual->complete('segunda passada');
 
     expect($ritual->fresh()->completedAtLabel())->toBe('08:30')
@@ -50,7 +51,7 @@ test('the first completion of the day is the one that counts', function () {
 });
 
 test('blank notes are stored as null rather than an empty string', function () {
-    $ritual = MorningRitual::getOrCreateForDate(today())->complete('   ');
+    $ritual = MorningRitual::getOrCreateForDate(MorningRitual::businessToday())->complete('   ');
 
     expect($ritual->notes)->toBeNull();
 });
@@ -58,7 +59,7 @@ test('blank notes are stored as null rather than an empty string', function () {
 test('completedToday is false while the day has no concluded ritual', function () {
     expect(MorningRitual::completedToday())->toBeFalse();
 
-    MorningRitual::getOrCreateForDate(today());
+    MorningRitual::getOrCreateForDate(MorningRitual::businessToday());
 
     expect(MorningRitual::completedToday())->toBeFalse();
 });

@@ -199,7 +199,7 @@ test('step 5 refuses to pull past the WIP limit', function () {
 // ── Tela final — o registro ──────────────────────────────────────────────
 
 test('concluding the last screen records the ritual with optional notes', function () {
-    $this->travelTo('2026-08-07 08:15:00');
+    $this->travelTo('2026-08-07 11:15:00'); // 08:15 local
 
     Livewire::test('pages::morning-ritual')
         ->set('step', 6)
@@ -222,10 +222,10 @@ test('the ritual can be concluded without notes', function () {
 });
 
 test('reopening on the same day says "já concluído às HH:MM"', function () {
-    $this->travelTo('2026-08-07 08:15:00');
+    $this->travelTo('2026-08-07 11:15:00'); // 08:15 local
     Livewire::test('pages::morning-ritual')->set('step', 6)->call('completeRitual');
 
-    $this->travelTo('2026-08-07 15:00:00');
+    $this->travelTo('2026-08-07 18:00:00'); // 15:00 local, mesmo dia
 
     Livewire::test('pages::morning-ritual')
         ->assertSee('Já concluído às 08:15')
@@ -253,7 +253,7 @@ test('the wizard walks the five steps plus the record screen', function () {
 test('the sidebar badge shows only while today\'s ritual is unfinished', function () {
     Livewire::test('ritual-badge')->assertSee('hoje');
 
-    MorningRitual::getOrCreateForDate(today())->complete(null);
+    MorningRitual::getOrCreateForDate(MorningRitual::businessToday())->complete(null);
 
     Livewire::test('ritual-badge')->assertDontSee('hoje');
 });

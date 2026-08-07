@@ -43,7 +43,10 @@ class GetRitualStatusTool extends Tool
         $ritual = MorningRitual::today();
 
         $payload = [
-            'date' => today()->toDateString(),
+            // O dia do ritual é o dia do usuário, não o dia UTC: em UTC-3 o
+            // dia UTC vira às 21h, e um cliente MCP consultado às 22h leria
+            // "ainda não fez o ritual de amanhã".
+            'date' => MorningRitual::businessToday()->toDateString(),
             'completed' => $ritual?->isCompleted() ?? false,
             'completed_at' => $ritual?->completed_at?->toDateTimeString(),
             'completed_at_label' => $ritual?->completedAtLabel(),

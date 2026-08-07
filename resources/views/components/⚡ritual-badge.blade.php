@@ -30,7 +30,12 @@ new class extends Component
 
 ?>
 
-<span>
+{{-- O poll de baixa frequência existe por causa da virada do dia: numa SPA
+     mantida aberta, o badge só recalcularia ao montar ou ao receber
+     `ritual-completed`, e uma sessão que atravessa a meia-noite continuaria
+     mostrando o estado de ontem. Cinco minutos é barato (uma consulta por
+     dia de trabalho) e mantém a pergunta honesta. --}}
+<span wire:poll.300s="refreshBadge">
     @if ($this->pending)
         <flux:badge size="sm" color="amber" data-test="ritual-pending-badge">hoje</flux:badge>
     @endif

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ActivityStatus;
+use App\Mcp\Prompts\DevelopmentWorkflowPrompt;
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\GetRitualStatusTool;
 use App\Models\Activity;
@@ -35,9 +36,9 @@ test('get-ritual-status reports a day whose ritual has not been done', function 
 });
 
 test('get-ritual-status reports the conclusion and the notes', function () {
-    $this->travelTo('2026-08-07 08:15:00');
+    $this->travelTo('2026-08-07 11:15:00'); // 08:15 no fuso de negócio
 
-    MorningRitual::getOrCreateForDate(today())->complete('Puxei a fatia de billing.');
+    MorningRitual::getOrCreateForDate(MorningRitual::businessToday())->complete('Puxei a fatia de billing.');
 
     $payload = ritualStatusPayload();
 
@@ -110,4 +111,41 @@ test('the daily plan tools and prompt are gone from the server', function () {
             ->and($registered)->not->toContain('SuggestTasks')
             ->and($registered)->not->toContain('DailyPlanning');
     }
+});
+
+test('no registered prompt instructs a client to use a removed tool', function () {
+    // Um prompt que manda usar `add-to-plan` descreve um passo impossível:
+    // a tool não existe mais (issue #147, review). O teste lê o texto real
+    // de cada prompt registrado, não o registro.
+    $removed = ['add-to-plan', 'today-plan', 'suggest-tasks', 'daily-planning'];
+
+    $prompts = (new ReflectionClass(SoloBoardServer::class))->getDefaultProperties()['prompts'];
+
+    expect($prompts)->not->toBeEmpty();
+
+    foreach ($prompts as $promptClass) {
+        $source = file_get_contents((new ReflectionClass($promptClass))->getFileName());
+
+        foreach ($removed as $tool) {
+            expect($source)->not->toContain("`{$tool}`");
+        }
+    }
+});
+
+test('the workflow prompt points at the tools that still exist', function () {
+    $source = file_get_contents(
+        (new ReflectionClass(DevelopmentWorkflowPrompt::class))->getFileName()
+    );
+
+    expect($source)->toContain('get-ritual-status')
+        ->and($source)->toContain('get-pull-queue');
+});
+
+test('the workflow documentation matches the tools the server registers', function () {
+    $doc = file_get_contents(base_path('docs/DEVELOPMENT_WORKFLOW_PROMPT.md'));
+
+    expect($doc)->not->toContain('`add-to-plan`')
+        ->and($doc)->not->toContain('`today-plan`')
+        ->and($doc)->not->toContain('`suggest-tasks`')
+        ->and($doc)->toContain('`get-ritual-status`');
 });

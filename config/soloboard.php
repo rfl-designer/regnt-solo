@@ -3,6 +3,30 @@
 return [
     'mcp_key' => env('SOLOBOARD_MCP_KEY'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Business timezone (issue #147)
+    |--------------------------------------------------------------------------
+    |
+    | The application stores and computes everything in UTC (see
+    | `config/app.php`), which is the right default for timestamps and the
+    | wrong answer for the one question the morning ritual asks: "que dia é
+    | hoje, para mim?".
+    |
+    | In America/Recife (UTC-3) the UTC day turns at 21:00 local time, so a
+    | ritual concluded at 21:30 on Monday would be filed as Tuesday's — and
+    | the sidebar badge would light up again the same evening, asking for a
+    | ritual that had just been done. The same offset makes "concluído às
+    | HH:MM" read three hours ahead of the clock on the wall.
+    |
+    | So the *calendar day* of the ritual and the way its time is rendered
+    | are derived from this timezone, while the stored timestamp stays UTC.
+    | Nothing else is converted: this is a calendar-and-presentation
+    | concern, not a storage one.
+    |
+    */
+    'timezone' => env('SOLOBOARD_TIMEZONE', 'America/Recife'),
+
     'ai_enabled' => env('SOLOBOARD_AI_ENABLED', false),
     'ai_api_key' => env('ANTHROPIC_API_KEY'),
     'ai_model' => env('SOLOBOARD_AI_MODEL', 'claude-sonnet-4-20250514'),

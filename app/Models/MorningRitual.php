@@ -54,6 +54,38 @@ class MorningRitual extends Model
     }
 
     /**
+     * The business timezone: the one the user's day actually turns in.
+     *
+     * The app runs in UTC and must keep doing so — timestamps are
+     * comparable only because of it. But "hoje" is a calendar question, and
+     * the calendar in question is the user's: in UTC-3 the UTC day flips at
+     * 21:00 local, which would file an evening ritual under tomorrow and
+     * relight the badge the same night.
+     */
+    public static function timezone(): string
+    {
+        return (string) config('soloboard.timezone', 'America/Recife');
+    }
+
+    /**
+     * Now, as the user reads a clock.
+     */
+    public static function businessNow(): CarbonInterface
+    {
+        return now()->setTimezone(self::timezone());
+    }
+
+    /**
+     * Today's date in the business timezone — the single answer to "de que
+     * dia é este ritual", reused by every surface so they cannot disagree
+     * about which day is being asked about.
+     */
+    public static function businessToday(): CarbonInterface
+    {
+        return self::businessNow()->startOfDay();
+    }
+
+    /**
      * Get (or create) the ritual record for a given date.
      */
     public static function getOrCreateForDate(CarbonInterface $date): static
@@ -69,7 +101,7 @@ class MorningRitual extends Model
      */
     public static function today(): ?static
     {
-        return static::query()->whereDate('date', today()->toDateString())->first();
+        return static::query()->whereDate('date', self::businessToday()->toDateString())->first();
     }
 
     /**
@@ -113,9 +145,13 @@ class MorningRitual extends Model
     /**
      * The "já concluído às HH:MM" rendering, shared by every surface that
      * shows it so they cannot disagree on the format.
+     *
+     * Converted to the business timezone: the stored timestamp is UTC, and
+     * printing it raw would tell the user the ritual happened three hours
+     * after they did it.
      */
     public function completedAtLabel(): ?string
     {
-        return $this->completed_at?->format('H:i');
+        return $this->completed_at?->copy()->setTimezone(self::timezone())->format('H:i');
     }
 }

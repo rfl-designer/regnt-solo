@@ -75,6 +75,8 @@ new class extends Component
         $distribution = $metrics->distribution();
         $agingItems = $metrics->agingItems();
         $lastCut = $metrics->lastCut();
+        $clientWaits = $metrics->clientWaitRanking(30);
+        $longestWait = $clientWaits->max('minutes') ?: 1;
     @endphp
 
     {{-- Header --}}
@@ -226,6 +228,58 @@ new class extends Component
                             {{ $aging['tooltip'] }}
                         </flux:badge>
                     </button>
+                @endforeach
+            </div>
+        @endif
+    </div>
+
+    {{-- Esperas por cliente (issue #146) --}}
+    <div class="rounded-xl border border-zinc-700 bg-zinc-900/50 p-6" data-test="client-waits">
+        <flux:heading size="lg">Esperas por cliente</flux:heading>
+        <flux:text class="mt-1 text-sm">
+            Quanto tempo cada cliente segurou o quadro nos últimos 30 dias, somando Aguardando aprovação e
+            Aguardando validação. Espera interna (Esperando) fica de fora — ela não é do cliente. Esperas ainda
+            abertas contam até agora.
+        </flux:text>
+
+        @if ($clientWaits->isEmpty())
+            <div class="flex flex-col items-center gap-2 py-10 text-center">
+                <flux:icon name="clock" class="size-8 text-zinc-600" />
+                <flux:text>Nenhuma espera de cliente nos últimos 30 dias.</flux:text>
+            </div>
+        @else
+            <div class="mt-4 flex flex-col gap-2">
+                @foreach ($clientWaits as $row)
+                    @php
+                        $client = $row['client'];
+                        $days = $row['minutes'] / 1440;
+                    @endphp
+
+                    <div
+                        class="rounded-lg border border-zinc-700 bg-zinc-800 p-3"
+                        wire:key="client-wait-{{ $client->id }}"
+                    >
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex min-w-0 items-center gap-2">
+                                <span class="size-2.5 shrink-0 rounded-full" style="background-color: {{ $client->color }}"></span>
+                                <span class="truncate text-sm font-medium text-zinc-200">{{ $client->name }}</span>
+                            </div>
+                            <div class="flex shrink-0 items-center gap-2">
+                                <flux:badge size="sm" color="zinc">
+                                    {{ $row['items'] }} {{ $row['items'] === 1 ? 'item' : 'itens' }}
+                                </flux:badge>
+                                <span class="text-sm font-medium text-orange-300">
+                                    {{ number_format($days, 1, ',', '.') }} dias
+                                </span>
+                            </div>
+                        </div>
+                        <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-zinc-700">
+                            <div
+                                class="h-full rounded-full bg-orange-500/80"
+                                style="width: {{ round(($row['minutes'] / $longestWait) * 100, 2) }}%"
+                            ></div>
+                        </div>
+                    </div>
                 @endforeach
             </div>
         @endif

@@ -200,8 +200,13 @@ test('the aging list costs the same whether it holds 3 items or 30', function ()
     $many = historyReads(fn () => Livewire::test('pages::flow'));
 
     // A query per aging row would make this 3 vs 30.
+    //
+    // The ceiling is 5 rather than 4 since issue #146: the page gained the
+    // "esperas por cliente" ranking, which reads the history for its own
+    // 30-day window. Like every other read here it is a fixed number of
+    // queries — which is what the equality above is actually guarding.
     expect($many)->toBe($few)
-        ->and($few)->toBeLessThanOrEqual(4);
+        ->and($few)->toBeLessThanOrEqual(5);
 });
 
 test('without a usable baseline the page raises no alarm at all', function () {

@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Project;
 use App\Services\FlowMetricsService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Flow efficiency per Spec and the ranking of client waits (issue #146).
@@ -206,4 +207,103 @@ test('waits with no client to attribute them to are left out of the ranking', fu
     ]);
 
     expect(metrics()->clientWaitRanking())->toBeEmpty();
+});
+
+test('a reopened Épico keeps its window running instead of closing on the stale validation', function () {
+    $epic = withSpecHistory(Activity::factory()->epic()->awaitingValidation()->create(), [
+        [ActivityStatus::AwaitingApproval, '2026-08-01 12:00'],
+        [ActivityStatus::Todo, '2026-08-02 12:00'],
+        [ActivityStatus::Done, '2026-08-03 12:00'],
+        // Reaberto e reentregue: a validação de 03/08 é passado, não fim.
+        [ActivityStatus::Doing, '2026-08-04 12:00'],
+        [ActivityStatus::AwaitingValidation, '2026-08-05 12:00'],
+    ]);
+
+    $efficiency = metrics()->specEfficiency($epic);
+
+    // Closing on the old validation would have reported a one-day window at
+    // 0% and hidden both the day of rework and the wait that is running now.
+    expect($efficiency['open'])->toBeTrue()
+        ->and($efficiency['window_minutes'])->toBe(5.0 * 24 * 60)
+        ->and($efficiency['touch_minutes'])->toBe(1.0 * 24 * 60)
+        ->and($efficiency['percent'])->toBe(20);
+});
+
+test('a validated Épico that stayed validated closes its window on the validation', function () {
+    $epic = withSpecHistory(Activity::factory()->epic()->done()->create(), [
+        [ActivityStatus::AwaitingApproval, '2026-08-01 12:00'],
+        [ActivityStatus::Todo, '2026-08-02 12:00'],
+        [ActivityStatus::Done, '2026-08-03 12:00'],
+        [ActivityStatus::Doing, '2026-08-04 12:00'],
+        [ActivityStatus::Done, '2026-08-05 12:00'],
+    ]);
+
+    $efficiency = metrics()->specEfficiency($epic);
+
+    expect($efficiency['open'])->toBeFalse()
+        ->and($efficiency['window_end']->toDateTimeString())->toBe('2026-08-05 12:00:00');
+});
+
+test('a wait answered inside the window still counts, even though it began before it', function () {
+    $client = Client::factory()->create(['name' => 'Acme']);
+
+    // Sent 40 days ago, answered 25 days ago: there is no *entry* into the
+    // wait inside the window and the item isn't waiting now, so only the
+    // exit change can find it.
+    withSpecHistory(Activity::factory()->issue()->todo()->create(['client_id' => $client->id]), [
+        [ActivityStatus::AwaitingApproval, now()->copy()->subDays(40)->toDateTimeString()],
+        [ActivityStatus::Todo, now()->copy()->subDays(25)->toDateTimeString()],
+    ]);
+
+    $ranking = metrics()->clientWaitRanking(30);
+
+    expect($ranking)->toHaveCount(1)
+        ->and($ranking[0]['minutes'])->toBe(5.0 * 24 * 60);
+});
+
+test('a wait that ended before the window contributes nothing and nobody', function () {
+    $client = Client::factory()->create(['name' => 'Antigo']);
+
+    withSpecHistory(Activity::factory()->issue()->todo()->create(['client_id' => $client->id]), [
+        [ActivityStatus::AwaitingApproval, now()->copy()->subDays(90)->toDateTimeString()],
+        [ActivityStatus::Todo, now()->copy()->subDays(60)->toDateTimeString()],
+    ]);
+
+    expect(metrics()->clientWaitRanking(30))->toBeEmpty();
+});
+
+test('reading the ranking costs the same whether the board has 2 old waits or 30', function () {
+    $client = Client::factory()->create(['name' => 'Acme']);
+
+    $ancientWait = function () use ($client): void {
+        withSpecHistory(Activity::factory()->issue()->todo()->create(['client_id' => $client->id]), [
+            [ActivityStatus::AwaitingApproval, now()->copy()->subDays(300)->toDateTimeString()],
+            [ActivityStatus::Todo, now()->copy()->subDays(290)->toDateTimeString()],
+        ]);
+    };
+
+    // How many activities the history read is asked about — the number that
+    // used to grow with everything that had ever waited, window or no
+    // window.
+    $historyBreadth = function (): int {
+        $widest = 0;
+        DB::listen(function ($query) use (&$widest): void {
+            if (str_contains($query->sql, 'activity_status_changes')
+                && str_contains($query->sql, 'activity_id')) {
+                $widest = max($widest, count($query->bindings));
+            }
+        });
+        metrics()->clientWaitRanking(30);
+
+        return $widest;
+    };
+
+    collect(range(1, 2))->each(fn () => $ancientWait());
+    $few = $historyBreadth();
+
+    collect(range(3, 30))->each(fn () => $ancientWait());
+    $many = $historyBreadth();
+
+    // History that cannot touch the window is never read at all.
+    expect($many)->toBe($few);
 });

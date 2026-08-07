@@ -107,6 +107,32 @@ enum ActivityStatus: string
     }
 
     /**
+     * Where this status sits along the flow, as a comparable rank: its
+     * position in {@see boardOrder()}, with Inbox (off-board triage) ranked
+     * before everything.
+     *
+     * This is what makes "moved forward" and "sent back" answerable without
+     * enumerating pairs of statuses — the Spec lifecycle (issue #146) needs
+     * exactly that distinction to tell an approval (Aguardando aprovação ->
+     * Pronto) from a reprovação (Aguardando aprovação -> Backlog).
+     */
+    public function flowRank(): int
+    {
+        $index = array_search($this, self::boardOrder(), true);
+
+        return $index === false ? -1 : $index;
+    }
+
+    /**
+     * Whether moving from this status to $other is a move forward along the
+     * flow rather than a step back.
+     */
+    public function isAheadOf(self $other): bool
+    {
+        return $this->flowRank() > $other->flowRank();
+    }
+
+    /**
      * Whether this status represents the activity waiting on someone before
      * it can move forward — client-side (Aguardando aprovação/validação) or
      * internal (Esperando). Waiting statuses require "esperando quem" to be

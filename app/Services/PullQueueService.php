@@ -86,8 +86,60 @@ class PullQueueService
      */
     public function queue(?Closure $constrain = null): Collection
     {
-        $activities = $this->universe($constrain);
+        return $this->partition($constrain)['queue'];
+    }
 
+    /**
+     * What sits in Pronto but is *not* in the queue: the children of an
+     * Épico whose Spec is still waiting on the client (issue #146).
+     *
+     * They are deliberately still on the board — there is no hard lock, and
+     * the user is free to pull one anyway. What they lose is their claim on
+     * the order: an item whose Spec hasn't been said yes to cannot push a
+     * committed one down the queue, so it neither ranks nor reorders
+     * Pronto. The card says why, and that is the whole enforcement.
+     *
+     * @param  Closure(Builder): void|null  $constrain  Same scoping as {@see queue()}.
+     * @return Collection<int, Activity>
+     */
+    public function blockedBySpec(?Closure $constrain = null): Collection
+    {
+        return $this->partition($constrain)['blocked'];
+    }
+
+    /**
+     * Both halves of Pronto from **one** read of the column.
+     *
+     * The board renders the ranked queue and the spec-pending tail side by
+     * side, and the two are complementary slices of the same universe.
+     * Asking for them separately hydrates every card in Pronto twice (plus
+     * its project, client, parent history and time entries) to throw one
+     * copy away. This is the call a surface showing both should make;
+     * {@see queue()} and {@see blockedBySpec()} remain for the readers that
+     * genuinely want only one — the MCP tool wants only the queue.
+     *
+     * @param  Closure(Builder): void|null  $constrain  Extra scoping applied to the universe.
+     * @return array{queue: Collection<int, PullQueueEntry>, blocked: Collection<int, Activity>}
+     */
+    public function partition(?Closure $constrain = null): array
+    {
+        [$blocked, $queueable] = $this->universe($constrain)
+            ->partition(fn (Activity $activity): bool => $activity->isBlockedBySpecApproval());
+
+        return [
+            'queue' => $this->rank($queueable),
+            'blocked' => $blocked->values(),
+        ];
+    }
+
+    /**
+     * Turn a set of Pronto items into the ordered queue.
+     *
+     * @param  EloquentCollection<int, Activity>  $activities
+     * @return Collection<int, PullQueueEntry>
+     */
+    private function rank(EloquentCollection $activities): Collection
+    {
         if ($activities->isEmpty()) {
             return collect();
         }
@@ -126,7 +178,9 @@ class PullQueueService
         $query = Activity::query()
             ->leaf()
             ->where('status', ActivityStatus::Todo)
-            ->with(['project.client', 'client', 'parent', 'timeEntries'])
+            // `parent.statusChanges` is what the Spec gate reads: without it
+            // every card in Pronto asks its Épico for its history one by one.
+            ->with(['project.client', 'client', 'parent.statusChanges', 'timeEntries'])
             ->withCount('commits');
 
         if ($constrain !== null) {

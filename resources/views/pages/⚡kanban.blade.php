@@ -93,7 +93,39 @@ new class extends Component
     #[Computed]
     public function pullQueue(): \Illuminate\Support\Collection
     {
-        return app(PullQueueService::class)->queue(fn ($query) => $this->applyFilters($query));
+        return $this->pronto['queue'];
+    }
+
+    /**
+     * The tail of Pronto: what is on the board but out of the queue because
+     * its Épico's Spec is still waiting on the client (issue #146).
+     *
+     * Rendered below the degraus, unranked, with a discreet "spec em
+     * aprovação" on each card. Nothing stops the user pulling one — it just
+     * doesn't get to order the column.
+     *
+     * @return \Illuminate\Support\Collection<int, \App\Models\Activity>
+     */
+    #[Computed]
+    public function specPending(): \Illuminate\Support\Collection
+    {
+        return $this->pronto['blocked'];
+    }
+
+    /**
+     * Both halves of Pronto, from one read of the column.
+     *
+     * The two computeds above are views onto this one, rather than two
+     * independent calls: each call hydrates every card in Pronto with its
+     * project, client, parent history and time entries, and the board needs
+     * both halves on every single render.
+     *
+     * @return array{queue: \Illuminate\Support\Collection<int, \App\Services\PullQueueEntry>, blocked: \Illuminate\Support\Collection<int, \App\Models\Activity>}
+     */
+    #[Computed]
+    public function pronto(): array
+    {
+        return app(PullQueueService::class)->partition(fn ($query) => $this->applyFilters($query));
     }
 
     /**
@@ -253,11 +285,19 @@ new class extends Component
             : ActivityStatus::Doing->color();
     }
 
+    /**
+     * `feature-updated` is in the list because moving an Épico *is* the
+     * Spec lifecycle event (issue #146): approving one from the feature
+     * modal changes which cards the pull queue ranks, without touching a
+     * single card. Listening only to `task-*` left the board showing "spec
+     * em aprovação" on items that had just been approved.
+     */
     #[On('task-updated')]
     #[On('task-created')]
+    #[On('feature-updated')]
     public function refreshBoard(): void
     {
-        unset($this->projects, $this->pullQueue, $this->flow);
+        unset($this->projects, $this->pronto, $this->pullQueue, $this->specPending, $this->flow);
     }
 
     /**
@@ -446,8 +486,17 @@ new class extends Component
                 // queue itself, which is the same universe.
                 $tasks = $isTodo ? collect() : $this->getColumnTasks($status, withProject: true);
                 $unassignedTasks = $isTodo ? collect() : $this->getColumnTasks($status, withProject: false);
+                // Pronto's lazy-loading budget is one budget for the whole
+                // column, not one per section: the ranked queue is served
+                // first (it is what the user is meant to pull from) and the
+                // spec-pending tail gets whatever is left, so a hundred
+                // unapproved cards can't blow past the limit that every
+                // other column respects.
                 $queueEntries = $isTodo ? $this->pullQueue->take($limit) : collect();
-                $total = $isTodo ? $this->pullQueue->count() : $this->getColumnTotal($status);
+                $specPending = $isTodo
+                    ? $this->specPending->take(max(0, $limit - $queueEntries->count()))
+                    : collect();
+                $total = $isTodo ? $this->pullQueue->count() + $this->specPending->count() : $this->getColumnTotal($status);
 
                 $estimate = $this->getColumnEstimate($status);
                 $estimateFormatted = $this->formatDuration($estimate);
@@ -615,10 +664,36 @@ new class extends Component
                                     :aging-tooltip="$this->flow->agingTooltip($entry->activity)"
                                 />
                             @empty
-                                <li class="py-8 text-center text-sm text-zinc-600">
-                                    Nenhuma task
-                                </li>
+                                @if ($specPending->isEmpty())
+                                    <li class="py-8 text-center text-sm text-zinc-600">
+                                        Nenhuma task
+                                    </li>
+                                @endif
                             @endforelse
+
+                            {{-- Spec em aprovação (issue #146): fora da fila,
+                                 e por isso sempre no fim e sem ordenação
+                                 própria — não empurram nada para baixo. --}}
+                            @if ($specPending->isNotEmpty())
+                                <li
+                                    wire:key="pull-queue-degrau-spec-pending"
+                                    wire:sort:ignore
+                                    class="flex items-center gap-2 pt-1 first:pt-0"
+                                >
+                                    <span class="text-[0.65rem] font-medium tracking-wide text-violet-400/80 uppercase">
+                                        Spec em aprovação
+                                    </span>
+                                    <span class="h-px flex-1 bg-zinc-700/60"></span>
+                                </li>
+
+                                @foreach ($specPending as $blocked)
+                                    <x-pull-queue-card
+                                        :activity="$blocked"
+                                        :aging-border="$this->flow->agingBorderClass($blocked)"
+                                        :aging-tooltip="$this->flow->agingTooltip($blocked)"
+                                    />
+                                @endforeach
+                            @endif
                         </ul>
                     @else
                     <ul

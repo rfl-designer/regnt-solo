@@ -9,6 +9,7 @@ use App\Enums\ServiceClass;
 use App\Observers\ActivityObserver;
 use App\Observers\ActivityRealtimeObserver;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Database\Factories\ActivityFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 #[ObservedBy([ActivityObserver::class, ActivityRealtimeObserver::class])]
@@ -316,6 +318,206 @@ class Activity extends Model
 
             return round($lastChange->changed_at->diffInMinutes(now()), 2);
         });
+    }
+
+    /**
+     * The Spec's four lifecycle timestamps (issue #146).
+     *
+     * There is no `spec_sent_at` column and there must not be one: the Spec
+     * lifecycle *is* the Épico's status history. Moving the status is the
+     * event, so the four dates below are read from
+     * {@see ActivityStatusChange} rather than stamped by whoever happened
+     * to make the move — a change made over MCP, from the Kanban or from
+     * the modal all land in the same place, and a hand-written history
+     * (import, backfill) is read exactly as it happened.
+     *
+     * The semantics are chosen for a Spec that goes round: reprovações and
+     * reentregas are normal, not exceptional.
+     *
+     * - **Enviada is the *first* entry into Aguardando aprovação.** The
+     *   question it answers is "quando o cliente recebeu isto", and a
+     *   reprovação followed by a re-send doesn't change that answer.
+     * - **Aprovada is the *last* exit forward out of Aguardando
+     *   aprovação.** Forward is what makes it an approval: leaving towards
+     *   Backlog is a reprovação, and only {@see ActivityStatus::isAheadOf()}
+     *   can tell those apart. Last, because after a reprovação the earlier
+     *   approval no longer stands.
+     * - **Entregue is the *last* entry into Aguardando validação**, and
+     *   **Validada the *last* entry into Feito** — a reentrega replaces the
+     *   previous delivery, and an item bounced out of Feito and finished
+     *   again was validated when it was validated for good.
+     *
+     * @return Collection<int, ActivityStatusChange>
+     */
+    private function orderedStatusChanges(): Collection
+    {
+        return $this->relationLoaded('statusChanges')
+            ? $this->statusChanges->sortBy([['changed_at', 'asc'], ['id', 'asc']])->values()
+            : $this->statusChanges()->orderBy('changed_at')->orderBy('id')->get();
+    }
+
+    /**
+     * First entry into Aguardando aprovação — when the Spec was sent.
+     */
+    protected function specEnviada(): Attribute
+    {
+        return Attribute::get(fn (): ?CarbonInterface => $this->orderedStatusChanges()
+            ->first(fn (ActivityStatusChange $change): bool => $change->to_status === ActivityStatus::AwaitingApproval)
+            ?->changed_at);
+    }
+
+    /**
+     * Last exit from Aguardando aprovação towards a status further along
+     * the flow — when the Spec was approved. A reprovação (an exit
+     * backwards, typically to Backlog) is deliberately not one.
+     */
+    protected function specAprovada(): Attribute
+    {
+        return Attribute::get(fn (): ?CarbonInterface => $this->orderedStatusChanges()
+            ->last(fn (ActivityStatusChange $change): bool => $change->from_status === ActivityStatus::AwaitingApproval
+                && $change->to_status?->isAheadOf(ActivityStatus::AwaitingApproval) === true)
+            ?->changed_at);
+    }
+
+    /**
+     * Last entry into Aguardando validação — when the work was delivered.
+     */
+    protected function specEntregue(): Attribute
+    {
+        return Attribute::get(fn (): ?CarbonInterface => $this->orderedStatusChanges()
+            ->last(fn (ActivityStatusChange $change): bool => $change->to_status === ActivityStatus::AwaitingValidation)
+            ?->changed_at);
+    }
+
+    /**
+     * Last entry into Feito — when the delivery was validated.
+     */
+    protected function specValidada(): Attribute
+    {
+        return Attribute::get(fn (): ?CarbonInterface => $this->orderedStatusChanges()
+            ->last(fn (ActivityStatusChange $change): bool => $change->to_status === ActivityStatus::Done)
+            ?->changed_at);
+    }
+
+    /**
+     * Whether the Spec has been put in front of the client at all — the
+     * lifecycle only constrains anything once it has started.
+     */
+    public function hasSpecLifecycle(): bool
+    {
+        return $this->spec_enviada !== null;
+    }
+
+    /**
+     * The four stages, in order. The single source of truth for "which step
+     * is the Spec on" — the modal's timeline renders these, and nothing
+     * else may enumerate them.
+     *
+     * @var list<string>
+     */
+    public const array SPEC_STAGES = ['enviada', 'aprovada', 'entregue', 'validada'];
+
+    /**
+     * Which stage the Spec is *on right now*, or null when it has no
+     * lifecycle at all.
+     *
+     * This is decided by walking the history **in order**, not by asking
+     * which of the four timestamps exist. The difference is the whole point:
+     * the four dates are historical facts that never stop being true, so a
+     * Spec that was validated, reopened and delivered again has a validation
+     * date *and* a later delivery date, and reading "it has a validated
+     * date, therefore it is validated" would leave the last stage lit while
+     * the work is back in the client's hands.
+     *
+     * Order also settles the ties. `activity_status_changes.changed_at` only
+     * has second precision, so an approval and a re-send recorded in the
+     * same second are indistinguishable by timestamp; the ordering here is
+     * (changed_at, id), which is the sequence the moves actually happened
+     * in.
+     *
+     * Two moves are lifecycle events without producing a stage of their own,
+     * and both are handled after the walk: leaving Feito (reaberto) and
+     * leaving Aguardando validação backwards (rejeitado na validação) both
+     * put the Spec back on Aprovada, which is where "approved and being
+     * worked on" lives.
+     */
+    public function specStage(): ?string
+    {
+        $changes = $this->orderedStatusChanges();
+        $stage = null;
+
+        foreach ($changes as $change) {
+            $stage = match (true) {
+                $change->to_status === ActivityStatus::AwaitingApproval => 'enviada',
+                $change->from_status === ActivityStatus::AwaitingApproval
+                    && $change->to_status?->isAheadOf(ActivityStatus::AwaitingApproval) === true => 'aprovada',
+                $change->to_status === ActivityStatus::AwaitingValidation => 'entregue',
+                $change->to_status === ActivityStatus::Done => 'validada',
+                default => $stage,
+            };
+        }
+
+        $current = $changes->last()?->to_status;
+
+        // Reaberto, ou rejeitado na validação: a data continua no histórico,
+        // mas a Spec voltou a ser trabalho em andamento.
+        if ($stage === 'validada' && $current !== ActivityStatus::Done) {
+            return 'aprovada';
+        }
+
+        if ($stage === 'entregue'
+            && ! in_array($current, [ActivityStatus::AwaitingValidation, ActivityStatus::Done], true)) {
+            return 'aprovada';
+        }
+
+        return $stage;
+    }
+
+    /**
+     * Whether the Spec is currently in the client's hands, waiting for a
+     * yes — which is exactly "the stage it is on is Enviada".
+     *
+     * The question is asked against the **last** send, not the first: a
+     * Spec that was approved, changed and sent again is pending once more,
+     * and its earlier approval no longer covers it.
+     *
+     * This is what makes a reprovação read correctly too. Reproving sends
+     * the Épico backwards (typically to Backlog) without producing an
+     * approval, so the last send is still the last lifecycle event and the
+     * Spec stays pending — asking only "is it sitting in Aguardando
+     * aprovação right now" would have called a reproved Spec approved.
+     *
+     * There is no hard lock behind this (that was the decision in #124):
+     * children of an Épico in this state keep moving freely, they just
+     * don't get ranked by the pull queue and their card says why.
+     */
+    public function isSpecPending(): bool
+    {
+        return $this->specStage() === 'enviada';
+    }
+
+    /**
+     * Whether the Spec is validated *and has stayed that way* — the only
+     * state in which its flow-efficiency window is closed.
+     */
+    public function isSpecValidated(): bool
+    {
+        return $this->specStage() === 'validada';
+    }
+
+    /**
+     * Whether this item is a child of an Épico whose Spec is still pending
+     * — the reason the pull queue leaves it out (issue #146).
+     */
+    public function isBlockedBySpecApproval(): bool
+    {
+        if ($this->parent_id === null) {
+            return false;
+        }
+
+        $parent = $this->relationLoaded('parent') ? $this->parent : $this->parent()->first();
+
+        return $parent?->type === ActivityType::Epic && $parent->isSpecPending();
     }
 
     /**

@@ -1,5 +1,8 @@
 <?php
 
+use App\Enums\ActivityStatus;
+use App\Models\Activity;
+use App\Models\ActivityStatusChange;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -47,4 +50,36 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Give an activity a hand-written status history, wiping whatever the
+ * ActivityObserver recorded so the fixture states one sequence only.
+ *
+ * The Spec lifecycle, the flow efficiency and the pull queue's spec gate
+ * (issue #146) all read `activity_status_changes` and nothing else, so a
+ * test that wants to state "this Épico was approved on the 3rd" has to
+ * write the history rather than set a column. This lives here because the
+ * three suites that need it must agree on exactly one way of doing it.
+ *
+ * @param  list<array{0: ActivityStatus, 1: string}>  $steps  [status, moment] pairs, in order.
+ */
+function withSpecHistory(Activity $activity, array $steps): Activity
+{
+    ActivityStatusChange::query()->where('activity_id', $activity->id)->delete();
+
+    $previous = null;
+
+    foreach ($steps as [$status, $at]) {
+        ActivityStatusChange::factory()->create([
+            'activity_id' => $activity->id,
+            'from_status' => $previous,
+            'to_status' => $status,
+            'changed_at' => Carbon\Carbon::parse($at),
+        ]);
+
+        $previous = $status;
+    }
+
+    return $activity->fresh();
 }

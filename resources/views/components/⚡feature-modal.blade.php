@@ -4,8 +4,10 @@ use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
 use App\Models\Activity;
+use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Project;
 use App\Models\TimeEntry;
+use App\Services\FlowMetricsService;
 use App\Support\Markdown;
 use Flux\Flux;
 use Livewire\Attributes\Computed;
@@ -49,7 +51,124 @@ new class extends Component
             return null;
         }
 
-        return Activity::with(['project', 'children.timeEntries', 'timeEntries'])->find($this->featureId);
+        return Activity::with(['project.client', 'client', 'children.timeEntries', 'timeEntries', 'statusChanges'])->find($this->featureId);
+    }
+
+    /**
+     * The Spec's lifecycle, ready to render (issue #146).
+     *
+     * The four dates are read straight off the Épico's accessors, which
+     * derive them from the status history — the modal stamps nothing. The
+     * "current" step is the one the Spec is actually sitting on: a Spec
+     * sent again after an approval is back on Enviada, which is exactly
+     * what {@see Activity::isSpecPending()} answers.
+     *
+     * @return list<array{key: string, label: string, icon: string, at: ?\Carbon\CarbonInterface, done: bool, current: bool}>
+     */
+    #[Computed]
+    public function specTimeline(): array
+    {
+        $feature = $this->feature;
+
+        if (! $feature) {
+            return [];
+        }
+
+        $steps = [
+            ['key' => 'enviada', 'label' => 'Enviada', 'icon' => 'paper-airplane', 'at' => $feature->spec_enviada],
+            ['key' => 'aprovada', 'label' => 'Aprovada', 'icon' => 'hand-thumb-up', 'at' => $feature->spec_aprovada],
+            ['key' => 'entregue', 'label' => 'Entregue', 'icon' => 'truck', 'at' => $feature->spec_entregue],
+            ['key' => 'validada', 'label' => 'Validada', 'icon' => 'check-badge', 'at' => $feature->spec_validada],
+        ];
+
+        // The lit step comes from Activity::specStage(), which walks the
+        // history in order. Inferring it from "which timestamps exist" would
+        // keep Validada lit on an Épico that was validated, reopened and
+        // delivered again — the date stays true, the stage does not.
+        $currentIndex = array_search($feature->specStage(), Activity::SPEC_STAGES, true);
+        $currentIndex = $currentIndex === false ? -1 : $currentIndex;
+
+        return collect($steps)
+            ->map(fn (array $step, int $index): array => [
+                ...$step,
+                // Only the steps already left behind are ticked. A date that
+                // sits *ahead* of the current stage is history, not progress.
+                'done' => $step['at'] !== null && $index < $currentIndex,
+                'current' => $index === $currentIndex,
+            ])
+            ->all();
+    }
+
+    /**
+     * The flow efficiency of this Spec, or null while it has no approval to
+     * measure from.
+     *
+     * @return array{window_start: \Carbon\CarbonInterface, window_end: \Carbon\CarbonInterface, open: bool, window_minutes: float, touch_minutes: float, ratio: float, percent: int}|null
+     */
+    #[Computed]
+    public function specEfficiency(): ?array
+    {
+        return $this->feature
+            ? app(FlowMetricsService::class)->specEfficiency($this->feature)
+            : null;
+    }
+
+    /**
+     * The two shortcuts on the timeline are sugar and nothing else: they
+     * set the status, and the status change *is* the lifecycle event. There
+     * is no second mechanism recording a "sent at" — moving the Épico from
+     * the Kanban, from MCP or from here all produce the same history.
+     */
+    public function sendForApproval(): void
+    {
+        $this->moveTo(ActivityStatus::AwaitingApproval, 'Spec enviada para aprovação');
+    }
+
+    public function deliverForValidation(): void
+    {
+        $this->moveTo(ActivityStatus::AwaitingValidation, 'Entregue para validação');
+    }
+
+    private function moveTo(ActivityStatus $status, string $heading): void
+    {
+        if (! $this->feature) {
+            return;
+        }
+
+        try {
+            $this->feature->update(['status' => $status]);
+        } catch (WaitingRequiresWaitingForException $e) {
+            // Both moves are client-side waits, so "esperando quem" is
+            // resolved from the effective client — an Épico with no client
+            // has nobody to wait on, and saying so beats a raw exception.
+            Flux::toast(
+                variant: 'danger',
+                heading: 'Sem cliente para esperar',
+                text: 'Vincule o épico a um projeto ou cliente antes de mandar para '.$status->label().'.',
+            );
+
+            return;
+        }
+
+        unset($this->feature, $this->specTimeline, $this->specEfficiency);
+
+        Flux::toast(variant: 'success', heading: $heading, text: $this->title);
+        $this->dispatch('feature-updated');
+    }
+
+    /**
+     * Format a duration in minutes as "3d 4h" / "5h" / "40m".
+     */
+    public function formatSpan(float $minutes): string
+    {
+        $days = intdiv((int) $minutes, 1440);
+        $hours = intdiv((int) $minutes % 1440, 60);
+
+        if ($days > 0) {
+            return $hours > 0 ? "{$days}d {$hours}h" : "{$days}d";
+        }
+
+        return $this->formatDuration($minutes);
     }
 
     #[On('open-feature-modal')]
@@ -302,6 +421,109 @@ new class extends Component
         {{-- Feature Details (when editing) --}}
         @if ($this->feature)
             <flux:separator />
+
+            {{-- Ciclo de vida da Spec (issue #146). Derivado dos movimentos
+                 de status: não existe coluna nenhuma guardando estas datas. --}}
+            <div class="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4" data-test="spec-timeline">
+                <div class="mb-3 flex items-center justify-between">
+                    <flux:heading size="sm">Ciclo da Spec</flux:heading>
+                    @if ($this->feature->isSpecPending())
+                        <flux:badge size="sm" color="violet" icon="paper-airplane">Em aprovação</flux:badge>
+                    @endif
+                </div>
+
+                <div class="flex items-stretch gap-1">
+                    @foreach ($this->specTimeline as $step)
+                        <div class="flex-1" wire:key="spec-step-{{ $step['key'] }}">
+                            <div
+                                @class([
+                                    'h-1 rounded-full',
+                                    'bg-violet-500' => $step['current'],
+                                    'bg-emerald-500/70' => $step['done'],
+                                    'bg-zinc-700' => ! $step['current'] && ! $step['done'],
+                                ])
+                            ></div>
+                            <div class="mt-2 flex items-center gap-1">
+                                <flux:icon
+                                    :name="$step['icon']"
+                                    @class([
+                                        'size-3.5',
+                                        'text-violet-400' => $step['current'],
+                                        'text-emerald-400' => $step['done'],
+                                        'text-zinc-600' => ! $step['current'] && ! $step['done'],
+                                    ])
+                                />
+                                <span
+                                    @class([
+                                        'text-xs',
+                                        'font-medium text-violet-300' => $step['current'],
+                                        'text-zinc-300' => $step['done'],
+                                        'text-zinc-600' => ! $step['current'] && ! $step['done'],
+                                    ])
+                                >{{ $step['label'] }}</span>
+                            </div>
+                            <span class="mt-0.5 block text-[0.65rem] text-zinc-500">
+                                {{ $step['at']?->format('d/m/Y H:i') ?? '—' }}
+                            </span>
+                        </div>
+                    @endforeach
+                </div>
+
+                {{-- Atalhos: açúcar em cima do status, nada mais. --}}
+                @if ($this->feature->status !== ActivityStatus::Done)
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        @if ($this->feature->status !== ActivityStatus::AwaitingApproval)
+                            <flux:button
+                                type="button"
+                                wire:click="sendForApproval"
+                                variant="ghost"
+                                size="sm"
+                                icon="paper-airplane"
+                                data-test="spec-send"
+                            >
+                                Enviar p/ aprovação
+                            </flux:button>
+                        @endif
+
+                        @if ($this->feature->status !== ActivityStatus::AwaitingValidation)
+                            <flux:button
+                                type="button"
+                                wire:click="deliverForValidation"
+                                variant="ghost"
+                                size="sm"
+                                icon="truck"
+                                data-test="spec-deliver"
+                            >
+                                Entregar p/ validação
+                            </flux:button>
+                        @endif
+                    </div>
+                @endif
+
+                {{-- Eficiência de fluxo desta spec: toque ÷ janela. --}}
+                @if ($this->specEfficiency)
+                    @php $efficiency = $this->specEfficiency; @endphp
+
+                    <div class="mt-4 border-t border-zinc-700 pt-3" data-test="spec-efficiency">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-zinc-400">Eficiência de fluxo</span>
+                            <span class="font-medium text-zinc-200">{{ $efficiency['percent'] }}%</span>
+                        </div>
+                        <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-zinc-700">
+                            <div
+                                class="h-full rounded-full bg-violet-500 transition-all duration-300"
+                                style="width: {{ $efficiency['percent'] }}%"
+                            ></div>
+                        </div>
+                        <span class="mt-2 block text-xs text-zinc-500">
+                            {{ $this->formatSpan($efficiency['touch_minutes']) }} de toque em
+                            {{ $this->formatSpan($efficiency['window_minutes']) }}
+                            {{ $efficiency['open'] ? 'desde a aprovação (ainda contando)' : 'entre a aprovação e a validação' }}.
+                            A aprovação fica fora do relógio; as esperas, dentro.
+                        </span>
+                    </div>
+                @endif
+            </div>
 
             {{-- Status & Progress --}}
             <div class="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">

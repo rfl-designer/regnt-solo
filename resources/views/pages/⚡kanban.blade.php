@@ -347,6 +347,14 @@ new class extends Component
 ?>
 
 <div class="flex h-full w-full flex-1 flex-col p-4 sm:p-6">
+    @php
+        // Every card that can show aging, read in one go before the first
+        // column renders (issue #145). Per-column warming would cost a
+        // query per collection — including for the columns that never show
+        // aging at all.
+        $this->flow->warmBoard();
+    @endphp
+
     {{-- Header --}}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center gap-3">
@@ -440,12 +448,6 @@ new class extends Component
                 $unassignedTasks = $isTodo ? collect() : $this->getColumnTasks($status, withProject: false);
                 $queueEntries = $isTodo ? $this->pullQueue->take($limit) : collect();
                 $total = $isTodo ? $this->pullQueue->count() : $this->getColumnTotal($status);
-
-                // One history read for the whole column instead of one per
-                // card — see FlowMetricsService::warm().
-                $this->flow->warm($tasks);
-                $this->flow->warm($unassignedTasks);
-                $this->flow->warm($queueEntries->map(fn ($entry) => $entry->activity));
 
                 $estimate = $this->getColumnEstimate($status);
                 $estimateFormatted = $this->formatDuration($estimate);

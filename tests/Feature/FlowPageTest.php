@@ -65,6 +65,26 @@ function agingActivity(ActivityStatus $status, float $days, string $title = 'Env
     return $activity;
 }
 
+/**
+ * How many reads of the status history a piece of work performs. That
+ * table is where an N+1 in the flow metrics shows up: everything else the
+ * page touches is a plain listing.
+ */
+function historyReads(callable $work): int
+{
+    $count = 0;
+
+    DB::listen(function ($query) use (&$count): void {
+        if (str_contains($query->sql, 'activity_status_changes')) {
+            $count++;
+        }
+    });
+
+    $work();
+
+    return $count;
+}
+
 beforeEach(function () {
     Carbon::setTestNow('2026-08-07 12:00');
     BaselineCut::query()->delete();
@@ -164,6 +184,24 @@ test('the aging list shows items past the attention threshold, worst first', fun
         ->assertSee('Quase estourando')
         ->assertDontSee('Tranquila')
         ->assertSeeInOrder(['Estourada', 'Quase estourando']);
+});
+
+test('the aging list costs the same whether it holds 3 items or 30', function () {
+    flowPageBaseline(30, days: 10);
+
+    // Pronto rather than Fazendo: the WIP limit would refuse the 3rd card
+    // in Fazendo, and this test is about volume.
+    collect(range(1, 3))->each(fn (int $i) => agingActivity(ActivityStatus::Todo, days: 15, title: "Velha {$i}"));
+
+    $few = historyReads(fn () => Livewire::test('pages::flow'));
+
+    collect(range(4, 30))->each(fn (int $i) => agingActivity(ActivityStatus::Todo, days: 15, title: "Velha {$i}"));
+
+    $many = historyReads(fn () => Livewire::test('pages::flow'));
+
+    // A query per aging row would make this 3 vs 30.
+    expect($many)->toBe($few)
+        ->and($few)->toBeLessThanOrEqual(4);
 });
 
 test('without a usable baseline the page raises no alarm at all', function () {

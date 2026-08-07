@@ -152,6 +152,39 @@ test('aging reaches the four target columns, and only them', function (string $s
     'Backlog' => ['backlog', false],
 ]);
 
+test('the board reads the status history a fixed number of times, whatever the card count', function () {
+    kanbanBaseline(30, days: 10);
+
+    $reads = function (): int {
+        $count = 0;
+
+        DB::listen(function ($query) use (&$count): void {
+            if (str_contains($query->sql, 'activity_status_changes')) {
+                $count++;
+            }
+        });
+
+        Livewire::test('pages::kanban');
+
+        return $count;
+    };
+
+    collect(range(1, 4))->each(fn (int $i) => boardCard(ActivityStatus::Todo, days: 12, title: "Pronta {$i}"));
+    collect(range(1, 4))->each(fn (int $i) => boardCard(ActivityStatus::Waiting, days: 12, title: "Esperando {$i}"));
+
+    $few = $reads();
+
+    collect(range(5, 20))->each(fn (int $i) => boardCard(ActivityStatus::Todo, days: 12, title: "Pronta {$i}"));
+    collect(range(5, 20))->each(fn (int $i) => boardCard(ActivityStatus::AwaitingValidation, days: 12, title: "Validando {$i}"));
+
+    $many = $reads();
+
+    // Warming column by column would grow this with the number of
+    // collections rendered; a query per card would grow it with the cards.
+    expect($many)->toBe($few)
+        ->and($few)->toBeLessThanOrEqual(5);
+});
+
 test('the Pronto card keeps its motivo in the tooltip and adds the aging to it', function () {
     kanbanBaseline(30, days: 10);
 

@@ -189,6 +189,91 @@ test('a cut without a motivo is refused by the service, not only by the form', f
         ->and(flow()->lastCut()->is($cut))->toBeTrue();
 });
 
+test('the baseline is scoped by the last Feito, not by completed_at', function () {
+    // The two timestamps disagree — an import, a backfill or a bulk write
+    // that skipped model events. The history is the authority, because it
+    // is also what closes the clock.
+    $stampedBeforeFinishedAfter = Activity::factory()->issue()->done()->create([
+        'completed_at' => Carbon::parse('2026-02-01 09:00'),
+    ]);
+    withFlowHistory($stampedBeforeFinishedAfter, [
+        [ActivityStatus::Todo, '2026-04-01 09:00'],
+        [ActivityStatus::Done, '2026-04-04 09:00'],
+    ]);
+
+    $stampedAfterFinishedBefore = Activity::factory()->issue()->done()->create([
+        'completed_at' => Carbon::parse('2026-05-01 09:00'),
+    ]);
+    withFlowHistory($stampedAfterFinishedBefore, [
+        [ActivityStatus::Todo, '2026-02-01 09:00'],
+        [ActivityStatus::Done, '2026-02-08 09:00'],
+    ]);
+
+    BaselineCut::factory()->create(['cut_at' => Carbon::parse('2026-03-01 00:00')]);
+
+    // Only the one that actually entered Feito after the cut: 3 days.
+    // Filtering by completed_at would have picked the other one, and
+    // reported 7.
+    expect(flow()->sample())->toBe([3.0]);
+});
+
+test('an item reopened after the cut leaves the baseline until it is done again', function () {
+    $reopened = Activity::factory()->issue()->doing()->create();
+    withFlowHistory($reopened, [
+        [ActivityStatus::Todo, '2026-07-01 09:00'],
+        [ActivityStatus::Done, '2026-07-05 09:00'],
+        [ActivityStatus::Doing, '2026-07-06 09:00'],
+    ]);
+
+    // It has a Feito after the cut, but it is work in progress again —
+    // measuring it would report a delivery that is currently undone.
+    expect(flow()->sample())->toBe([]);
+});
+
+test('a cut invalidates the memoized sample on the same instance', function () {
+    concludedIn(3);
+
+    $flow = flow();
+
+    expect($flow->sample())->toBe([3.0]);
+
+    // A second past the only conclusion, so the population really is empty
+    // — the boundary itself is inclusive.
+    $flow->cut('Mudei o jeito de trabalhar', now()->copy()->addSecond());
+
+    // The cut lands after the only concluded item, so the population is
+    // now empty. Reading a stale [3.0] here would keep quoting a promise
+    // the user has just retired.
+    expect($flow->sample())->toBe([])
+        ->and($flow->sampleSize())->toBe(0);
+});
+
+test('the tooltip rounds away from the threshold, so it never contradicts the border', function (float $ageDays, string $level, string $tooltip) {
+    config()->set('soloboard.sle_minimum_sample', 30);
+
+    collect(range(1, 30))->each(fn () => concludedIn(10));
+
+    $activity = Activity::factory()->issue()->doing()->create();
+    withFlowHistory($activity, [
+        [ActivityStatus::Todo, now()->copy()->subMinutes((int) round($ageDays * 24 * 60))->toDateTimeString()],
+    ]);
+
+    $aging = flow()->agingFor($activity);
+
+    expect(flow()->sleDays())->toBe(10)
+        ->and($aging['level'])->toBe($level)
+        ->and($aging['tooltip'])->toBe($tooltip);
+})->with([
+    // Amber: still inside the SLE, and the text must not say it reached it.
+    'well inside' => [8.0, 'attention', '8 de 10 dias da SLE'],
+    'just inside' => [9.6, 'attention', '9,6 de 10 dias da SLE'],
+    'a hair inside' => [9.96, 'attention', '9,9 de 10 dias da SLE'],
+    // Red: broken, and the text must not read as short of the SLE.
+    'exactly at the SLE' => [10.0, 'breach', '10 de 10 dias da SLE'],
+    'a hair over' => [10.04, 'breach', '10,1 de 10 dias da SLE'],
+    'well over' => [10.4, 'breach', '10,4 de 10 dias da SLE'],
+]);
+
 test('the distribution keeps the empty days between buckets so the tail is visible', function () {
     concludedIn(1);
     concludedIn(1);

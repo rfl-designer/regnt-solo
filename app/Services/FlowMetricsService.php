@@ -7,7 +7,6 @@ use App\Models\Activity;
 use App\Models\ActivityStatusChange;
 use App\Models\BaselineCut;
 use Carbon\CarbonInterface;
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
 /**
@@ -129,20 +128,51 @@ class FlowMetricsService
             throw new \InvalidArgumentException('Um corte de baseline exige um motivo.');
         }
 
-        return BaselineCut::create([
+        $cut = BaselineCut::create([
             'reason' => $reason,
             'cut_at' => $at ?? now(),
         ]);
+
+        // A cut redefines the population, so anything already computed
+        // from the old one is now a lie. Callers that keep the service
+        // around — a Livewire component that cuts and re-renders in the
+        // same request — must not have to know to throw it away.
+        $this->forget();
+
+        return $cut;
+    }
+
+    /**
+     * Drop everything memoized from the current baseline.
+     */
+    public function forget(): void
+    {
+        $this->memoizedSample = null;
+        $this->clockCache = [];
     }
 
     /**
      * The baseline population: the cycle times, in days, of everything
      * concluded since the last cut.
      *
-     * An item concluded in the window but with no measurable clock — no
-     * recorded entry into Pronto, typically because it was closed straight
-     * out of triage — is left out rather than counted as zero. It has no
-     * cycle time; inventing one would drag the percentile down.
+     * "Concluded since the cut" is decided by the **last entry into Feito**,
+     * not by `activities.completed_at`. Those two normally agree, and when
+     * they don't the history is the one that counts: it is the timestamp
+     * that closes the clock a few lines below, so filtering by anything
+     * else would let an item be measured with one date and admitted with
+     * another. A backfill, an import or a bulk write that skipped model
+     * events is exactly the case where they diverge, and exactly the case
+     * where a silently wrong n would move the SLE and the pull queue's
+     * window with it.
+     *
+     * An item in the window with no measurable clock — no recorded entry
+     * into Pronto, typically because it was closed straight out of triage
+     * — is left out rather than counted as zero. It has no cycle time;
+     * inventing one would drag the percentile down.
+     *
+     * Cost is three queries regardless of size, and none of them hydrates
+     * an Activity: the population is read as ids. It still grows with
+     * everything concluded since the cut — which is what a cut is *for*.
      *
      * @return list<float>
      */
@@ -152,27 +182,41 @@ class FlowMetricsService
             return $this->memoizedSample;
         }
 
-        $query = Activity::query()
-            ->leaf()
-            ->where('status', ActivityStatus::Done);
-
         $cutAt = $this->lastCut()?->cut_at;
 
-        if ($cutAt !== null) {
-            $query->where('completed_at', '>=', $cutAt);
-        }
+        // Anything that entered Feito after the cut. An item can only have
+        // its *last* Feito after the cut if it has *some* Feito after it,
+        // so this candidate set is exactly the population — no narrowing
+        // pass needed once the clocks are read.
+        $finishedSinceCut = ActivityStatusChange::query()
+            ->where('to_status', ActivityStatus::Done->value)
+            ->when($cutAt !== null, fn ($query) => $query->where('changed_at', '>=', $cutAt))
+            ->distinct()
+            ->pluck('activity_id')
+            ->all();
 
-        /** @var EloquentCollection<int, Activity> $completed */
-        $completed = $query->get(['id']);
-
-        if ($completed->isEmpty()) {
+        if ($finishedSinceCut === []) {
             return $this->memoizedSample = [];
         }
 
-        $clocks = $this->clocks($completed->modelKeys());
+        // Still concluded, and still a board item: an item reopened after
+        // the cut is work in progress again, and a parent that has since
+        // grown children is a container, not a delivery.
+        $ids = Activity::query()
+            ->leaf()
+            ->where('status', ActivityStatus::Done)
+            ->whereIn('id', $finishedSinceCut)
+            ->pluck('id')
+            ->all();
 
-        return $this->memoizedSample = $completed
-            ->map(fn (Activity $activity): ?float => $this->cycleTimeFromClock($clocks[$activity->id] ?? []))
+        if ($ids === []) {
+            return $this->memoizedSample = [];
+        }
+
+        $clocks = $this->clocks($ids);
+
+        return $this->memoizedSample = collect($ids)
+            ->map(fn (int $id): ?float => $this->cycleTimeFromClock($clocks[$id] ?? []))
             ->filter(fn (?float $days): bool => $days !== null)
             ->sort()
             ->values()
@@ -286,8 +330,33 @@ class FlowMetricsService
             'sle' => $sle,
             'ratio' => $ratio,
             'level' => $level,
-            'tooltip' => sprintf('%d de %d dias da SLE', (int) round($days), $sle),
+            'tooltip' => sprintf('%s de %d dias da SLE', $this->formatDays($days, $level), $sle),
         ];
+    }
+
+    /**
+     * The age as the tooltip states it, in PT-BR.
+     *
+     * Rounding to whole days would make the text contradict the colour it
+     * sits on: with an SLE of 10, both 9,6 (amber — still inside) and 10,4
+     * (red — already broken) would read "10 de 10 dias". A card that says
+     * one thing and shows another trains the user to trust neither.
+     *
+     * So the age keeps a decimal, and it is rounded *away* from the
+     * threshold — down while the item is still inside the SLE, up once it
+     * has broken it. That makes the number and the border agree by
+     * construction: an amber card can never read as having reached the
+     * SLE, and a red one can never read as being short of it.
+     */
+    private function formatDays(float $days, string $level): string
+    {
+        $value = $level === 'breach'
+            ? ceil($days * 10) / 10
+            : floor($days * 10) / 10;
+
+        return $value == (int) $value
+            ? (string) (int) $value
+            : number_format($value, 1, ',', '');
     }
 
     /**
@@ -327,14 +396,20 @@ class FlowMetricsService
             return collect();
         }
 
-        return Activity::query()
+        $candidates = Activity::query()
             ->leaf()
             ->whereIn('status', array_map(
                 fn (ActivityStatus $status): string => $status->value,
                 self::agingStatuses(),
             ))
             ->with(['project', 'client'])
-            ->get()
+            ->get();
+
+        // One history read for the whole list. Without this, asking each
+        // row for its aging is a query per row.
+        $this->warm($candidates);
+
+        return $candidates
             ->map(fn (Activity $activity): array => [
                 'activity' => $activity,
                 'aging' => $this->agingFor($activity),
@@ -420,12 +495,39 @@ class FlowMetricsService
     }
 
     /**
-     * Read the clocks of a whole set of activities up front.
+     * Read the clocks of every card that can possibly show aging, in one
+     * go — the Kanban's single warm-up call.
      *
-     * A board renders dozens of cards and each one asks for its aging;
-     * without this the answer would cost one query per card. Callers that
-     * already hold the collection (the Kanban's columns) warm it once and
-     * every subsequent lookup is free.
+     * The board renders seven columns, each split into "com projeto", "sem
+     * projeto" and (for Pronto) the pull queue. Warming those pieces one
+     * by one costs a query each, including for the three columns that
+     * never show aging at all. This reads the four columns that can, as
+     * ids, in two queries flat — independent of how many cards or columns
+     * end up rendering.
+     *
+     * It returns early when there is no usable SLE, because then no card
+     * is flagged and there is nothing worth reading.
+     */
+    public function warmBoard(): void
+    {
+        if ($this->sleDays() === null) {
+            return;
+        }
+
+        $this->clocks(
+            Activity::query()
+                ->leaf()
+                ->whereIn('status', array_map(
+                    fn (ActivityStatus $status): string => $status->value,
+                    self::agingStatuses(),
+                ))
+                ->pluck('id')
+                ->all()
+        );
+    }
+
+    /**
+     * Read the clocks of a given set of activities up front.
      *
      * @param  iterable<Activity>  $activities
      */

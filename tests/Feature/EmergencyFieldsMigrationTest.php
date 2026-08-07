@@ -2,39 +2,68 @@
 
 use App\Models\Activity;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * The migration is not zero-touch by design: the invariant "no máximo uma
- * Emergência ativa" cannot hold for rows produced by the priority ->
- * service_class mapping, which turned every urgent activity into an
- * emergency. These tests pin the reconciliation it performs.
+ * The migration is not zero-touch by design: `service_class = emergency`
+ * came from a bulk mapping of `priority = urgent`, so the database can
+ * hold many active emergencies and nothing in it says which one is real.
+ * These tests pin the reconciliation it performs — and, above all, that it
+ * refuses to guess a survivor.
  */
 $migrationPath = 'migrations/2026_08_07_120000_add_emergency_fields_to_activities_table.php';
 
-test('every existing emergency is backfilled with a motivo and an emergency_since', function () use ($migrationPath) {
-    $emergency = Activity::factory()->issue()->done()->emergency('Motivo original')->create();
+/**
+ * Build a legacy row the way the previous migration left it: classified
+ * emergency, with no motivo and no `emergency_since`. Saved quietly so the
+ * observer's guard doesn't refuse the very state this migration exists to
+ * clean up.
+ */
+function legacyEmergency(string $title, bool $done = false): Activity
+{
+    $task = $done
+        ? Activity::factory()->issue()->done()->create(['title' => $title])
+        : Activity::factory()->issue()->todo()->create(['title' => $title]);
+
+    $task->forceFill([
+        'service_class' => 'emergency',
+        'emergency_reason' => null,
+        'emergency_since' => null,
+    ])->saveQuietly();
+
+    return $task;
+}
+
+test('every existing emergency is backfilled with a motivo so the observer can save it', function () use ($migrationPath) {
+    $done = legacyEmergency('Emergência já concluída', done: true);
 
     $migration = require database_path($migrationPath);
     $migration->down();
     $migration->up();
 
-    $row = DB::table('activities')->where('id', $emergency->id)->first();
+    $row = DB::table('activities')->where('id', $done->id)->first();
 
     expect($row->service_class)->toBe('emergency')
-        ->and($row->emergency_reason)->not->toBeNull()
-        ->and($row->emergency_since)->not->toBeNull();
+        ->and($row->emergency_reason)->not->toBeNull();
 });
 
-test('surplus active emergencies are demoted to standard so exactly one survives', function () use ($migrationPath) {
-    // Built with saveQuietly so the observer's guard doesn't refuse the
-    // very state this migration exists to clean up.
-    $ids = collect(range(1, 3))->map(function (int $i): int {
-        $task = Activity::factory()->issue()->todo()->create(['title' => "Legado {$i}"]);
-        $task->forceFill(['service_class' => 'emergency', 'emergency_reason' => null])->saveQuietly();
+test('emergency_since is left null for legacy rows rather than faking the age from created_at', function () use ($migrationPath) {
+    $done = legacyEmergency('Emergência antiga', done: true);
+    DB::table('activities')->where('id', $done->id)->update(['created_at' => now()->subYear()]);
 
-        return $task->id;
-    });
+    $migration = require database_path($migrationPath);
+    $migration->down();
+    $migration->up();
+
+    // The item's birthday is not the day it was classified, and nothing
+    // recorded the latter — "desconhecido" is the honest answer.
+    expect(DB::table('activities')->where('id', $done->id)->value('emergency_since'))->toBeNull()
+        ->and($done->fresh()->emergencyDays())->toBe(0);
+});
+
+test('every active legacy emergency is demoted — the migration crowns no arbitrary survivor', function () use ($migrationPath) {
+    $ids = collect(range(1, 3))->map(fn (int $i): int => legacyEmergency("Legado {$i}")->id);
 
     $migration = require database_path($migrationPath);
     $migration->down();
@@ -45,23 +74,33 @@ test('surplus active emergencies are demoted to standard so exactly one survives
         ->where('service_class', 'emergency')
         ->pluck('id');
 
-    expect($stillEmergency)->toHaveCount(1)
-        ->and($stillEmergency->first())->toBe($ids->last());
+    expect($stillEmergency)->toBeEmpty()
+        ->and(DB::table('activities')->whereIn('id', $ids)->count())->toBe(3);
+});
 
-    // The demoted ones keep everything except the classification.
-    expect(DB::table('activities')->whereIn('id', $ids)->count())->toBe(3);
+test('the demotions are logged with ids and titles, since down() cannot restore them', function () use ($migrationPath) {
+    $task = legacyEmergency('Legado que perde a classe');
+
+    Log::shouldReceive('warning')
+        ->once()
+        ->withArgs(function (string $message, array $context) use ($task): bool {
+            return str_contains($message, 'issue #143')
+                && $context['activities'] === [$task->id => 'Legado que perde a classe'];
+        });
+
+    $migration = require database_path($migrationPath);
+    $migration->down();
+    $migration->up();
 });
 
 test('a done emergency is never demoted — it is history, not board state', function () use ($migrationPath) {
-    $done = Activity::factory()->issue()->done()->emergency('Resolvido')->create();
-    $active = Activity::factory()->issue()->todo()->emergency('Ativo')->create();
+    $done = legacyEmergency('Resolvido', done: true);
 
     $migration = require database_path($migrationPath);
     $migration->down();
     $migration->up();
 
-    expect(DB::table('activities')->where('id', $done->id)->value('service_class'))->toBe('emergency')
-        ->and(DB::table('activities')->where('id', $active->id)->value('service_class'))->toBe('emergency');
+    expect(DB::table('activities')->where('id', $done->id)->value('service_class'))->toBe('emergency');
 });
 
 test('down() only removes the emergency columns, preserving rows', function () use ($migrationPath) {

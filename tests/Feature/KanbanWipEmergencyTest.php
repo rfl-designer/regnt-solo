@@ -22,16 +22,18 @@ test('dropping a third standard card into Fazendo is refused and the card stays 
     expect($third->fresh()->status)->toBe(ActivityStatus::Todo);
 });
 
-test('the refusal message explains the limit rather than failing silently', function () {
+test('the refusal actually reaches the user as a danger toast carrying the domain message', function () {
     Activity::factory()->issue()->doing()->count(2)->create();
     $third = Activity::factory()->issue()->todo()->create();
 
-    // The toast text is the canonical domain message — the Kanban never
-    // writes its own wording for the refusal.
-    expect(DoingWipLimitExceededException::messageFor(2))
-        ->toContain('Limite de 2 itens em Fazendo');
-
-    Livewire::test('pages::kanban')->call('handleSort', $third->id, 0, 'doing');
+    Livewire::test('pages::kanban')
+        ->call('handleSort', $third->id, 0, 'doing')
+        // Flux::toast dispatches `toast-show`; asserting the payload is what
+        // stops a silently swallowed exception from passing as a refusal.
+        ->assertDispatched('toast-show', function (string $event, array $params): bool {
+            return ($params['dataset']['variant'] ?? null) === 'danger'
+                && ($params['slots']['text'] ?? '') === DoingWipLimitExceededException::messageFor(2);
+        });
 
     expect($third->fresh()->status)->toBe(ActivityStatus::Todo);
 });
@@ -51,13 +53,27 @@ test('the Fazendo header shows n/limit, in red once the column is full', functio
     Livewire::test('pages::kanban')
         ->assertSee('2/2')
         ->assertSee('Limite de 2 itens em Fazendo');
+
+    expect(Livewire::test('pages::kanban')->instance()->wipBadgeColor())->toBe('red');
 });
 
-test('the Fazendo header reads 3/2 when an Emergência has furado o limite', function () {
+test('the n/limit badge is not red while there is still room', function () {
+    Activity::factory()->issue()->doing()->create();
+
+    $component = Livewire::test('pages::kanban')->assertSee('1/2');
+
+    expect($component->instance()->wipBadgeColor())
+        ->toBe(ActivityStatus::Doing->color())
+        ->not->toBe('red');
+});
+
+test('the Fazendo header reads 3/2 in red when an Emergência has furado o limite', function () {
     Activity::factory()->issue()->doing()->count(2)->create();
     Activity::factory()->issue()->doing()->emergency('Produção fora do ar')->create();
 
-    Livewire::test('pages::kanban')->assertSee('3/2');
+    $component = Livewire::test('pages::kanban')->assertSee('3/2');
+
+    expect($component->instance()->wipBadgeColor())->toBe('red');
 });
 
 test('the n/limit indicator ignores column filters, because the limit is about the whole board', function () {

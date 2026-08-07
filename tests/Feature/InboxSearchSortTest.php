@@ -100,10 +100,9 @@ test('inbox sorts tasks by service class', function () {
         'status' => 'inbox',
         'service_class' => ServiceClass::Intangible,
     ]);
-    Activity::factory()->create([
+    Activity::factory()->emergency()->create([
         'title' => 'Emergency task',
         'status' => 'inbox',
-        'service_class' => ServiceClass::Emergency,
     ]);
 
     Livewire::test('pages::inbox')

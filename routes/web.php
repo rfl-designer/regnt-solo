@@ -28,9 +28,14 @@ Route::livewire('kanban', 'pages::kanban')
     ->middleware(['auth'])
     ->name('kanban');
 
-Route::livewire('daily', 'pages::daily-planner')
+// O ritual matinal substitui o Daily Planner (issue #147). A rota antiga
+// sobrevive só como redirecionamento, para que links, atalhos e bookmarks
+// já existentes cheguem ao lugar certo em vez de darem 404.
+Route::livewire('ritual', 'pages::morning-ritual')
     ->middleware(['auth'])
-    ->name('daily');
+    ->name('ritual');
+
+Route::redirect('daily', '/ritual');
 
 Route::livewire('weekly', 'pages::weekly-calendar')
     ->middleware(['auth'])

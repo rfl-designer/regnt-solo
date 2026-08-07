@@ -4,7 +4,6 @@ use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Models\Client;
-use App\Models\DailyPlan;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -69,20 +68,26 @@ test('kanban only shows actionable leaf items', function () {
         ->assertDontSee('Personal task');
 });
 
-test('kanban done column only shows tasks completed this week', function () {
-    $thisWeekTask = Activity::factory()->issue()->done()->create([
+test('kanban done column shows what has not been archived, regardless of the week', function () {
+    // O filtro de semana saiu com o ritual matinal (issue #147): o que
+    // esvazia a coluna Feito agora é o arquivamento, um ato explícito.
+    Activity::factory()->issue()->done()->create([
         'title' => 'Done this week',
         'completed_at' => Carbon::now(),
     ]);
 
-    $lastWeekTask = Activity::factory()->issue()->done()->create([
+    Activity::factory()->issue()->done()->create([
         'title' => 'Done last week',
         'completed_at' => Carbon::now()->subWeek(),
     ]);
 
+    $archived = Activity::factory()->issue()->done()->create(['title' => 'Done and archived']);
+    $archived->archive();
+
     Livewire::test('pages::kanban')
         ->assertSee('Done this week')
-        ->assertDontSee('Done last week');
+        ->assertSee('Done last week')
+        ->assertDontSee('Done and archived');
 });
 
 test('kanban filters by project', function () {
@@ -145,7 +150,7 @@ test('kanban handleSort moves task to new status', function () {
     expect($task->fresh()->status)->toBe(ActivityStatus::Todo);
 });
 
-test('kanban handleSort to done marks task as done and syncs daily plan', function () {
+test('kanban handleSort to done marks task as done', function () {
     $task = Activity::factory()->doing()->create(['title' => 'Complete me']);
 
     Livewire::test('pages::kanban')
@@ -154,12 +159,9 @@ test('kanban handleSort to done marks task as done and syncs daily plan', functi
     $task->refresh();
 
     expect($task->status)->toBe(ActivityStatus::Done)
-        ->and($task->completed_at)->not->toBeNull();
-
-    $dailyPlan = DailyPlan::whereDate('date', Carbon::today())->first();
-
-    expect($dailyPlan)->not->toBeNull()
-        ->and($dailyPlan->tasks()->where('activity_id', $task->id)->exists())->toBeTrue();
+        ->and($task->completed_at)->not->toBeNull()
+        // Concluir escreve no quadro e em nada além dele (issue #147).
+        ->and($task->archived_at)->toBeNull();
 });
 
 test('kanban handleSort to done stops running timers', function () {

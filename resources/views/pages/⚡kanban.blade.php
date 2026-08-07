@@ -4,7 +4,6 @@ use App\Enums\ActivityStatus;
 use App\Exceptions\DomainRefusal;
 use App\Exceptions\SingleActiveEmergencyException;
 use App\Models\Activity;
-use App\Models\DailyPlan;
 use App\Models\Project;
 use App\Services\FlowMetricsService;
 use App\Services\PullQueueService;
@@ -198,14 +197,6 @@ new class extends Component
         try {
             DB::transaction(function () use ($task, $newStatus, $position): void {
                 if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
-                    // Add to daily plan if not already there (Observer syncs completed_at)
-                    $dailyPlan = DailyPlan::getOrCreateForDate(Carbon::today());
-
-                    if (! $dailyPlan->tasks()->where('activity_id', $task->id)->exists()) {
-                        $maxOrder = $dailyPlan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
-                        $dailyPlan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
-                    }
-
                     $task->markAsDone();
 
                     Flux::toast(variant: 'success', heading: 'Task concluída', text: $task->title);
@@ -311,11 +302,13 @@ new class extends Component
             ->withCount('commits')
             ->where('status', $status);
 
+        // Feito shows what hasn't been filed away yet (issue #147), which
+        // replaces the old "só a semana corrente" cut. The week filter hid
+        // work by the calendar; archiving hides it by an explicit act in
+        // the ritual's first step, so the column is a to-do for the ritual
+        // rather than a window that empties itself every Monday.
         if ($status === ActivityStatus::Done) {
-            $query->whereBetween('completed_at', [
-                Carbon::now()->startOfWeek(),
-                Carbon::now()->endOfWeek(),
-            ]);
+            $query->notArchived();
         }
 
         $this->applyFilters($query);
@@ -367,10 +360,7 @@ new class extends Component
             ->where('id', '!=', $movedId);
 
         if ($status === ActivityStatus::Done) {
-            $query->whereBetween('completed_at', [
-                Carbon::now()->startOfWeek(),
-                Carbon::now()->endOfWeek(),
-            ]);
+            $query->notArchived();
         }
 
         $ids = $query->orderBy('sort_order')->orderBy('id')->pluck('id')->all();

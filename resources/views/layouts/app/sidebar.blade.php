@@ -20,8 +20,9 @@
 
                 {{-- Planejamento --}}
                 <flux:sidebar.group heading="Planejamento" class="grid">
-                    <flux:sidebar.item icon="calendar-days" :href="route('daily')" :current="request()->routeIs('daily')" wire:navigate>
-                        Hoje
+                    <flux:sidebar.item icon="sun" :href="route('ritual')" :current="request()->routeIs('ritual')" wire:navigate>
+                        Ritual
+                        <livewire:ritual-badge />
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="calendar" :href="route('weekly')" :current="request()->routeIs('weekly')" wire:navigate>
                         Semana

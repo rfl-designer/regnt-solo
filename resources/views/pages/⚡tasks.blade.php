@@ -18,6 +18,15 @@ new class extends Component
     #[Url(as: 'project')]
     public ?int $projectFilter = null;
 
+    /**
+     * Where archived items live now (issue #147). The board's Feito column
+     * shows only what hasn't been filed away, so this filter is the way
+     * back to everything the morning ritual has archived — the history is
+     * hidden, never deleted.
+     */
+    #[Url(as: 'archived')]
+    public bool $showArchived = false;
+
     public bool $showDeleteModal = false;
 
     public ?int $deletingTaskId = null;
@@ -33,6 +42,12 @@ new class extends Component
     public function tasksByStatus(): array
     {
         $query = Activity::query()->tasks()->with(['project', 'parent']);
+
+        if ($this->showArchived) {
+            $query->archived();
+        } else {
+            $query->notArchived();
+        }
 
         if ($this->search !== '') {
             $query->whereRaw('lower(title) like ?', ['%'.mb_strtolower($this->search).'%']);
@@ -122,6 +137,11 @@ new class extends Component
         unset($this->tasksByStatus);
     }
 
+    public function updatedShowArchived(): void
+    {
+        unset($this->tasksByStatus);
+    }
+
     /**
      * @return list<ActivityStatus>
      */
@@ -165,6 +185,16 @@ new class extends Component
                 <option value="{{ $project->id }}">{{ $project->emoji }} {{ $project->name }}</option>
             @endforeach
         </flux:select>
+
+        <flux:button
+            wire:click="$toggle('showArchived')"
+            size="sm"
+            :variant="$showArchived ? 'primary' : 'ghost'"
+            icon="archive-box"
+            data-test="toggle-archived"
+        >
+            Arquivadas
+        </flux:button>
     </div>
 
     @php
@@ -175,7 +205,7 @@ new class extends Component
         <div class="flex flex-1 items-center justify-center">
             <div class="text-center">
                 <flux:icon name="check-circle" class="mx-auto mb-3 size-12 text-zinc-500" />
-                <flux:heading size="lg">Nenhuma tarefa</flux:heading>
+                <flux:heading size="lg">{{ $showArchived ? 'Nenhuma tarefa arquivada' : 'Nenhuma tarefa' }}</flux:heading>
                 <flux:text class="mt-1">Crie um recado para começar.</flux:text>
                 <flux:text class="mt-1 text-sm text-zinc-500">
                     Pressione <kbd class="rounded border border-zinc-600 bg-zinc-700 px-1.5 py-0.5 text-xs">Ctrl</kbd>

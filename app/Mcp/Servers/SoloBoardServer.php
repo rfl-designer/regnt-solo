@@ -44,6 +44,7 @@ use App\Mcp\Tools\ToggleRecurringTaskTool;
 use App\Mcp\Tools\UpdateDocumentTool;
 use App\Mcp\Tools\UpdateEpicTool;
 use App\Mcp\Tools\UpdateIssueTool;
+use App\Mcp\Tools\UpdateTaskTool;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Prompt;
 use Laravel\Mcp\Server\Tool;
@@ -106,6 +107,7 @@ class SoloBoardServer extends Server
         DeleteIssueTool::class,
         ListTasksTool::class,
         CreateTaskTool::class,
+        UpdateTaskTool::class,
         ListDraftsTool::class,
         CreateDraftTool::class,
         PromoteDraftTool::class,

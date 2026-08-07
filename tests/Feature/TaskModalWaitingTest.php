@@ -76,3 +76,108 @@ test('leaving a wait status via the task modal clears waiting_for', function () 
     expect($task->fresh()->waiting_for)->toBeNull()
         ->and($task->fresh()->waiting_since)->toBeNull();
 });
+
+// -----------------------------------------------------------------------
+// Finding 4: switching between two waiting categories in the modal must
+// not silently reuse the previous wait's "esperando quem".
+// -----------------------------------------------------------------------
+
+test('switching from a client-side wait to the internal wait clears the inherited name and opens the prompt', function () {
+    $client = Client::factory()->create(['name' => 'Acme Corp']);
+    $project = Project::factory()->create(['client_id' => $client->id]);
+    $task = Activity::factory()->create([
+        'project_id' => $project->id,
+        'status' => ActivityStatus::AwaitingApproval,
+        'waiting_for' => 'Acme Corp',
+    ]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->assertSet('waitingFor', 'Acme Corp')
+        ->set('status', 'waiting')
+        ->assertSet('waitingFor', '')
+        ->assertSet('showWaitingForPrompt', true)
+        ->call('saveTask')
+        ->assertSet('showWaitingForPrompt', true);
+
+    expect($task->fresh()->status)->toBe(ActivityStatus::AwaitingApproval);
+});
+
+test('switching from the internal wait to a client-side wait re-resolves the effective client', function () {
+    $client = Client::factory()->create(['name' => 'Acme Corp']);
+    $project = Project::factory()->create(['client_id' => $client->id]);
+    $task = Activity::factory()->create([
+        'project_id' => $project->id,
+        'status' => ActivityStatus::Waiting,
+        'waiting_for' => 'Designer',
+    ]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->assertSet('waitingFor', 'Designer')
+        ->set('status', 'awaiting_validation')
+        ->assertSet('waitingFor', 'Acme Corp')
+        ->call('saveTask');
+
+    expect($task->fresh()->status)->toBe(ActivityStatus::AwaitingValidation)
+        ->and($task->fresh()->waiting_for)->toBe('Acme Corp');
+});
+
+test('re-selecting the status the task already had keeps the stored waiting_for untouched', function () {
+    $task = Activity::factory()->waiting('Designer')->create();
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->set('status', 'doing')
+        ->set('status', 'waiting')
+        ->assertSet('waitingFor', 'Designer')
+        ->assertSet('showWaitingForPrompt', false);
+});
+
+// -----------------------------------------------------------------------
+// Finding 5: changing project/client during a client-side wait must
+// re-resolve "esperando quem" in the modal too.
+// -----------------------------------------------------------------------
+
+test('changing the project while already in a client-side wait re-resolves waitingFor in the modal', function () {
+    $oldClient = Client::factory()->create(['name' => 'Old Client']);
+    $oldProject = Project::factory()->create(['client_id' => $oldClient->id]);
+    $newClient = Client::factory()->create(['name' => 'New Client']);
+    $newProject = Project::factory()->create(['client_id' => $newClient->id]);
+
+    $task = Activity::factory()->create([
+        'project_id' => $oldProject->id,
+        'status' => ActivityStatus::AwaitingApproval,
+        'waiting_for' => 'Old Client',
+    ]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->assertSet('waitingFor', 'Old Client')
+        ->set('projectId', (string) $newProject->id)
+        ->assertSet('waitingFor', 'New Client')
+        ->call('saveTask');
+
+    expect($task->fresh()->waiting_for)->toBe('New Client');
+});
+
+test('manually editing waitingFor stops a later project change from overwriting it', function () {
+    $oldClient = Client::factory()->create(['name' => 'Old Client']);
+    $oldProject = Project::factory()->create(['client_id' => $oldClient->id]);
+    $newProject = Project::factory()->create();
+
+    $task = Activity::factory()->create([
+        'project_id' => $oldProject->id,
+        'status' => ActivityStatus::AwaitingApproval,
+        'waiting_for' => 'Old Client',
+    ]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->set('waitingFor', 'Manually set name')
+        ->set('projectId', (string) $newProject->id)
+        ->assertSet('waitingFor', 'Manually set name')
+        ->call('saveTask');
+
+    expect($task->fresh()->waiting_for)->toBe('Manually set name');
+});

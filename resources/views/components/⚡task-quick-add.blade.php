@@ -184,6 +184,17 @@ new class extends Component
             ? ActivityStatus::tryFrom($this->initialStatus) ?? ActivityStatus::Inbox
             : ActivityStatus::Inbox;
 
+        // Quick-Add always creates in Inbox (issue #142 criterion). The "+"
+        // button on a waiting column (Aguardando aprovação/validação,
+        // Esperando) would otherwise create straight into a status that
+        // requires "esperando quem", which Quick-Add has no field for —
+        // fall back to Inbox instead of surfacing the domain guard as a
+        // raw Livewire error.
+        if ($taskStatus->isWaiting()) {
+            Flux::toast(variant: 'warning', heading: 'Criada na Inbox', text: 'Quick-Add sempre cria na Inbox; mover para espera exige informar "esperando quem" no Kanban ou no Task Modal.');
+            $taskStatus = ActivityStatus::Inbox;
+        }
+
         if ($invalidServiceClass) {
             Flux::toast(variant: 'warning', heading: 'Classe de serviço inválida', text: "\"!{$serviceClass}\" não é uma classe válida. Task criada como Padrão.");
         }

@@ -47,29 +47,44 @@ class ActivityObserver
      * (waiting_since) invariant for the three waiting statuses (issue
      * #142): Aguardando aprovação, Esperando, Aguardando validação.
      *
-     * - Entering a client-side wait (Aguardando aprovação/validação) with
-     *   no waiting_for yet auto-fills it from the activity's effective
-     *   client.
-     * - Any waiting status with no waiting_for after that auto-fill attempt
-     *   is refused — this is what makes the internal wait (Esperando)
-     *   effectively require an interactive answer, since it has no client
-     *   to fall back on.
-     * - waiting_since is stamped the first time the activity lands in a
-     *   waiting status and left untouched on subsequent saves while it
-     *   stays there.
-     * - Leaving a waiting status for any other status clears both fields
-     *   automatically.
+     * - `waiting_for` is normalized (trimmed, blank -> null) before any of
+     *   the rules below run, so `''`/`'   '` are treated exactly like null
+     *   rather than slipping through as an "anonymous" wait.
+     * - A status is null or non-waiting: both fields are cleared. `null`
+     *   counts as non-waiting here (a nullable status is still a valid
+     *   Eloquent state even though no current UI produces it directly).
+     * - Every genuine *entry* into a waiting status this save — whether
+     *   this is a brand new record, a move from a non-waiting status, or a
+     *   move between two waiting statuses (e.g. `awaiting_approval` ->
+     *   `waiting`) — requires a fresh, explicit `waiting_for` for this
+     *   save: client-side waits (Aguardando aprovação/validação) resolve
+     *   it from the effective client when not explicitly provided;
+     *   the internal wait (Esperando) has no such fallback, so an
+     *   inherited value from the previous wait is discarded, which is
+     *   exactly what forces the interactive prompt in the UI.
+     * - Staying in the *same* client-side wait while the project/client
+     *   changes (and `waiting_for` itself wasn't explicitly touched this
+     *   save) re-resolves "esperando quem" from the new effective client,
+     *   instead of keeping the previous client's name.
+     * - Any waiting status left with no `waiting_for` after the rules
+     *   above is refused.
+     * - `waiting_since` is stamped fresh on every genuine entry (as
+     *   defined above) and left untouched on saves that don't change
+     *   status while already sitting in the same wait — this is also what
+     *   stops a caller from forging the timestamp via mass assignment
+     *   (`waiting_since` isn't fillable; see {@see Activity::$fillable}),
+     *   since any entry transition always overwrites it with `now()` here.
      *
      * Fires on every Eloquent save regardless of origin (Kanban, Task
      * Modal, MCP tools, tinker), same as the fixed_date guard above.
      */
     private function handleWaitingState(Activity $activity): void
     {
-        if ($activity->status === null) {
-            return;
-        }
+        $activity->waiting_for = $this->normalizeWaitingFor($activity->waiting_for);
 
-        if (! $activity->status->isWaiting()) {
+        $newStatus = $activity->status;
+
+        if ($newStatus === null || ! $newStatus->isWaiting()) {
             if ($activity->waiting_for !== null) {
                 $activity->waiting_for = null;
             }
@@ -81,17 +96,55 @@ class ActivityObserver
             return;
         }
 
-        if ($activity->status->isClientWaiting() && $activity->waiting_for === null) {
+        // New records have no "original" status to diff against — every
+        // create into a waiting status is an entry. `isDirty` on a fresh
+        // model always reports false (its original is synced to itself at
+        // construction time), so `exists` is checked first.
+        $enteringWaitThisSave = ! $activity->exists || $activity->isDirty('status');
+
+        $waitingForExplicit = $activity->exists
+            ? $activity->isDirty('waiting_for')
+            : $activity->waiting_for !== null;
+
+        if ($enteringWaitThisSave) {
+            if ($newStatus->isInternalWaiting() && ! $waitingForExplicit) {
+                // No client to fall back on, and no fresh answer given —
+                // even a value inherited from a previous wait is discarded
+                // so the guard below refuses and the UI's blocking prompt
+                // takes over.
+                $activity->waiting_for = null;
+            } elseif ($newStatus->isClientWaiting() && ! $waitingForExplicit) {
+                $activity->waiting_for = $activity->effective_client?->name;
+            }
+        } elseif ($newStatus->isClientWaiting()
+            && ! $waitingForExplicit
+            && ($activity->isDirty('project_id') || $activity->isDirty('client_id'))
+        ) {
             $activity->waiting_for = $activity->effective_client?->name;
         }
 
-        if ($activity->waiting_for === null) {
+        if (blank($activity->waiting_for)) {
             throw new WaitingRequiresWaitingForException;
         }
 
-        if ($activity->waiting_since === null) {
+        if ($enteringWaitThisSave || $activity->waiting_since === null) {
             $activity->waiting_since = now();
         }
+    }
+
+    /**
+     * Trim `waiting_for` and treat a blank result as absent, so a
+     * whitespace-only value never counts as "esperando quem" being set.
+     */
+    private function normalizeWaitingFor(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 
     /**

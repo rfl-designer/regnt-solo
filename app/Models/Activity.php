@@ -43,8 +43,12 @@ class Activity extends Model
         'status',
         'priority',
         'service_class',
+        // `waiting_since` is deliberately NOT fillable: it must only ever
+        // be stamped by ActivityObserver::handleWaitingState() with now(),
+        // never accepted from caller input (Kanban, Task Modal, MCP tools),
+        // so nothing can forge the "desde quando" timestamp on entry into
+        // a waiting status.
         'waiting_for',
-        'waiting_since',
         'due_date',
         'estimated_minutes',
         'completed_at',

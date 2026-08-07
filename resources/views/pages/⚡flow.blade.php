@@ -84,7 +84,7 @@ new class extends Component
             <flux:text class="mt-1">O que o quadro promete, medido pelo que ele entregou.</flux:text>
         </div>
 
-        <flux:button wire:click="openCutModal" variant="primary" icon="scissors" size="sm">
+        <flux:button wire:click="openCutModal" variant="primary" icon="scissors" size="sm" data-test="cut-open">
             Cortar baseline
         </flux:button>
     </div>
@@ -247,6 +247,7 @@ new class extends Component
                     wire:model="cutReason"
                     rows="3"
                     placeholder="Ex: adoção do Fluxo Solo, saída de um cliente grande, mudança no jeito de trabalhar"
+                    data-test="cut-reason"
                 />
                 <flux:error name="cutReason" />
             </flux:field>
@@ -255,7 +256,7 @@ new class extends Component
                 <flux:modal.close>
                     <flux:button variant="ghost">Cancelar</flux:button>
                 </flux:modal.close>
-                <flux:button type="submit" variant="primary" wire:loading.attr="disabled">
+                <flux:button type="submit" variant="primary" wire:loading.attr="disabled" data-test="cut-submit">
                     <span wire:loading.remove wire:target="saveCut">Cortar</span>
                     <span wire:loading wire:target="saveCut">Cortando...</span>
                 </flux:button>

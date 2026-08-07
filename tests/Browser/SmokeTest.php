@@ -25,7 +25,7 @@ test('client related pages load without javascript errors', function (): void {
         'client_id' => $client->id,
     ]);
 
-    visit(['/clients', '/kanban'])
+    visit(['/clients', '/kanban', '/flow'])
         ->assertNoJavaScriptErrors()
         ->assertNoBrokenImages();
 });

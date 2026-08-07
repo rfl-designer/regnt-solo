@@ -97,6 +97,22 @@ new class extends Component
     }
 
     /**
+     * The tail of Pronto: what is on the board but out of the queue because
+     * its Épico's Spec is still waiting on the client (issue #146).
+     *
+     * Rendered below the degraus, unranked, with a discreet "spec em
+     * aprovação" on each card. Nothing stops the user pulling one — it just
+     * doesn't get to order the column.
+     *
+     * @return \Illuminate\Support\Collection<int, \App\Models\Activity>
+     */
+    #[Computed]
+    public function specPending(): \Illuminate\Support\Collection
+    {
+        return app(PullQueueService::class)->blockedBySpec(fn ($query) => $this->applyFilters($query));
+    }
+
+    /**
      * Get total count for a column (for "load more" button).
      */
     public function getColumnTotal(ActivityStatus $status): int
@@ -257,7 +273,7 @@ new class extends Component
     #[On('task-created')]
     public function refreshBoard(): void
     {
-        unset($this->projects, $this->pullQueue, $this->flow);
+        unset($this->projects, $this->pullQueue, $this->specPending, $this->flow);
     }
 
     /**
@@ -447,7 +463,9 @@ new class extends Component
                 $tasks = $isTodo ? collect() : $this->getColumnTasks($status, withProject: true);
                 $unassignedTasks = $isTodo ? collect() : $this->getColumnTasks($status, withProject: false);
                 $queueEntries = $isTodo ? $this->pullQueue->take($limit) : collect();
-                $total = $isTodo ? $this->pullQueue->count() : $this->getColumnTotal($status);
+                // Out of the queue but still in the column (issue #146).
+                $specPending = $isTodo ? $this->specPending : collect();
+                $total = $isTodo ? $this->pullQueue->count() + $specPending->count() : $this->getColumnTotal($status);
 
                 $estimate = $this->getColumnEstimate($status);
                 $estimateFormatted = $this->formatDuration($estimate);
@@ -615,10 +633,36 @@ new class extends Component
                                     :aging-tooltip="$this->flow->agingTooltip($entry->activity)"
                                 />
                             @empty
-                                <li class="py-8 text-center text-sm text-zinc-600">
-                                    Nenhuma task
-                                </li>
+                                @if ($specPending->isEmpty())
+                                    <li class="py-8 text-center text-sm text-zinc-600">
+                                        Nenhuma task
+                                    </li>
+                                @endif
                             @endforelse
+
+                            {{-- Spec em aprovação (issue #146): fora da fila,
+                                 e por isso sempre no fim e sem ordenação
+                                 própria — não empurram nada para baixo. --}}
+                            @if ($specPending->isNotEmpty())
+                                <li
+                                    wire:key="pull-queue-degrau-spec-pending"
+                                    wire:sort:ignore
+                                    class="flex items-center gap-2 pt-1 first:pt-0"
+                                >
+                                    <span class="text-[0.65rem] font-medium tracking-wide text-violet-400/80 uppercase">
+                                        Spec em aprovação
+                                    </span>
+                                    <span class="h-px flex-1 bg-zinc-700/60"></span>
+                                </li>
+
+                                @foreach ($specPending as $blocked)
+                                    <x-pull-queue-card
+                                        :activity="$blocked"
+                                        :aging-border="$this->flow->agingBorderClass($blocked)"
+                                        :aging-tooltip="$this->flow->agingTooltip($blocked)"
+                                    />
+                                @endforeach
+                            @endif
                         </ul>
                     @else
                     <ul

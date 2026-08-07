@@ -86,7 +86,8 @@ class PullQueueService
      */
     public function queue(?Closure $constrain = null): Collection
     {
-        $activities = $this->universe($constrain);
+        $activities = $this->universe($constrain)
+            ->reject(fn (Activity $activity): bool => $activity->isBlockedBySpecApproval());
 
         if ($activities->isEmpty()) {
             return collect();
@@ -100,6 +101,26 @@ class PullQueueService
                 $history[$activity->id] ?? [],
             ))
             ->sort(fn (PullQueueEntry $a, PullQueueEntry $b): int => $a->sortKey() <=> $b->sortKey())
+            ->values();
+    }
+
+    /**
+     * What sits in Pronto but is *not* in the queue: the children of an
+     * Épico whose Spec is still waiting on the client (issue #146).
+     *
+     * They are deliberately still on the board — there is no hard lock, and
+     * the user is free to pull one anyway. What they lose is their claim on
+     * the order: an item whose Spec hasn't been said yes to cannot push a
+     * committed one down the queue, so it neither ranks nor reorders
+     * Pronto. The card says why, and that is the whole enforcement.
+     *
+     * @param  Closure(Builder): void|null  $constrain  Same scoping as {@see queue()}.
+     * @return Collection<int, Activity>
+     */
+    public function blockedBySpec(?Closure $constrain = null): Collection
+    {
+        return $this->universe($constrain)
+            ->filter(fn (Activity $activity): bool => $activity->isBlockedBySpecApproval())
             ->values();
     }
 
@@ -126,7 +147,9 @@ class PullQueueService
         $query = Activity::query()
             ->leaf()
             ->where('status', ActivityStatus::Todo)
-            ->with(['project.client', 'client', 'parent', 'timeEntries'])
+            // `parent.statusChanges` is what the Spec gate reads: without it
+            // every card in Pronto asks its Épico for its history one by one.
+            ->with(['project.client', 'client', 'parent.statusChanges', 'timeEntries'])
             ->withCount('commits');
 
         if ($constrain !== null) {

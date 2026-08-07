@@ -410,8 +410,18 @@ class Activity extends Model
 
     /**
      * Whether the Spec is currently in the client's hands, waiting for a
-     * yes: it was sent and has no standing approval, or it has just been
-     * sent again after one.
+     * yes.
+     *
+     * The question is asked against the **last** send, not the first: a
+     * Spec that was approved, changed and sent again is pending once more,
+     * and its earlier approval no longer covers it. So the standing
+     * approval only counts when it came *after* the last send.
+     *
+     * This is what makes a reprovação read correctly too. Reproving sends
+     * the Épico backwards (typically to Backlog) without producing an
+     * approval, so the last send stays unanswered and the Spec stays
+     * pending — asking only "is it sitting in Aguardando aprovação right
+     * now" would have called a reproved Spec approved.
      *
      * There is no hard lock behind this (that was the decision in #124):
      * children of an Épico in this state keep moving freely, they just
@@ -419,11 +429,17 @@ class Activity extends Model
      */
     public function isSpecPending(): bool
     {
-        if ($this->status === ActivityStatus::AwaitingApproval) {
-            return true;
+        $lastSentAt = $this->orderedStatusChanges()
+            ->last(fn (ActivityStatusChange $change): bool => $change->to_status === ActivityStatus::AwaitingApproval)
+            ?->changed_at;
+
+        if ($lastSentAt === null) {
+            return false;
         }
 
-        return $this->hasSpecLifecycle() && $this->spec_aprovada === null;
+        $approvedAt = $this->spec_aprovada;
+
+        return $approvedAt === null || $approvedAt->lessThan($lastSentAt);
     }
 
     /**

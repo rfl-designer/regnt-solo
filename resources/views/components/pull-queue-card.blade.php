@@ -1,14 +1,18 @@
-@props(['entry', 'agingBorder' => null, 'agingTooltip' => null])
+@props(['entry' => null, 'activity' => null, 'agingBorder' => null, 'agingTooltip' => null])
 
 @php
-    $task = $entry->activity;
+    $task = $entry?->activity ?? $activity;
+
+    // Two kinds of card share this markup: one that earned a position in
+    // the queue (and explains it), and one that is out of the queue because
+    // its Épico's Spec is still with the client (issue #146).
+    $reason = $entry?->positionReason()
+        ?? 'fora da fila: a spec do épico ainda está em aprovação';
 
     // The card already explains its position; when it is also burning
     // through the SLE (issue #145), that goes in the same tooltip rather
     // than a second one stacked on top of it.
-    $tooltip = $agingTooltip
-        ? $entry->positionReason().' · '.$agingTooltip
-        : $entry->positionReason();
+    $tooltip = $agingTooltip ? $reason.' · '.$agingTooltip : $reason;
 @endphp
 
 {{-- A card in the Pronto column (issue #144).
@@ -37,6 +41,15 @@
                 <div class="mt-2 flex items-center gap-1.5 border-l-2 pl-2" style="border-color: {{ $task->project->color }}">
                     <span class="text-xs">{{ $task->project->emoji }}</span>
                     <span class="truncate text-xs text-zinc-400">{{ $task->project->name }}</span>
+                </div>
+            @endif
+
+            {{-- Spec ainda em aprovação (issue #146): sinal discreto, não um
+                 bloqueio — o card continua arrastável e clicável. --}}
+            @if ($entry === null)
+                <div class="mt-2 flex items-center gap-1 text-xs text-violet-400/80" data-test="spec-pending-signal">
+                    <flux:icon name="paper-airplane" class="size-3.5" />
+                    <span>spec em aprovação</span>
                 </div>
             @endif
 

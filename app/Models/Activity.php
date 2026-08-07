@@ -5,9 +5,11 @@ namespace App\Models;
 use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
+use App\Enums\ServiceClass;
 use App\Observers\ActivityObserver;
 use App\Observers\ActivityRealtimeObserver;
 use Carbon\Carbon;
+use Database\Factories\ActivityFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -21,7 +23,7 @@ use Illuminate\Support\Str;
 #[ObservedBy([ActivityObserver::class, ActivityRealtimeObserver::class])]
 class Activity extends Model
 {
-    /** @use HasFactory<\Database\Factories\ActivityFactory> */
+    /** @use HasFactory<ActivityFactory> */
     use HasFactory;
 
     /**
@@ -40,6 +42,7 @@ class Activity extends Model
         'spec',
         'status',
         'priority',
+        'service_class',
         'due_date',
         'estimated_minutes',
         'completed_at',
@@ -64,6 +67,7 @@ class Activity extends Model
             'type' => ActivityType::class,
             'status' => ActivityStatus::class,
             'priority' => ActivityPriority::class,
+            'service_class' => ServiceClass::class,
             'due_date' => 'date',
             'completed_at' => 'datetime',
         ];

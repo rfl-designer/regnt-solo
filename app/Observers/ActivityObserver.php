@@ -3,6 +3,8 @@
 namespace App\Observers;
 
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Models\Activity;
 use App\Models\ActivityStatusChange;
 use App\Models\DailyPlan;
@@ -10,6 +12,21 @@ use Carbon\Carbon;
 
 class ActivityObserver
 {
+    /**
+     * Handle the Activity "saving" event.
+     *
+     * Enforces the domain invariant that classifying an activity as "Data
+     * fixa" requires a due date. This is the single choke point for the
+     * guard — it fires on every save regardless of origin (Kanban, Task
+     * Modal, MCP tools, tinker), so no surface can bypass it.
+     */
+    public function saving(Activity $activity): void
+    {
+        if ($activity->service_class === ServiceClass::FixedDate && $activity->due_date === null) {
+            throw new FixedDateRequiresDueDateException;
+        }
+    }
+
     /**
      * Handle the Activity "creating" event.
      *

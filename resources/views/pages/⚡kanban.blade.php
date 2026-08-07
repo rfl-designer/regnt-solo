@@ -1,9 +1,8 @@
 <?php
 
 use App\Enums\ActivityStatus;
-use App\Exceptions\DoingWipLimitExceededException;
+use App\Exceptions\DomainRefusal;
 use App\Exceptions\SingleActiveEmergencyException;
-use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
@@ -165,7 +164,13 @@ new class extends Component
 
                 $this->reorderColumn($newStatus, $task->id, $position);
             });
-        } catch (WaitingRequiresWaitingForException|DoingWipLimitExceededException|SingleActiveEmergencyException $e) {
+        } catch (SingleActiveEmergencyException) {
+            // Dragging a concluded Emergência back onto the board would
+            // light a second one. That is a choice, not a dead end: hand the
+            // pending move to the shared modal, which asks "Manter a atual /
+            // Substituir" and applies the move itself if the user swaps.
+            $this->dispatch('open-emergency-modal', taskId: $task->id, status: $newStatus->value);
+        } catch (DomainRefusal $e) {
             // No client-side pre-block: the drop is optimistic, the domain
             // guard is the authority, and the re-render that follows this
             // request puts the card back where it came from. The toast is
@@ -195,6 +200,19 @@ new class extends Component
             ->leaf()
             ->where('status', ActivityStatus::Doing)
             ->count();
+    }
+
+    /**
+     * The colour of the "n/2" badge: red from the moment the column is
+     * full, and it stays red at 3/2 when an Emergência has furado o limite.
+     * Exposed as a method so the decision itself is testable, rather than
+     * only inferrable from rendered HTML.
+     */
+    public function wipBadgeColor(): string
+    {
+        return $this->doingWipCount() >= $this->wipLimit()
+            ? 'red'
+            : ActivityStatus::Doing->color();
     }
 
     #[On('task-updated')]
@@ -429,7 +447,7 @@ new class extends Component
                                      legitimately reads "3/2" when an Emergência
                                      has furado o limite. --}}
                                 <flux:tooltip content="Limite de {{ $wipLimit }} itens em Fazendo — só uma Emergência fura o limite.">
-                                    <flux:badge size="sm" color="{{ $wipCount >= $wipLimit ? 'red' : $status->color() }}">
+                                    <flux:badge size="sm" color="{{ $this->wipBadgeColor() }}">
                                         {{ $wipCount }}/{{ $wipLimit }}
                                     </flux:badge>
                                 </flux:tooltip>

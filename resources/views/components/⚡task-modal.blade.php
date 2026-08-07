@@ -4,6 +4,7 @@ use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
 use App\Enums\ActivityType;
 use App\Models\Activity;
+use App\Services\EmergencySlotService;
 use App\Models\ActivityCommit;
 use App\Models\Client;
 use App\Models\Project;
@@ -424,64 +425,14 @@ new class extends Component
         $this->showEmergencyReasonPrompt = false;
 
         try {
-            if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
-                $task->update([
-                    'title' => $this->title,
-                    'project_id' => $this->projectId ? (int) $this->projectId : null,
-                    'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
-                    'service_class' => $this->serviceClass,
-                    'emergency_reason' => $this->emergencyReason ?: null,
-                    'waiting_for' => $this->waitingFor ?: null,
-                    'due_date' => $this->dueDate ?: null,
-                    'estimated_minutes' => $this->estimatedMinutes,
-                    'pr_url' => $this->prUrl ?: null,
-                    'session_prompt' => $this->sessionPrompt ?: null,
-                    'session_result' => $this->sessionResult ?: null,
-                ]);
-                $task->markAsDone();
-                $this->status = ActivityStatus::Done->value;
-                $this->originalStatus = ActivityStatus::Done->value;
-                $this->waitingFor = '';
-                $this->waitingForTouched = false;
-                $this->waitingDays = 0;
-            } else {
-                $task->update([
-                    'title' => $this->title,
-                    'project_id' => $this->projectId ? (int) $this->projectId : null,
-                    'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
-                    'status' => $this->status,
-                    'service_class' => $this->serviceClass,
-                    'emergency_reason' => $this->emergencyReason ?: null,
-                    'waiting_for' => $this->waitingFor ?: null,
-                    'due_date' => $this->dueDate ?: null,
-                    'estimated_minutes' => $this->estimatedMinutes,
-                    'completed_at' => $newStatus === ActivityStatus::Done ? $task->completed_at : null,
-                    'pr_url' => $this->prUrl ?: null,
-                    'session_prompt' => $this->sessionPrompt ?: null,
-                    'session_result' => $this->sessionResult ?: null,
-                ]);
-
-                $task->refresh();
-                $this->originalStatus = $task->status->value;
-                $this->waitingFor = $task->waiting_for ?? '';
-                $this->waitingForTouched = false;
-                $this->waitingDays = $task->waitingDays();
-            }
+            $this->persistTask($task, $newStatus);
         } catch (\App\Exceptions\SingleActiveEmergencyException $e) {
             // Blocking choice, not a toast: the user has to say which of the
             // two is the Emergência before anything is written.
             $this->emergencyConflict = $e->activeEmergencyContext();
 
             return;
-        } catch (\App\Exceptions\WaitingRequiresWaitingForException $e) {
-            Flux::toast(variant: 'danger', heading: 'Não foi possível salvar', text: $e->getMessage());
-
-            return;
-        } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
-            Flux::toast(variant: 'danger', heading: 'Não foi possível salvar', text: $e->getMessage());
-
-            return;
-        } catch (\App\Exceptions\DoingWipLimitExceededException $e) {
+        } catch (\App\Exceptions\DomainRefusal $e) {
             Flux::toast(variant: 'danger', heading: 'Não foi possível salvar', text: $e->getMessage());
 
             return;
@@ -513,27 +464,94 @@ new class extends Component
     }
 
     /**
+     * Write the modal's state onto the activity, throwing the domain
+     * exceptions rather than handling them — that is what lets the same
+     * persistence run both on its own ({@see saveTask()}) and inside the
+     * swap transaction ({@see replaceEmergency()}), where a refusal has to
+     * roll the demotion back with it.
+     *
+     * Concluding is applied *first*, inside one transaction, exactly like
+     * the MCP update tools: saving "done + Emergência" in one go must not
+     * be judged against the intermediate state where the item is still
+     * active and therefore looks like a second Emergência. The final state
+     * — a concluded Emergência, which occupies no slot — is what the guards
+     * get to see.
+     *
+     * @throws \App\Exceptions\DomainRefusal
+     */
+    private function persistTask(Activity $task, ActivityStatus $newStatus): void
+    {
+        $attributes = [
+            'title' => $this->title,
+            'project_id' => $this->projectId ? (int) $this->projectId : null,
+            'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
+            'service_class' => $this->serviceClass,
+            'emergency_reason' => $this->emergencyReason ?: null,
+            'waiting_for' => $this->waitingFor ?: null,
+            'due_date' => $this->dueDate ?: null,
+            'estimated_minutes' => $this->estimatedMinutes,
+            'pr_url' => $this->prUrl ?: null,
+            'session_prompt' => $this->sessionPrompt ?: null,
+            'session_result' => $this->sessionResult ?: null,
+        ];
+
+        if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
+            DB::transaction(function () use ($task, $attributes): void {
+                $task->markAsDone();
+                $task->refresh();
+                $task->update($attributes);
+            });
+
+            $this->status = ActivityStatus::Done->value;
+            $this->originalStatus = ActivityStatus::Done->value;
+            $this->waitingFor = '';
+            $this->waitingForTouched = false;
+            $this->waitingDays = 0;
+
+            return;
+        }
+
+        $task->update($attributes + [
+            'status' => $this->status,
+            'completed_at' => $newStatus === ActivityStatus::Done ? $task->completed_at : null,
+        ]);
+
+        $task->refresh();
+        $this->originalStatus = $task->status->value;
+        $this->waitingFor = $task->waiting_for ?? '';
+        $this->waitingForTouched = false;
+        $this->waitingDays = $task->waitingDays();
+    }
+
+    /**
      * Keep the Emergência that already holds the board's slot: this task
-     * falls back to the classification it had, and the save is retried so
-     * the user's other edits aren't lost.
+     * gives up on being one, and the save is retried so the user's other
+     * edits aren't lost.
+     *
+     * Note the item does *not* simply fall back to its stored class: when
+     * the conflict came from reactivating a concluded Emergência, the
+     * stored class is `emergency`, so restoring it would hit the very same
+     * refusal on every retry. Giving the slot up means becoming Padrão.
      */
     public function keepCurrentEmergency(): void
     {
         $task = Activity::findOrFail($this->taskId);
 
-        $this->serviceClass = $task->service_class->value;
-        $this->emergencyReason = $task->emergency_reason ?? '';
+        $this->serviceClass = $task->service_class === ServiceClass::Emergency
+            ? ServiceClass::Standard->value
+            : $task->service_class->value;
+        $this->emergencyReason = '';
         $this->emergencyConflict = null;
 
         $this->saveTask();
     }
 
     /**
-     * Replace the current Emergência with this task: demote the active one
-     * first, then let the normal save promote this one. Chained on purpose
-     * — the promotion is only attempted once the demotion is actually
-     * saved, and both share a transaction so the board is never left
-     * without the Emergência the user meant to have.
+     * Replace the current Emergência with this task: demote the one holding
+     * the slot, then persist this task's full save — both inside a single
+     * transaction ({@see EmergencySlotService::swap()}), so a refused save
+     * rolls the demotion back with it and the board is never left without
+     * the Emergência the user meant to have.
      */
     public function replaceEmergency(): void
     {
@@ -543,15 +561,32 @@ new class extends Component
             return;
         }
 
-        DB::transaction(function () use ($conflictId): void {
-            Activity::findOrFail($conflictId)->update([
-                'service_class' => ServiceClass::Standard,
-            ]);
-        });
+        $task = Activity::findOrFail($this->taskId);
+        $newStatus = ActivityStatus::from($this->status);
+
+        try {
+            app(EmergencySlotService::class)->swap(
+                $conflictId,
+                $task->id,
+                fn () => $this->persistTask($task, $newStatus),
+            );
+        } catch (\App\Exceptions\SingleActiveEmergencyException $e) {
+            // The slot changed hands while the modal sat open: ask again
+            // against the Emergência that actually holds it now.
+            $this->emergencyConflict = $e->activeEmergencyContext();
+
+            return;
+        } catch (\App\Exceptions\DomainRefusal $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível salvar', text: $e->getMessage());
+
+            return;
+        }
 
         $this->emergencyConflict = null;
 
-        $this->saveTask();
+        $this->dispatch('task-updated');
+
+        Flux::toast(variant: 'success', heading: 'Task salva', text: $this->title);
     }
 
     public function deleteTimeEntry(int $entryId): void

@@ -1,10 +1,11 @@
 <?php
 
+use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
 use App\Exceptions\SingleActiveEmergencyException;
 use App\Models\Activity;
+use App\Services\EmergencySlotService;
 use Flux\Flux;
-use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
@@ -32,32 +33,43 @@ new class extends Component
     public ?array $conflict = null;
 
     /**
+     * A board move that was refused because it would light a second
+     * Emergência (e.g. dragging a concluded Emergência back onto the
+     * board). When set, the pending operation is the *move*, not a
+     * classification: the item already carries its motivo, so only the
+     * "Manter a atual / Substituir" question is left to answer.
+     */
+    public ?string $pendingStatus = null;
+
+    /**
      * The single UI checkpoint for classifying something as Emergência
      * (issue #143). Every surface that offers the classification — Inbox,
-     * Command Palette, Quick-Add — defers here instead of writing straight
-     * away, because the domain guards refuse an Emergência with no motivo
-     * and refuse a second active one. Collecting both answers up front is
-     * what turns those refusals into a decision the user actually makes.
+     * Command Palette, Quick-Add — and every surface whose operation was
+     * refused for lighting a second one — the Kanban's drag — defers here
+     * instead of writing straight away, because the domain guards refuse an
+     * Emergência with no motivo and refuse a second active one. Collecting
+     * both answers up front is what turns those refusals into a decision
+     * the user actually makes.
      *
      * The Task Modal is the deliberate exception: it already owns an open
      * modal, so it asks the same two questions inline rather than stacking
      * a second one on top.
+     *
+     * @param  string|null  $status  Set when the pending operation is a board move rather than a classification.
+     * @param  string|null  $reason  Pre-filled motivo (e.g. the AI's own justification for suggesting the classification).
      */
     #[On('open-emergency-modal')]
-    public function open(int $taskId): void
+    public function open(int $taskId, ?string $status = null, ?string $reason = null): void
     {
         $task = Activity::findOrFail($taskId);
 
         $this->taskId = $taskId;
-        $this->reason = $task->emergency_reason ?? '';
+        $this->reason = $reason ?? $task->emergency_reason ?? '';
+        $this->pendingStatus = $status;
         $this->conflict = null;
         $this->step = 'reason';
 
-        $active = Activity::query()
-            ->activeEmergency()
-            ->whereKeyNot($taskId)
-            ->orderBy('emergency_since')
-            ->first();
+        $active = app(EmergencySlotService::class)->active([$taskId]);
 
         if ($active !== null) {
             $this->conflict = (new SingleActiveEmergencyException($active))->activeEmergencyContext();
@@ -65,12 +77,22 @@ new class extends Component
         }
 
         $this->resetValidation();
+
+        // A pending move with the slot already free has nothing left to
+        // ask: the conflict that bounced it is gone, so just let it happen.
+        if ($this->pendingStatus !== null && $this->conflict === null) {
+            $this->apply();
+
+            return;
+        }
+
         $this->showModal = true;
     }
 
     /**
-     * Keep the Emergência that already holds the slot: the classification
-     * the user started simply doesn't happen.
+     * Keep the Emergência that already holds the slot: the operation the
+     * user started — classifying, or moving a concluded Emergência back
+     * onto the board — simply doesn't happen.
      */
     public function keepCurrent(): void
     {
@@ -82,11 +104,19 @@ new class extends Component
     }
 
     /**
-     * Choose to replace the current Emergência — which still needs a motivo
-     * for the new one before anything is written.
+     * Choose to replace the current Emergência. A pending *move* has
+     * everything it needs already (the item is classified, motivo and
+     * all), so it is applied right away; a pending *classification* still
+     * needs its motivo first.
      */
     public function replaceCurrent(): void
     {
+        if ($this->pendingStatus !== null) {
+            $this->apply();
+
+            return;
+        }
+
         $this->step = 'reason';
     }
 
@@ -98,40 +128,52 @@ new class extends Component
             'reason.required' => 'Informe por que isso é uma Emergência.',
         ]);
 
+        $this->apply();
+    }
+
+    /**
+     * Perform the pending operation, handing the slot over first when the
+     * user chose to substitute. Both writes share one transaction inside
+     * {@see EmergencySlotService::swap()}, so a refused promotion never
+     * leaves the board with zero Emergências.
+     */
+    private function apply(): void
+    {
         $task = Activity::findOrFail($this->taskId);
         $conflictId = $this->conflict['id'] ?? null;
+        $pendingStatus = $this->pendingStatus;
+        $reason = $this->reason;
 
         try {
-            DB::transaction(function () use ($task, $conflictId): void {
-                // Chained on purpose: the demotion is a real save that must
-                // succeed before the promotion is even attempted, and both
-                // share a transaction so a refused promotion never leaves
-                // the board with zero Emergências.
-                if ($conflictId !== null) {
-                    Activity::findOrFail($conflictId)->update([
-                        'service_class' => ServiceClass::Standard,
-                    ]);
+            app(EmergencySlotService::class)->swap($conflictId, $task->id, function () use ($task, $pendingStatus, $reason): void {
+                if ($pendingStatus !== null) {
+                    $task->update(['status' => ActivityStatus::from($pendingStatus)]);
+
+                    return;
                 }
 
                 $task->update([
                     'service_class' => ServiceClass::Emergency,
-                    'emergency_reason' => $this->reason,
+                    'emergency_reason' => $reason,
                 ]);
             });
         } catch (SingleActiveEmergencyException $e) {
-            // Someone else took the slot between opening this modal and
-            // confirming: ask the same question again with fresh data.
+            // The slot changed hands between opening this modal and
+            // confirming: ask the same question again with fresh data
+            // instead of overwriting a newer decision.
             $this->conflict = $e->activeEmergencyContext();
             $this->step = 'conflict';
 
             return;
         }
 
+        $heading = $pendingStatus !== null ? 'Emergência movida' : 'Emergência classificada';
+
         $this->close();
 
         $this->dispatch('task-updated');
 
-        Flux::toast(variant: 'success', heading: 'Emergência classificada', text: $task->title);
+        Flux::toast(variant: 'success', heading: $heading, text: $task->title);
     }
 
     public function cancel(): void
@@ -142,7 +184,7 @@ new class extends Component
     private function close(): void
     {
         $this->showModal = false;
-        $this->reset('taskId', 'reason', 'step', 'conflict');
+        $this->reset('taskId', 'reason', 'step', 'conflict', 'pendingStatus');
         $this->resetValidation();
     }
 };

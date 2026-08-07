@@ -110,7 +110,7 @@ new class extends Component
 
         try {
             $task->update(['service_class' => $newServiceClass]);
-        } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
+        } catch (\App\Exceptions\DomainRefusal $e) {
             Flux::toast(variant: 'danger', heading: 'Não foi possível atualizar', text: $e->getMessage());
 
             return;
@@ -172,7 +172,7 @@ new class extends Component
                 try {
                     $task->update($updateData);
                     $count++;
-                } catch (\App\Exceptions\DoingWipLimitExceededException|\App\Exceptions\WaitingRequiresWaitingForException $e) {
+                } catch (\App\Exceptions\DomainRefusal $e) {
                     $refusal ??= $e->getMessage();
                 }
             });
@@ -233,7 +233,7 @@ new class extends Component
 
         try {
             $task->update($updateData);
-        } catch (\App\Exceptions\DoingWipLimitExceededException|\App\Exceptions\WaitingRequiresWaitingForException $e) {
+        } catch (\App\Exceptions\DomainRefusal $e) {
             Flux::toast(variant: 'danger', heading: 'Não foi possível mover', text: $e->getMessage());
 
             return;
@@ -346,7 +346,7 @@ new class extends Component
                 'estimate' => $task->update(['status' => ActivityStatus::Todo]),
                 default => null,
             };
-        } catch (\App\Exceptions\FixedDateRequiresDueDateException|\App\Exceptions\SingleActiveEmergencyException|\App\Exceptions\DoingWipLimitExceededException $e) {
+        } catch (\App\Exceptions\DomainRefusal $e) {
             Flux::toast(variant: 'danger', heading: 'Não foi possível aplicar', text: $e->getMessage());
 
             return;
@@ -371,20 +371,28 @@ new class extends Component
 
         $serviceClassEnum = $serviceClass ? ServiceClass::tryFrom($serviceClass) : null;
 
-        $updates = [
-            'status' => ActivityStatus::Todo,
-            'service_class' => $serviceClassEnum ?? $task->service_class,
-        ];
-
-        // An Emergência always needs a motivo (issue #143). When the AI is
-        // the one suggesting the classification, its own justification for
-        // the suggestion is the motivo — recorded verbatim so the card says
-        // who decided and why.
+        // An Emergência is never applied straight from a suggestion: the
+        // classification needs a motivo, and may need a decision about the
+        // Emergência already holding the board's slot. The AI's own
+        // justification is carried over as the proposed motivo, but the
+        // human still confirms it in the same blocking modal every other
+        // surface defers to — the machine proposes, it doesn't classify.
         if ($serviceClassEnum === ServiceClass::Emergency) {
-            $updates['emergency_reason'] = $suggestion['reason'] ?? 'Sugerido pelo assistente de IA.';
+            $task->update(['status' => ActivityStatus::Todo]);
+
+            $this->dispatch(
+                'open-emergency-modal',
+                taskId: $task->id,
+                reason: $suggestion['reason'] ?? 'Sugerido pelo assistente de IA.',
+            );
+
+            return;
         }
 
-        $task->update($updates);
+        $task->update([
+            'status' => ActivityStatus::Todo,
+            'service_class' => $serviceClassEnum ?? $task->service_class,
+        ]);
     }
 
     /**

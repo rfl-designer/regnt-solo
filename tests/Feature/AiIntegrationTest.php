@@ -307,12 +307,44 @@ test('applyBacklogSuggestion with prioritize action updates task', function () {
         ])
         ->set('showBacklogAnalysis', true)
         ->call('applyBacklogSuggestion', $task->id, 'prioritize')
-        ->assertCount('backlogAnalysis', 0);
+        ->assertCount('backlogAnalysis', 0)
+        // An Emergência is never applied straight from a suggestion: the
+        // machine proposes the motivo, the human confirms it in the same
+        // blocking modal every other surface defers to (issue #143).
+        ->assertDispatched('open-emergency-modal', taskId: $task->id, reason: 'Important task');
 
     $task->refresh();
 
     expect($task->status)->toBe(ActivityStatus::Todo)
-        ->and($task->service_class->value)->toBe('emergency');
+        ->and($task->service_class->value)->toBe('standard');
+});
+
+test('applyBacklogSuggestion applies a non-emergency service class directly', function () {
+    config([
+        'soloboard.ai_enabled' => true,
+        'soloboard.ai_api_key' => 'test-key',
+    ]);
+
+    $task = Activity::factory()->create(['title' => 'Task para priorizar']);
+
+    Livewire::test('pages::inbox')
+        ->set('backlogAnalysis', [
+            [
+                'task_id' => $task->id,
+                'action' => 'prioritize',
+                'reason' => 'Important task',
+                'suggested_service_class' => 'intangible',
+                'suggested_project' => null,
+            ],
+        ])
+        ->set('showBacklogAnalysis', true)
+        ->call('applyBacklogSuggestion', $task->id, 'prioritize')
+        ->assertNotDispatched('open-emergency-modal');
+
+    $task->refresh();
+
+    expect($task->status)->toBe(ActivityStatus::Todo)
+        ->and($task->service_class->value)->toBe('intangible');
 });
 
 test('applyBacklogSuggestion with prioritize action refuses fixed_date without due date', function () {

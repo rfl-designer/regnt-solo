@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ActivityStatus;
+use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
@@ -29,8 +30,11 @@ new class extends Component
     /** @var array<string, int> */
     public array $limits = [
         'backlog' => 20,
+        'awaiting_approval' => 20,
         'todo' => 20,
         'doing' => 20,
+        'waiting' => 20,
+        'awaiting_validation' => 20,
         'done' => 20,
     ];
 
@@ -39,12 +43,7 @@ new class extends Component
 
     public function mount(): void
     {
-        $this->kanbanStatuses = [
-            ActivityStatus::Backlog,
-            ActivityStatus::Todo,
-            ActivityStatus::Doing,
-            ActivityStatus::Done,
-        ];
+        $this->kanbanStatuses = ActivityStatus::boardOrder();
     }
 
     /**
@@ -134,25 +133,39 @@ new class extends Component
         $task = Activity::findOrFail((int) $id);
         $newStatus = ActivityStatus::from($groupId);
 
-        DB::transaction(function () use ($task, $newStatus, $position): void {
-            if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
-                // Add to daily plan if not already there (Observer syncs completed_at)
-                $dailyPlan = DailyPlan::getOrCreateForDate(Carbon::today());
+        // The internal wait (Esperando) has no client to auto-fill "esperando
+        // quem" from, so it always needs an interactive answer. Defer the
+        // move to the blocking mini modal instead of writing straight away;
+        // the modal performs the actual update once a name is given.
+        if ($newStatus->isInternalWaiting() && $task->status !== ActivityStatus::Waiting) {
+            $this->dispatch('open-waiting-for-modal', taskId: $task->id, status: $newStatus->value);
 
-                if (! $dailyPlan->tasks()->where('activity_id', $task->id)->exists()) {
-                    $maxOrder = $dailyPlan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
-                    $dailyPlan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
+            return;
+        }
+
+        try {
+            DB::transaction(function () use ($task, $newStatus, $position): void {
+                if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
+                    // Add to daily plan if not already there (Observer syncs completed_at)
+                    $dailyPlan = DailyPlan::getOrCreateForDate(Carbon::today());
+
+                    if (! $dailyPlan->tasks()->where('activity_id', $task->id)->exists()) {
+                        $maxOrder = $dailyPlan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
+                        $dailyPlan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
+                    }
+
+                    $task->markAsDone();
+
+                    Flux::toast(variant: 'success', heading: 'Task concluída', text: $task->title);
+                } else {
+                    $task->update(['status' => $newStatus]);
                 }
 
-                $task->markAsDone();
-
-                Flux::toast(variant: 'success', heading: 'Task concluída', text: $task->title);
-            } else {
-                $task->update(['status' => $newStatus]);
-            }
-
-            $this->reorderColumn($newStatus, $task->id, $position);
-        });
+                $this->reorderColumn($newStatus, $task->id, $position);
+            });
+        } catch (WaitingRequiresWaitingForException $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível mover', text: $e->getMessage());
+        }
     }
 
     #[On('task-updated')]
@@ -458,6 +471,13 @@ new class extends Component
                                             </flux:badge>
                                         @endif
 
+                                        {{-- Waiting Badge --}}
+                                        @if ($task->isWaiting())
+                                            <flux:badge size="sm" color="{{ $task->status->color() }}" icon="{{ $task->status->icon() }}">
+                                                ⏳ {{ $task->waiting_for }} · há {{ $task->waitingDays() }} {{ $task->waitingDays() === 1 ? 'dia' : 'dias' }}
+                                            </flux:badge>
+                                        @endif
+
                                         {{-- Running Timer --}}
                                         @if ($task->isRunning())
                                             <flux:badge size="sm" color="emerald" class="animate-pulse">
@@ -541,6 +561,12 @@ new class extends Component
                                                 @if ($task->isOverdue())
                                                     <flux:badge size="sm" color="red" icon="exclamation-triangle">
                                                         {{ $task->due_date->diffForHumans() }}
+                                                    </flux:badge>
+                                                @endif
+
+                                                @if ($task->isWaiting())
+                                                    <flux:badge size="sm" color="{{ $task->status->color() }}" icon="{{ $task->status->icon() }}">
+                                                        ⏳ {{ $task->waiting_for }} · há {{ $task->waitingDays() }} {{ $task->waitingDays() === 1 ? 'dia' : 'dias' }}
                                                     </flux:badge>
                                                 @endif
 

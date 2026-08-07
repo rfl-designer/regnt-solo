@@ -38,11 +38,13 @@ test('project board shows features grouped by explicit status', function () {
 test('project board kanban has all four column headers', function () {
     $project = Project::factory()->create();
 
+    // "A Fazer" -> "Pronto" and "Concluída" -> "Feito" are label-only renames
+    // from issue #142 (the persisted todo/done values don't change).
     Livewire::test('pages::project-detail', ['slug' => $project->slug])
         ->assertSee('Backlog')
-        ->assertSee('A Fazer')
+        ->assertSee('Pronto')
         ->assertSee('Fazendo')
-        ->assertSee('Concluída');
+        ->assertSee('Feito');
 });
 
 // ========================================

@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
 use App\Exceptions\FixedDateRequiresDueDateException;
+use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
@@ -20,7 +21,7 @@ class UpdateIssueTool extends Tool
 {
     protected string $name = 'update-issue';
 
-    protected string $description = 'Updates an existing roadmap issue (type=Issue). Accepts status, project_id and parent_id (the parent_id link is the second pass of the sync, where the tree is wired up). When status is changed to "done", the issue is marked done (stops running timers and sets completed_at). Classifying as fixed_date requires due_date — the request is refused otherwise. Provide only the fields you want to change.';
+    protected string $description = 'Updates an existing roadmap issue (type=Issue). Accepts status, project_id and parent_id (the parent_id link is the second pass of the sync, where the tree is wired up). When status is changed to "done", the issue is marked done (stops running timers and sets completed_at). Classifying as fixed_date requires due_date — the request is refused otherwise. Setting status to awaiting_approval, waiting or awaiting_validation requires waiting_for — client-side waits auto-fill it from the effective client when omitted, waiting (internal) has no default and is refused without one. Provide only the fields you want to change.';
 
     /**
      * Handle the tool request.
@@ -35,6 +36,7 @@ class UpdateIssueTool extends Tool
             'parent_id' => 'nullable|integer|exists:activities,id',
             'status' => ['nullable', 'string', Rule::enum(ActivityStatus::class)],
             'service_class' => ['nullable', 'string', Rule::enum(ServiceClass::class)],
+            'waiting_for' => 'nullable|string|max:255',
             'due_date' => 'nullable|date',
             'estimated_minutes' => 'nullable|integer|min:1',
             'github_issue_number' => 'nullable|integer',
@@ -74,6 +76,10 @@ class UpdateIssueTool extends Tool
             $updates['service_class'] = $validated['service_class'];
         }
 
+        if (array_key_exists('waiting_for', $validated)) {
+            $updates['waiting_for'] = $validated['waiting_for'];
+        }
+
         if (isset($validated['due_date'])) {
             $updates['due_date'] = $validated['due_date'];
         }
@@ -105,7 +111,7 @@ class UpdateIssueTool extends Tool
                     $issue->update($updates);
                 }
             });
-        } catch (FixedDateRequiresDueDateException $e) {
+        } catch (FixedDateRequiresDueDateException|WaitingRequiresWaitingForException $e) {
             return Response::error($e->getMessage());
         }
 
@@ -118,6 +124,8 @@ class UpdateIssueTool extends Tool
             'service_class' => $issue->service_class->value,
             'project' => $issue->project?->name,
             'parent_id' => $issue->parent_id,
+            'waiting_for' => $issue->waiting_for,
+            'waiting_since' => $issue->waiting_since?->toDateTimeString(),
             'due_date' => $issue->due_date?->toDateString(),
             'estimated_minutes' => $issue->estimated_minutes,
             'completed_at' => $issue->completed_at?->toDateTimeString(),
@@ -144,8 +152,9 @@ class UpdateIssueTool extends Tool
             'description' => $schema->string()->description('New description in markdown format.'),
             'project_id' => $schema->integer()->description('Id of the project to assign the issue to.'),
             'parent_id' => $schema->integer()->description('Id of the parent activity (an Epic -> Fatia, or another Issue -> Follow-up). Set null for a loose issue (Avulsa).'),
-            'status' => $schema->string()->enum(['inbox', 'backlog', 'todo', 'doing', 'done'])->description('New status. Setting to "done" will stop running timers and set completed_at.'),
+            'status' => $schema->string()->enum(['inbox', 'backlog', 'awaiting_approval', 'todo', 'doing', 'waiting', 'awaiting_validation', 'done'])->description('New status. The 7-column board order (excluding inbox) is: backlog, awaiting_approval, todo, doing, waiting, awaiting_validation, done. Setting to "done" will stop running timers and set completed_at.'),
             'service_class' => $schema->string()->enum(['emergency', 'fixed_date', 'standard', 'intangible'])->description('New service class (replaces priority). "fixed_date" requires due_date to also be set — the request is refused otherwise.'),
+            'waiting_for' => $schema->string()->description('Who the issue is waiting on ("esperando quem"). Required when status is awaiting_approval, waiting or awaiting_validation — client-side waits auto-fill this from the effective client when omitted; waiting (internal) has no default and is refused without an explicit value.'),
             'due_date' => $schema->string()->description('New due date in YYYY-MM-DD format.'),
             'estimated_minutes' => $schema->integer()->description('New estimated time in minutes.'),
             'github_issue_number' => $schema->integer()->description('GitHub issue number this issue mirrors (upsert key).'),

@@ -246,10 +246,17 @@ test('kanban listens to task-created event', function () {
         ->assertSuccessful();
 });
 
-test('kanban shows all four column headers', function () {
+test('kanban shows all seven column headers in flow order', function () {
+    // "A Fazer" -> "Pronto" and "Concluída" -> "Feito" are label-only
+    // renames from issue #142 (the persisted todo/done values don't change).
     Livewire::test('pages::kanban')
-        ->assertSee('Backlog')
-        ->assertSee('A Fazer')
-        ->assertSee('Fazendo')
-        ->assertSee('Concluída');
+        ->assertSeeInOrder([
+            'Backlog',
+            'Aguardando aprovação',
+            'Pronto',
+            'Fazendo',
+            'Esperando',
+            'Aguardando validação',
+            'Feito',
+        ]);
 });

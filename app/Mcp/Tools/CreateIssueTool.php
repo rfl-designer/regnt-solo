@@ -6,6 +6,7 @@ use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
 use App\Enums\ServiceClass;
 use App\Exceptions\FixedDateRequiresDueDateException;
+use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
@@ -32,6 +33,7 @@ class CreateIssueTool extends Tool
             'parent_id' => 'nullable|integer|exists:activities,id',
             'status' => ['nullable', 'string', Rule::enum(ActivityStatus::class)],
             'service_class' => ['nullable', 'string', Rule::enum(ServiceClass::class)],
+            'waiting_for' => 'nullable|string|max:255',
             'due_date' => 'nullable|date',
             'estimated_minutes' => 'nullable|integer|min:1',
             'github_issue_number' => 'nullable|integer',
@@ -40,7 +42,7 @@ class CreateIssueTool extends Tool
             'title.required' => 'You must provide a title for the issue.',
             'project_id.exists' => 'Project not found. Use list-projects to find available project ids.',
             'parent_id.exists' => 'Parent not found. Use list-epics or list-issues to find available ids.',
-            'status.Illuminate\Validation\Rules\Enum' => 'Invalid status. Valid values: inbox, backlog, todo, doing, done.',
+            'status.Illuminate\Validation\Rules\Enum' => 'Invalid status. Valid values: inbox, backlog, awaiting_approval, todo, doing, waiting, awaiting_validation, done.',
             'service_class.Illuminate\Validation\Rules\Enum' => 'Invalid service_class. Valid values: emergency, fixed_date, standard, intangible.',
         ]);
 
@@ -51,6 +53,7 @@ class CreateIssueTool extends Tool
             'project_id' => $validated['project_id'] ?? null,
             'status' => $validated['status'] ?? ActivityStatus::Inbox,
             'service_class' => $validated['service_class'] ?? ServiceClass::Standard,
+            'waiting_for' => $validated['waiting_for'] ?? null,
             'due_date' => $validated['due_date'] ?? null,
             'estimated_minutes' => $validated['estimated_minutes'] ?? null,
         ];
@@ -72,7 +75,7 @@ class CreateIssueTool extends Tool
             } else {
                 $issue = Activity::create($payload);
             }
-        } catch (FixedDateRequiresDueDateException $e) {
+        } catch (FixedDateRequiresDueDateException|WaitingRequiresWaitingForException $e) {
             return Response::error($e->getMessage());
         }
 
@@ -90,6 +93,8 @@ class CreateIssueTool extends Tool
             'service_class' => $issue->service_class->value,
             'project' => $issue->project?->name,
             'parent_id' => $issue->parent_id,
+            'waiting_for' => $issue->waiting_for,
+            'waiting_since' => $issue->waiting_since?->toDateTimeString(),
             'due_date' => $issue->due_date?->toDateString(),
             'estimated_minutes' => $issue->estimated_minutes,
             'github_issue_number' => $issue->github_issue_number,
@@ -112,8 +117,9 @@ class CreateIssueTool extends Tool
             'description' => $schema->string()->description('Issue description in markdown format (rewritten in plain product language for the stakeholder board).'),
             'project_id' => $schema->integer()->description('Id of the project to assign the issue to. Use list-projects to find ids.'),
             'parent_id' => $schema->integer()->description('Id of the parent activity (an Epic -> Fatia, or another Issue -> Follow-up). Omit for a loose issue (Avulsa). Resolved by the sync from the issue parent chain.'),
-            'status' => $schema->string()->enum(['inbox', 'backlog', 'todo', 'doing', 'done'])->description('Issue status. Default: inbox. Setting to "done" stops running timers and sets completed_at.'),
+            'status' => $schema->string()->enum(['inbox', 'backlog', 'awaiting_approval', 'todo', 'doing', 'waiting', 'awaiting_validation', 'done'])->description('Issue status. Default: inbox. The 7-column board order (excluding inbox) is: backlog, awaiting_approval, todo, doing, waiting, awaiting_validation, done. Setting to "done" stops running timers and sets completed_at.'),
             'service_class' => $schema->string()->enum(['emergency', 'fixed_date', 'standard', 'intangible'])->description('Issue service class (replaces priority). Default: standard. "fixed_date" requires due_date to also be set — the request is refused otherwise.'),
+            'waiting_for' => $schema->string()->description('Who the issue is waiting on ("esperando quem"). Required when status is awaiting_approval, waiting or awaiting_validation — client-side waits auto-fill this from the effective client when omitted; waiting (internal) has no default and is refused without an explicit value.'),
             'due_date' => $schema->string()->description('Due date in YYYY-MM-DD format.'),
             'estimated_minutes' => $schema->integer()->description('Estimated time in minutes to complete the issue.'),
             'github_issue_number' => $schema->integer()->description('GitHub issue number this issue mirrors. When provided, the issue is upserted by this number (no duplicate on repeated syncs).'),

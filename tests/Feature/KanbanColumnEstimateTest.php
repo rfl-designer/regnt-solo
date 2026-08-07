@@ -52,11 +52,15 @@ test('kanban column hides estimate badge when no tasks have estimates', function
         'estimated_minutes' => null,
     ]);
 
-    // Should show the column but no estimate badge
+    // Should show the column but no estimate badge. Uses assertDontSeeText
+    // (strips tags before matching) rather than assertDontSee, because raw
+    // HTML now legitimately contains the substring "0h" inside SVG icon
+    // path data (e.g. the paper-airplane icon added for the Aguardando
+    // aprovação column in issue #142).
     Livewire::test('pages::kanban')
         ->assertSee(ActivityStatus::Backlog->label())
-        ->assertDontSee('0m')
-        ->assertDontSee('0h');
+        ->assertDontSeeText('0m')
+        ->assertDontSeeText('0h');
 });
 
 test('getColumnEstimate returns sum of estimated_minutes', function (): void {

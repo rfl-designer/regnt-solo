@@ -158,6 +158,7 @@
         <livewire:feature-modal />
         <livewire:project-form />
         <livewire:timer-notes-modal />
+        <livewire:waiting-for-modal />
 
         @persist('toast')
             <flux:toast />

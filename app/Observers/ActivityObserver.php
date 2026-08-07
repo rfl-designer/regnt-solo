@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
 use App\Exceptions\FixedDateRequiresDueDateException;
+use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Activity;
 use App\Models\ActivityStatusChange;
 use App\Models\DailyPlan;
@@ -36,6 +37,60 @@ class ActivityObserver
     {
         if ($activity->service_class === ServiceClass::FixedDate && $activity->due_date === null) {
             throw new FixedDateRequiresDueDateException;
+        }
+
+        $this->handleWaitingState($activity);
+    }
+
+    /**
+     * Enforce the "esperando quem" (waiting_for) / "desde quando"
+     * (waiting_since) invariant for the three waiting statuses (issue
+     * #142): Aguardando aprovação, Esperando, Aguardando validação.
+     *
+     * - Entering a client-side wait (Aguardando aprovação/validação) with
+     *   no waiting_for yet auto-fills it from the activity's effective
+     *   client.
+     * - Any waiting status with no waiting_for after that auto-fill attempt
+     *   is refused — this is what makes the internal wait (Esperando)
+     *   effectively require an interactive answer, since it has no client
+     *   to fall back on.
+     * - waiting_since is stamped the first time the activity lands in a
+     *   waiting status and left untouched on subsequent saves while it
+     *   stays there.
+     * - Leaving a waiting status for any other status clears both fields
+     *   automatically.
+     *
+     * Fires on every Eloquent save regardless of origin (Kanban, Task
+     * Modal, MCP tools, tinker), same as the fixed_date guard above.
+     */
+    private function handleWaitingState(Activity $activity): void
+    {
+        if ($activity->status === null) {
+            return;
+        }
+
+        if (! $activity->status->isWaiting()) {
+            if ($activity->waiting_for !== null) {
+                $activity->waiting_for = null;
+            }
+
+            if ($activity->waiting_since !== null) {
+                $activity->waiting_since = null;
+            }
+
+            return;
+        }
+
+        if ($activity->status->isClientWaiting() && $activity->waiting_for === null) {
+            $activity->waiting_for = $activity->effective_client?->name;
+        }
+
+        if ($activity->waiting_for === null) {
+            throw new WaitingRequiresWaitingForException;
+        }
+
+        if ($activity->waiting_since === null) {
+            $activity->waiting_since = now();
         }
     }
 

@@ -71,6 +71,7 @@ new class extends Component
 
         return Activity::active()
             ->schedulable()
+            ->notWaiting()
             ->whereNotIn('id', $planTaskIds)
             ->when($this->filterProjectId, fn ($q) => $q->where('project_id', $this->filterProjectId))
             ->with('project')
@@ -584,6 +585,14 @@ new class extends Component
                                                 @if ($task->isOverdue())
                                                     <flux:badge size="sm" color="red" icon="exclamation-triangle">
                                                         {{ $task->due_date->diffForHumans() }}
+                                                    </flux:badge>
+                                                @endif
+
+                                                {{-- Waiting badge: an item already in today's plan stays
+                                                     visible even after it enters a waiting status. --}}
+                                                @if ($task->isWaiting())
+                                                    <flux:badge size="sm" color="{{ $task->status->color() }}" icon="{{ $task->status->icon() }}">
+                                                        ⏳ {{ $task->waiting_for }} · há {{ $task->waitingDays() }} {{ $task->waitingDays() === 1 ? 'dia' : 'dias' }}
                                                     </flux:badge>
                                                 @endif
                                             </div>

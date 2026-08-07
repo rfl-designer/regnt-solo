@@ -129,6 +129,46 @@ class ActivityFactory extends Factory
     }
 
     /**
+     * Indicate that the activity is awaiting client approval, with
+     * waiting_for already set (bypassing the auto-fill guard for tests
+     * that don't care about the client-resolution path).
+     */
+    public function awaitingApproval(?string $waitingFor = 'Cliente'): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => ActivityStatus::AwaitingApproval,
+            'waiting_for' => $waitingFor,
+            'waiting_since' => now(),
+        ]);
+    }
+
+    /**
+     * Indicate that the activity is in the internal wait (Esperando),
+     * with waiting_for already set.
+     */
+    public function waiting(string $waitingFor = 'Designer'): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => ActivityStatus::Waiting,
+            'waiting_for' => $waitingFor,
+            'waiting_since' => now(),
+        ]);
+    }
+
+    /**
+     * Indicate that the activity is awaiting client validation, with
+     * waiting_for already set.
+     */
+    public function awaitingValidation(?string $waitingFor = 'Cliente'): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => ActivityStatus::AwaitingValidation,
+            'waiting_for' => $waitingFor,
+            'waiting_since' => now(),
+        ]);
+    }
+
+    /**
      * Indicate that the activity is overdue.
      */
     public function overdue(): static

@@ -2,6 +2,7 @@
 
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\CreateTaskTool;
 use App\Mcp\Tools\ListTasksTool;
@@ -134,7 +135,7 @@ test('create-task refuses fixed_date without a due date', function () {
         'service_class' => 'fixed_date',
     ]);
 
-    $response->assertHasErrors();
+    $response->assertHasErrors([FixedDateRequiresDueDateException::MESSAGE]);
 
     $this->assertDatabaseMissing('activities', [
         'title' => 'Fixed date task',

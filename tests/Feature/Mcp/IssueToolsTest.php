@@ -2,6 +2,7 @@
 
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\CreateIssueTool;
 use App\Mcp\Tools\DeleteIssueTool;
@@ -119,7 +120,7 @@ test('create-issue refuses fixed_date without a due date', function () {
         'service_class' => 'fixed_date',
     ]);
 
-    $response->assertHasErrors();
+    $response->assertHasErrors([FixedDateRequiresDueDateException::MESSAGE]);
 
     $this->assertDatabaseMissing('activities', [
         'title' => 'Fixed date issue',
@@ -243,7 +244,7 @@ test('update-issue refuses fixed_date without a due date', function () {
         'service_class' => 'fixed_date',
     ]);
 
-    $response->assertHasErrors();
+    $response->assertHasErrors([FixedDateRequiresDueDateException::MESSAGE]);
 
     $issue->refresh();
     expect($issue->service_class->value)->not->toBe('fixed_date');
@@ -278,7 +279,7 @@ test('update-issue rejects status=done combined with an invalid fixed_date and r
         'service_class' => 'fixed_date',
     ]);
 
-    $response->assertHasErrors();
+    $response->assertHasErrors([FixedDateRequiresDueDateException::MESSAGE]);
 
     $issue->refresh();
     $entry->refresh();

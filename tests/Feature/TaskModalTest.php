@@ -2,6 +2,7 @@
 
 use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Models\Activity;
 use App\Models\Client;
 use App\Models\Project;
@@ -125,7 +126,10 @@ test('classifying as fixed_date without a due date is refused with a toast', fun
         ->dispatch('open-task-modal', taskId: $task->id)
         ->set('serviceClass', 'fixed_date')
         ->set('dueDate', null)
-        ->call('saveTask');
+        ->call('saveTask')
+        ->assertDispatched('toast-show', function (string $name, array $params): bool {
+            return ($params['slots']['text'] ?? null) === FixedDateRequiresDueDateException::MESSAGE;
+        });
 
     expect($task->fresh()->service_class)->toBe(ServiceClass::Standard);
 });

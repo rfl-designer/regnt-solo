@@ -2,6 +2,7 @@
 
 use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Models\Activity;
 use App\Models\Project;
 use App\Models\User;
@@ -202,7 +203,10 @@ test('update service class to fixed_date without a due date is refused with a to
     $task = Activity::factory()->create(['service_class' => ServiceClass::Standard, 'due_date' => null]);
 
     Livewire::test('pages::inbox')
-        ->call('updateServiceClass', $task->id, 'fixed_date');
+        ->call('updateServiceClass', $task->id, 'fixed_date')
+        ->assertDispatched('toast-show', function (string $name, array $params): bool {
+            return ($params['slots']['text'] ?? null) === FixedDateRequiresDueDateException::MESSAGE;
+        });
 
     expect($task->fresh()->service_class)->toBe(ServiceClass::Standard);
 });

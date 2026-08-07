@@ -473,7 +473,7 @@ new class extends Component
 
                         @if ($serviceClass === \App\Enums\ServiceClass::FixedDate->value && !$dueDate)
                             <flux:text size="sm" class="text-amber-400">
-                                Classificar como Data fixa exige uma data de vencimento.
+                                {{ \App\Exceptions\FixedDateRequiresDueDateException::MESSAGE }}
                             </flux:text>
                         @endif
 

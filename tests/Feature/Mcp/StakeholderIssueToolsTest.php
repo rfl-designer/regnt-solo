@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\StakeholderIssueStatus;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Mcp\Prompts\StakeholderIssuePlanningPrompt;
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\ListStakeholderIssuesTool;
@@ -61,7 +62,7 @@ test('promote-stakeholder-issue creates feature and links issue', function () {
     $response = SoloBoardServer::tool(PromoteStakeholderIssueToFeatureTool::class, [
         'issue_id' => $issue->id,
         'title' => 'Stakeholder report by period',
-        'priority' => 'high',
+        'service_class' => 'emergency',
     ]);
 
     $response->assertOk();
@@ -78,7 +79,28 @@ test('promote-stakeholder-issue creates feature and links issue', function () {
         'id' => $issue->activity_id,
         'project_id' => $project->id,
         'title' => 'Stakeholder report by period',
-        'priority' => 'high',
+        'service_class' => 'emergency',
+    ]);
+});
+
+test('promote-stakeholder-issue no longer accepts a priority field', function () {
+    $issue = StakeholderIssue::factory()->toFeature()->create();
+
+    $response = SoloBoardServer::tool(PromoteStakeholderIssueToFeatureTool::class, [
+        'issue_id' => $issue->id,
+        'title' => 'Priority-less feature',
+        'priority' => 'urgent',
+    ]);
+
+    $response->assertOk();
+
+    $issue->refresh();
+
+    // The unvalidated `priority` field is silently ignored; the created
+    // activity gets the database default, not the legacy input.
+    $this->assertDatabaseHas('activities', [
+        'id' => $issue->activity_id,
+        'priority' => 'medium',
     ]);
 });
 
@@ -121,7 +143,7 @@ test('promote-stakeholder-issue refuses fixed_date without a due date', function
         'service_class' => 'fixed_date',
     ]);
 
-    $response->assertHasErrors();
+    $response->assertHasErrors([FixedDateRequiresDueDateException::MESSAGE]);
 
     $issue->refresh();
     expect($issue->activity_id)->toBeNull();

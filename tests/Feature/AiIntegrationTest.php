@@ -2,6 +2,7 @@
 
 use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\User;
@@ -337,7 +338,10 @@ test('applyBacklogSuggestion with prioritize action refuses fixed_date without d
             ],
         ])
         ->set('showBacklogAnalysis', true)
-        ->call('applyBacklogSuggestion', $task->id, 'prioritize');
+        ->call('applyBacklogSuggestion', $task->id, 'prioritize')
+        ->assertDispatched('toast-show', function (string $name, array $params): bool {
+            return ($params['slots']['text'] ?? null) === FixedDateRequiresDueDateException::MESSAGE;
+        });
 
     $task->refresh();
 

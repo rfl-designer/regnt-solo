@@ -2,7 +2,6 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityType;
 use App\Enums\ServiceClass;
 use App\Enums\StakeholderIssueStatus;
@@ -33,13 +32,11 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
             'issue_id' => 'required|integer|exists:stakeholder_issues,id',
             'title' => 'nullable|string|max:255',
             'spec' => 'nullable|string',
-            'priority' => ['nullable', 'string', Rule::enum(ActivityPriority::class)],
             'service_class' => ['nullable', 'string', Rule::enum(ServiceClass::class)],
             'due_date' => 'nullable|date',
         ], [
             'issue_id.required' => 'You must provide the issue_id to promote.',
             'issue_id.exists' => 'Stakeholder issue not found. Use list-stakeholder-issues to find IDs.',
-            'priority.Illuminate\Validation\Rules\Enum' => 'Invalid priority. Valid values: urgent, high, medium, low.',
             'service_class.Illuminate\Validation\Rules\Enum' => 'Invalid service_class. Valid values: emergency, fixed_date, standard, intangible.',
         ]);
 
@@ -71,7 +68,6 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
                 'project_id' => $issue->project_id,
                 'title' => $title,
                 'spec' => $spec,
-                'priority' => $validated['priority'] ?? ActivityPriority::Medium,
                 'service_class' => $validated['service_class'] ?? ServiceClass::Standard,
                 'due_date' => $validated['due_date'] ?? null,
             ]);
@@ -109,7 +105,6 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
             'issue_id' => $schema->integer()->description('The ID of the stakeholder issue to convert. Use list-stakeholder-issues to find IDs.')->required(),
             'title' => $schema->string()->description('Optional feature title override. Defaults to a title generated from the issue comment.'),
             'spec' => $schema->string()->description('Optional feature spec in markdown. Defaults to an auto-generated spec based on the issue comment.'),
-            'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('Feature priority. Default: medium.'),
             'service_class' => $schema->string()->enum(['emergency', 'fixed_date', 'standard', 'intangible'])->description('Feature service class. Default: standard. "fixed_date" requires due_date to also be set — the request is refused otherwise.'),
             'due_date' => $schema->string()->description('Optional due date in YYYY-MM-DD format.'),
         ];

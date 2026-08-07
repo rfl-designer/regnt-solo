@@ -209,6 +209,55 @@ test('the active emergency can be edited and moved without tripping over itself'
         ->and($emergency->fresh()->status)->toBe(ActivityStatus::Doing);
 });
 
+test('demoting the Emergência that was furando o limite is refused while Fazendo is full', function () {
+    Activity::factory()->issue()->doing()->count(2)->create();
+    $emergency = Activity::factory()->issue()->doing()->emergency('Produção fora do ar')->create();
+
+    // The column reads 3/2 only because an Emergência is exempt. Dropping
+    // that exemption in place would leave three ordinary items in Fazendo,
+    // so the demotion has to be refused — take something out first.
+    expect(fn () => $emergency->update(['service_class' => ServiceClass::Standard]))
+        ->toThrow(DoingWipLimitExceededException::class);
+
+    expect($emergency->fresh()->service_class)->toBe(ServiceClass::Emergency);
+});
+
+test('demoting an Emergência in Fazendo is fine when the column has room', function () {
+    Activity::factory()->issue()->doing()->create();
+    $emergency = Activity::factory()->issue()->doing()->emergency('Produção fora do ar')->create();
+
+    $emergency->update(['service_class' => ServiceClass::Standard]);
+
+    expect($emergency->fresh()->service_class)->toBe(ServiceClass::Standard);
+});
+
+test('demoting an Emergência outside Fazendo is never gated by the WIP limit', function () {
+    Activity::factory()->issue()->doing()->count(2)->create();
+    $emergency = Activity::factory()->issue()->todo()->emergency('Produção fora do ar')->create();
+
+    $emergency->update(['service_class' => ServiceClass::Standard]);
+
+    expect($emergency->fresh()->service_class)->toBe(ServiceClass::Standard);
+});
+
+test('concluding an Emergência and classifying in the same save is judged by the final state', function () {
+    Activity::factory()->issue()->doing()->emergency('Incêndio atual')->create();
+    $task = Activity::factory()->issue()->doing()->create();
+
+    // The final state is a *concluded* Emergência, which holds no slot. A
+    // single save that lands there must be accepted, and it is — the guard
+    // only ever sees the values the save is about to write.
+    $task->update([
+        'status' => ActivityStatus::Done,
+        'service_class' => ServiceClass::Emergency,
+        'emergency_reason' => 'Virou incêndio e foi resolvido',
+    ]);
+
+    expect($task->fresh()->service_class)->toBe(ServiceClass::Emergency)
+        ->and($task->fresh()->status)->toBe(ActivityStatus::Done)
+        ->and($task->fresh()->isActiveEmergency())->toBeFalse();
+});
+
 test('demoting the active emergency frees the slot for the next one — the two-step swap', function () {
     $current = Activity::factory()->issue()->doing()->emergency('Incêndio antigo')->create();
     $next = Activity::factory()->issue()->todo()->create();

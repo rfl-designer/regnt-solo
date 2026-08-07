@@ -48,6 +48,29 @@ class ActivityObserver
     }
 
     /**
+     * Concurrency note for the two cross-row guards below (WIP limit and
+     * single Emergência): both read the current board state and then let
+     * the save write, so two *simultaneous* writers could each see room and
+     * both get in. That is accepted, not overlooked.
+     *
+     * SoloBoard is single-user by design (no `user_id` anywhere, one seeded
+     * account), so there is no second human racing the first; the only way
+     * to produce the interleaving is to drive two requests at the same
+     * instant on purpose. The alternatives all cost more than the risk:
+     * neither invariant is expressible as a portable database constraint
+     * ("one active Emergência" is cross-row, and MySQL has no partial
+     * unique index), and serializing every board write through a singleton
+     * lock row would add a bottleneck and a new failure mode to a
+     * single-user app to defend against a race that has no realistic
+     * trigger.
+     *
+     * What does hold: the swap flows that *deliberately* touch two rows
+     * (demote one Emergência, promote another) run both writes inside one
+     * transaction and re-validate the slot under that transaction, so the
+     * one multi-row operation the feature actually performs is consistent.
+     */
+
+    /**
      * Enforce the two Emergência invariants (issue #143):
      *
      * - **Motivo obrigatório.** Being an Emergência is what lets an item
@@ -116,11 +139,21 @@ class ActivityObserver
     /**
      * Enforce the WIP limit on "Fazendo" (issue #143).
      *
-     * Only *entering* Fazendo is gated — a new record created there, or a
-     * status change into it. Items already sitting in the column keep
-     * saving normally, so an over-limit column (which the Emergência
-     * exception legitimately produces, hence the board's "3/2") never
-     * becomes unusable.
+     * The guard runs whenever *this save* is what makes the activity a
+     * counting item in Fazendo. That is two distinct transitions, not one:
+     *
+     * - entering the column (a new record created there, or a status change
+     *   into it); and
+     * - **losing the Emergência exemption while already there** — demoting
+     *   the Emergência that was furando o limite would otherwise quietly
+     *   leave three ordinary items in Fazendo, and that is exactly what the
+     *   "Substituir" flow does when the current Emergência sits in the
+     *   column. Refusing it is the honest answer: take something out of
+     *   Fazendo first, then swap.
+     *
+     * Saves that change neither of those are never gated, so an over-limit
+     * column (which the Emergência exception legitimately produces, hence
+     * the board's "3/2") never becomes unusable.
      *
      * Two deliberate exclusions:
      *
@@ -132,6 +165,12 @@ class ActivityObserver
      *   ({@see Activity::isLeaf()} / {@see Activity::scopeLeaf()}) —
      *   issues and atomic epics. Personal tasks and parent epics never
      *   appear as Fazendo cards and are neither counted nor refused.
+     *
+     * Known gap: an epic in Fazendo that becomes a leaf because its last
+     * child was deleted starts counting without any save of its own passing
+     * through here. Refusing a child's deletion because of its parent's
+     * column would be a worse answer than briefly reading "3/2", so the
+     * count simply catches up.
      */
     private function enforceDoingWipLimit(Activity $activity): void
     {
@@ -139,13 +178,16 @@ class ActivityObserver
             return;
         }
 
-        $enteringDoingThisSave = ! $activity->exists || $activity->isDirty('status');
-
-        if (! $enteringDoingThisSave) {
+        if ($activity->service_class === ServiceClass::Emergency) {
             return;
         }
 
-        if ($activity->service_class === ServiceClass::Emergency) {
+        $enteringDoingThisSave = ! $activity->exists || $activity->isDirty('status');
+        $losingEmergencyExemption = $activity->exists
+            && $activity->isDirty('service_class')
+            && $activity->getOriginal('service_class') === ServiceClass::Emergency;
+
+        if (! $enteringDoingThisSave && ! $losingEmergencyExemption) {
             return;
         }
 

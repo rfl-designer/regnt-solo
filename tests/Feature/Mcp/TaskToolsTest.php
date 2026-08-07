@@ -115,6 +115,7 @@ test('create-task accepts an optional project and parent', function () {
         'parent_id' => $epic->id,
         'status' => 'todo',
         'service_class' => 'emergency',
+        'emergency_reason' => 'Produção fora do ar',
     ]);
 
     $response->assertOk();

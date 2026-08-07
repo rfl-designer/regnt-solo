@@ -5,7 +5,9 @@ namespace App\Mcp\Tools;
 use App\Enums\ActivityType;
 use App\Enums\ServiceClass;
 use App\Enums\StakeholderIssueStatus;
+use App\Exceptions\EmergencyRequiresReasonException;
 use App\Exceptions\FixedDateRequiresDueDateException;
+use App\Exceptions\SingleActiveEmergencyException;
 use App\Models\Activity;
 use App\Models\StakeholderIssue;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -33,6 +35,7 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
             'title' => 'nullable|string|max:255',
             'spec' => 'nullable|string',
             'service_class' => ['nullable', 'string', Rule::enum(ServiceClass::class)],
+            'emergency_reason' => 'nullable|string|max:1000',
             'due_date' => 'nullable|date',
         ], [
             'issue_id.required' => 'You must provide the issue_id to promote.',
@@ -69,9 +72,12 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
                 'title' => $title,
                 'spec' => $spec,
                 'service_class' => $validated['service_class'] ?? ServiceClass::Standard,
+                'emergency_reason' => $validated['emergency_reason'] ?? null,
                 'due_date' => $validated['due_date'] ?? null,
             ]);
-        } catch (FixedDateRequiresDueDateException $e) {
+        } catch (SingleActiveEmergencyException $e) {
+            return Response::error($e->toMcpError());
+        } catch (FixedDateRequiresDueDateException|EmergencyRequiresReasonException $e) {
             return Response::error($e->getMessage());
         }
 
@@ -106,6 +112,7 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
             'title' => $schema->string()->description('Optional feature title override. Defaults to a title generated from the issue comment.'),
             'spec' => $schema->string()->description('Optional feature spec in markdown. Defaults to an auto-generated spec based on the issue comment.'),
             'service_class' => $schema->string()->enum(['emergency', 'fixed_date', 'standard', 'intangible'])->description('Feature service class. Default: standard. "fixed_date" requires due_date to also be set — the request is refused otherwise.'),
+            'emergency_reason' => $schema->string()->description('Why this is an Emergência. Required when service_class is "emergency"; at most one emergency may be active on the board at a time.'),
             'due_date' => $schema->string()->description('Optional due date in YYYY-MM-DD format.'),
         ];
     }

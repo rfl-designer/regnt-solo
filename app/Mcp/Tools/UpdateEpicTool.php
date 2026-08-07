@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
+use App\Exceptions\DoingWipLimitExceededException;
 use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -86,7 +87,7 @@ class UpdateEpicTool extends Tool
         if (! empty($updates)) {
             try {
                 $epic->update($updates);
-            } catch (WaitingRequiresWaitingForException $e) {
+            } catch (WaitingRequiresWaitingForException|DoingWipLimitExceededException $e) {
                 return Response::error($e->getMessage());
             }
         }

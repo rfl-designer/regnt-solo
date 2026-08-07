@@ -63,6 +63,7 @@ test('promote-stakeholder-issue creates feature and links issue', function () {
         'issue_id' => $issue->id,
         'title' => 'Stakeholder report by period',
         'service_class' => 'emergency',
+        'emergency_reason' => 'Stakeholder bloqueado',
     ]);
 
     $response->assertOk();
@@ -121,6 +122,7 @@ test('promote-stakeholder-issue defaults service_class to standard and accepts a
         'issue_id' => $issue2->id,
         'title' => 'Emergency feature',
         'service_class' => 'emergency',
+        'emergency_reason' => 'Stakeholder bloqueado',
     ]);
 
     $response2->assertOk();

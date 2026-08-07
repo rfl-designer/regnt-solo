@@ -79,13 +79,13 @@ test('create-issue creates issue with defaults', function () {
     $response->assertOk();
     $response->assertSee('New MCP Issue');
     $response->assertSee('"status": "inbox"');
-    $response->assertSee('"priority": "medium"');
+    $response->assertSee('"service_class": "standard"');
 
     $this->assertDatabaseHas('activities', [
         'title' => 'New MCP Issue',
         'type' => ActivityType::Issue->value,
         'status' => 'inbox',
-        'priority' => 'medium',
+        'service_class' => 'standard',
     ]);
 });
 
@@ -98,7 +98,7 @@ test('create-issue accepts project_id and parent_id', function () {
         'project_id' => $project->id,
         'parent_id' => $epic->id,
         'status' => 'todo',
-        'priority' => 'high',
+        'service_class' => 'emergency',
     ]);
 
     $response->assertOk();
@@ -109,7 +109,20 @@ test('create-issue accepts project_id and parent_id', function () {
         'project_id' => $project->id,
         'parent_id' => $epic->id,
         'status' => 'todo',
-        'priority' => 'high',
+        'service_class' => 'emergency',
+    ]);
+});
+
+test('create-issue refuses fixed_date without a due date', function () {
+    $response = SoloBoardServer::tool(CreateIssueTool::class, [
+        'title' => 'Fixed date issue',
+        'service_class' => 'fixed_date',
+    ]);
+
+    $response->assertHasErrors();
+
+    $this->assertDatabaseMissing('activities', [
+        'title' => 'Fixed date issue',
     ]);
 });
 
@@ -205,7 +218,7 @@ test('update-issue updates fields, project and parent', function () {
     $response = SoloBoardServer::tool(UpdateIssueTool::class, [
         'issue_id' => $issue->id,
         'title' => 'New Title',
-        'priority' => 'urgent',
+        'service_class' => 'emergency',
         'project_id' => $project->id,
         'parent_id' => $epic->id,
     ]);
@@ -216,10 +229,24 @@ test('update-issue updates fields, project and parent', function () {
     $this->assertDatabaseHas('activities', [
         'id' => $issue->id,
         'title' => 'New Title',
-        'priority' => 'urgent',
+        'service_class' => 'emergency',
         'project_id' => $project->id,
         'parent_id' => $epic->id,
     ]);
+});
+
+test('update-issue refuses fixed_date without a due date', function () {
+    $issue = Activity::factory()->issue()->create(['due_date' => null]);
+
+    $response = SoloBoardServer::tool(UpdateIssueTool::class, [
+        'issue_id' => $issue->id,
+        'service_class' => 'fixed_date',
+    ]);
+
+    $response->assertHasErrors();
+
+    $issue->refresh();
+    expect($issue->service_class->value)->not->toBe('fixed_date');
 });
 
 test('update-issue marks done and stops timers when status changes to done', function () {
@@ -284,7 +311,7 @@ test('update-issue rejects a non-issue activity', function () {
                 'issue_id' => $activity->id,
                 'title' => 'Should not apply',
             ]);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $refused = true;
         }
 
@@ -326,7 +353,7 @@ test('delete-issue rejects a non-issue activity', function () {
             SoloBoardServer::tool(DeleteIssueTool::class, [
                 'issue_id' => $activity->id,
             ]);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $refused = true;
         }
 

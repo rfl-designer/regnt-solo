@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools;
 
+use App\Models\Project;
 use App\Models\TaskTemplate;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -34,7 +35,7 @@ class ApplyTemplateTool extends Tool
         }
 
         if (! empty($validated['project_slug'])) {
-            $project = \App\Models\Project::query()->where('slug', $validated['project_slug'])->firstOrFail();
+            $project = Project::query()->where('slug', $validated['project_slug'])->firstOrFail();
             $overrides['project_id'] = $project->id;
         }
 
@@ -47,7 +48,7 @@ class ApplyTemplateTool extends Tool
                 'id' => $task->id,
                 'title' => $task->title,
                 'status' => $task->status->value,
-                'priority' => $task->priority->value,
+                'service_class' => $task->service_class->value,
                 'estimated_minutes' => $task->estimated_minutes,
             ],
         ], JSON_PRETTY_PRINT));
@@ -56,7 +57,7 @@ class ApplyTemplateTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\Contracts\JsonSchema\JsonSchema>
+     * @return array<string, JsonSchema>
      */
     public function schema(JsonSchema $schema): array
     {

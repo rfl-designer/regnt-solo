@@ -7,6 +7,7 @@ use App\Models\Activity;
 use App\Models\DailyPlan;
 use Carbon\Carbon;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -68,7 +69,7 @@ class SuggestTasksTool extends Tool
             'id' => $task->id,
             'title' => $task->title,
             'status' => $task->status->value,
-            'priority' => $task->priority->value,
+            'service_class' => $task->service_class->value,
             'project' => $task->project?->name,
             'due_date' => $task->due_date?->toDateString(),
             'is_overdue' => $task->isOverdue(),
@@ -84,7 +85,7 @@ class SuggestTasksTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\JsonSchema\Types\Type>
+     * @return array<string, Type>
      */
     public function schema(JsonSchema $schema): array
     {

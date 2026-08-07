@@ -92,13 +92,13 @@ test('create-task creates a personal task with defaults', function () {
     $response->assertOk();
     $response->assertSee('New MCP Task');
     $response->assertSee('"status": "inbox"');
-    $response->assertSee('"priority": "medium"');
+    $response->assertSee('"service_class": "standard"');
 
     $this->assertDatabaseHas('activities', [
         'title' => 'New MCP Task',
         'type' => ActivityType::Task->value,
         'status' => 'inbox',
-        'priority' => 'medium',
+        'service_class' => 'standard',
         'project_id' => null,
         'parent_id' => null,
     ]);
@@ -113,7 +113,7 @@ test('create-task accepts an optional project and parent', function () {
         'project_id' => $project->id,
         'parent_id' => $epic->id,
         'status' => 'todo',
-        'priority' => 'high',
+        'service_class' => 'emergency',
     ]);
 
     $response->assertOk();
@@ -124,7 +124,35 @@ test('create-task accepts an optional project and parent', function () {
         'project_id' => $project->id,
         'parent_id' => $epic->id,
         'status' => 'todo',
-        'priority' => 'high',
+        'service_class' => 'emergency',
+    ]);
+});
+
+test('create-task refuses fixed_date without a due date', function () {
+    $response = SoloBoardServer::tool(CreateTaskTool::class, [
+        'title' => 'Fixed date task',
+        'service_class' => 'fixed_date',
+    ]);
+
+    $response->assertHasErrors();
+
+    $this->assertDatabaseMissing('activities', [
+        'title' => 'Fixed date task',
+    ]);
+});
+
+test('create-task accepts fixed_date with a due date', function () {
+    $response = SoloBoardServer::tool(CreateTaskTool::class, [
+        'title' => 'Fixed date task with due date',
+        'service_class' => 'fixed_date',
+        'due_date' => '2026-09-01',
+    ]);
+
+    $response->assertOk();
+
+    $this->assertDatabaseHas('activities', [
+        'title' => 'Fixed date task with due date',
+        'service_class' => 'fixed_date',
     ]);
 });
 

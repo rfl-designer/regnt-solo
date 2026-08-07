@@ -49,6 +49,11 @@ class Activity extends Model
         // so nothing can forge the "desde quando" timestamp on entry into
         // a waiting status.
         'waiting_for',
+        // `emergency_since` is deliberately NOT fillable, for the same
+        // reason as `waiting_since` above: only
+        // ActivityObserver::handleEmergencyState() may stamp it, so the
+        // "idade da Emergência ativa" can't be forged by caller input.
+        'emergency_reason',
         'due_date',
         'estimated_minutes',
         'completed_at',
@@ -75,6 +80,7 @@ class Activity extends Model
             'priority' => ActivityPriority::class,
             'service_class' => ServiceClass::class,
             'waiting_since' => 'datetime',
+            'emergency_since' => 'datetime',
             'due_date' => 'date',
             'completed_at' => 'datetime',
         ];
@@ -367,6 +373,35 @@ class Activity extends Model
     }
 
     /**
+     * The instance-level counterpart of {@see scopeLeaf()}: whether this
+     * activity is one of the items the board actually shows as a card.
+     * Both the WIP limit guard and the "n/2" indicator answer "how many
+     * items are in Fazendo" through this same definition, so the number
+     * the user sees is exactly the number the guard counts.
+     */
+    public function isLeaf(): bool
+    {
+        return match ($this->type) {
+            ActivityType::Issue => true,
+            ActivityType::Epic => ! $this->children()->exists(),
+            default => false,
+        };
+    }
+
+    /**
+     * Scope to the Emergência currently holding the board's single
+     * emergency slot: classified as Emergência and not yet concluded.
+     * Done Emergências are history and drafts (null status) were never on
+     * the board, so neither occupies the slot.
+     */
+    public function scopeActiveEmergency(Builder $query): void
+    {
+        $query->where('service_class', ServiceClass::Emergency)
+            ->whereNotNull('status')
+            ->where('status', '!=', ActivityStatus::Done);
+    }
+
+    /**
      * Scope to schedulable leaf items: issues, personal tasks plus atomic epics.
      */
     public function scopeSchedulable(Builder $query): void
@@ -539,6 +574,32 @@ class Activity extends Model
         }
 
         return (int) $this->waiting_since->diffInDays(now());
+    }
+
+    /**
+     * Whether this activity is the Emergência currently occupying the
+     * board's single emergency slot (see {@see scopeActiveEmergency()}).
+     */
+    public function isActiveEmergency(): bool
+    {
+        return $this->service_class === ServiceClass::Emergency
+            && $this->status !== null
+            && $this->status !== ActivityStatus::Done;
+    }
+
+    /**
+     * Get the number of whole days since the activity was classified as
+     * Emergência — the "idade" shown when a second Emergência is refused.
+     * Returns 0 when it isn't an Emergência or `emergency_since` hasn't
+     * been stamped yet.
+     */
+    public function emergencyDays(): int
+    {
+        if ($this->service_class !== ServiceClass::Emergency || $this->emergency_since === null) {
+            return 0;
+        }
+
+        return (int) $this->emergency_since->diffInDays(now());
     }
 
     /**

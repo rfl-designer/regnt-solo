@@ -35,6 +35,27 @@ class ActivityFactory extends Factory
     }
 
     /**
+     * Supply the motivo an Emergência is required to carry (issue #143)
+     * whenever a test asks for one without caring about the justification
+     * itself — including tests that set `service_class` directly rather
+     * than through the {@see emergency()} state.
+     *
+     * This runs at *making* time, before the guard in ActivityObserver, so
+     * it only ever fills a gap: a factory call that passes its own
+     * `emergency_reason` keeps it. Tests that assert the guard's refusal
+     * must therefore classify through a save on an existing model
+     * (`$task->update([...])`) rather than through the factory.
+     */
+    public function configure(): static
+    {
+        return $this->afterMaking(function (Activity $activity): void {
+            if ($activity->service_class === ServiceClass::Emergency && blank($activity->emergency_reason)) {
+                $activity->emergency_reason = 'Motivo da emergência (factory).';
+            }
+        });
+    }
+
+    /**
      * Indicate that the activity is an epic.
      */
     public function epic(): static
@@ -210,12 +231,14 @@ class ActivityFactory extends Factory
     }
 
     /**
-     * Indicate that the activity is classified as Emergência.
+     * Indicate that the activity is classified as Emergência, with the
+     * mandatory motivo already filled in.
      */
-    public function emergency(): static
+    public function emergency(string $reason = 'Produção fora do ar.'): static
     {
         return $this->state(fn (array $attributes) => [
             'service_class' => ServiceClass::Emergency,
+            'emergency_reason' => $reason,
         ]);
     }
 

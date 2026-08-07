@@ -41,16 +41,4 @@ enum PullQueueReason: string
             self::Fifo => 'Ordem de chegada',
         };
     }
-
-    /**
-     * The colour of the degrau, matching the service class it comes from.
-     */
-    public function color(): string
-    {
-        return match ($this) {
-            self::Emergency => 'red',
-            self::FixedDateAtRisk => 'amber',
-            self::Fifo => 'zinc',
-        };
-    }
 }

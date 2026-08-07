@@ -84,6 +84,43 @@ test('a Pronto card keeps its service class badge', function () {
     Livewire::test('pages::kanban')->assertSeeHtml('Intangível');
 });
 
+test('the Pronto list disables sorting inside itself while staying a drop target', function () {
+    readyInPronto(Activity::factory()->issue()->todo()->create(), '2026-08-01 09:00');
+
+    $html = Livewire::test('pages::kanban')->html();
+
+    // Everything between the Pronto <ul ...> tag's attributes.
+    $prontoList = str($html)->after('wire:sort:group-id="todo"')->before('>')->toString();
+
+    // `sort: false` is the only thing that stops Sortable rearranging the
+    // list; the group binding is what keeps drops in and out working.
+    expect($prontoList)->toContain('wire:sort:config="{ sort: false }"');
+    expect($html)->toContain('wire:sort:group="tasks"');
+
+    // No other column gives up sorting.
+    expect(substr_count($html, 'wire:sort:config'))->toBe(1);
+});
+
+test('the degrau headings use full Tailwind classes so they actually get colour', function () {
+    readyInPronto(
+        Activity::factory()->issue()->todo()->emergency('Produção fora do ar')->create(),
+        '2026-08-01 09:00'
+    );
+    readyInPronto(
+        Activity::factory()->issue()->todo()->fixedDate(today()->addDay()->toDateString())->create(),
+        '2026-08-02 09:00'
+    );
+    readyInPronto(Activity::factory()->issue()->todo()->create(), '2026-08-03 09:00');
+
+    $html = Livewire::test('pages::kanban')->html();
+
+    // Interpolated colours (text-{{ ... }}-400/80) would never be built by
+    // Tailwind's scanner, so the literals have to reach the markup intact.
+    expect($html)->toContain('text-red-400/80');
+    expect($html)->toContain('text-amber-400/80');
+    expect($html)->toContain('text-zinc-400/80');
+});
+
 test('the Pronto column has no drag handle to reorder with', function () {
     $ready = readyInPronto(Activity::factory()->issue()->todo()->create(['title' => 'Item pronto']), '2026-08-01 09:00');
     Activity::factory()->issue()->backlog()->create(['title' => 'Item no backlog']);

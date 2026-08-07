@@ -395,20 +395,23 @@ new class extends Component
     >
         @foreach ($kanbanStatuses as $status)
             @php
-                $tasks = $this->getColumnTasks($status, withProject: true);
-                $unassignedTasks = $this->getColumnTasks($status, withProject: false);
-                $total = $this->getColumnTotal($status);
-                $estimate = $this->getColumnEstimate($status);
-                $estimateFormatted = $this->formatDuration($estimate);
-                $limit = $limits[$status->value];
-                $hasMore = $total > $limit;
-            @endphp
-
-            @php
                 $isDone = $status === \App\Enums\ActivityStatus::Done;
                 $isDoing = $status === \App\Enums\ActivityStatus::Doing;
                 $isTodo = $status === \App\Enums\ActivityStatus::Todo;
+                $limit = $limits[$status->value];
+
+                // Pronto is rendered from the pull queue, so the two
+                // column queries (and the models they hydrate) would be
+                // loaded only to be thrown away. Its total comes from the
+                // queue itself, which is the same universe.
+                $tasks = $isTodo ? collect() : $this->getColumnTasks($status, withProject: true);
+                $unassignedTasks = $isTodo ? collect() : $this->getColumnTasks($status, withProject: false);
                 $queueEntries = $isTodo ? $this->pullQueue->take($limit) : collect();
+                $total = $isTodo ? $this->pullQueue->count() : $this->getColumnTotal($status);
+
+                $estimate = $this->getColumnEstimate($status);
+                $estimateFormatted = $this->formatDuration($estimate);
+                $hasMore = $total > $limit;
                 $wipLimit = $this->wipLimit();
                 $wipCount = $isDoing ? $this->doingWipCount() : 0;
             @endphp
@@ -518,22 +521,47 @@ new class extends Component
                             <span>Ordem automática da fila</span>
                         </div>
 
+                        {{-- `sort: false` is what actually removes the
+                             internal reordering: without it the card is
+                             draggable anywhere inside the list (no handle
+                             means Sortable treats the whole item as one),
+                             so the user could rearrange Pronto, fire a
+                             pointless handleSort and watch the order snap
+                             back. Sortable still lets the card be pulled
+                             out to another column and still accepts drops
+                             from them — only sorting within this list is
+                             off. See `getConfigurationOverrides()` in
+                             livewire/dist/livewire.esm.js. --}}
                         <ul
                             wire:sort="handleSort"
                             wire:sort:group="tasks"
                             wire:sort:group-id="{{ $status->value }}"
+                            wire:sort:config="{ sort: false }"
                             class="kanban-dropzone flex min-h-[2rem] flex-col gap-2 rounded-lg transition-colors duration-200"
                         >
                             @php $previousReason = null; @endphp
 
                             @forelse ($queueEntries as $entry)
                                 @if ($entry->reason !== $previousReason)
+                                    @php
+                                        // Written out in full: Tailwind scans these
+                                        // templates as plain text, so an interpolated
+                                        // `text-{{ $color }}-400/80` would never be
+                                        // generated and the heading would render
+                                        // colourless.
+                                        $degrauClass = match ($entry->reason) {
+                                            \App\Enums\PullQueueReason::Emergency => 'text-red-400/80',
+                                            \App\Enums\PullQueueReason::FixedDateAtRisk => 'text-amber-400/80',
+                                            \App\Enums\PullQueueReason::Fifo => 'text-zinc-400/80',
+                                        };
+                                    @endphp
+
                                     <li
                                         wire:key="pull-queue-degrau-{{ $entry->reason->value }}"
                                         wire:sort:ignore
                                         class="flex items-center gap-2 pt-1 first:pt-0"
                                     >
-                                        <span class="text-[0.65rem] font-medium tracking-wide text-{{ $entry->reason->color() }}-400/80 uppercase">
+                                        <span class="text-[0.65rem] font-medium tracking-wide {{ $degrauClass }} uppercase">
                                             {{ $entry->reason->label() }}
                                         </span>
                                         <span class="h-px flex-1 bg-zinc-700/60"></span>

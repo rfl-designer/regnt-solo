@@ -56,6 +56,9 @@
                     <flux:sidebar.item icon="chart-bar" :href="route('analytics')" :current="request()->routeIs('analytics')" wire:navigate>
                         Métricas
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="arrow-trending-up" :href="route('flow')" :current="request()->routeIs('flow')" wire:navigate>
+                        Fluxo
+                    </flux:sidebar.item>
                     <flux:sidebar.item icon="clipboard-document-list" :href="route('templates')" :current="request()->routeIs('templates')" wire:navigate>
                         Templates
                     </flux:sidebar.item>

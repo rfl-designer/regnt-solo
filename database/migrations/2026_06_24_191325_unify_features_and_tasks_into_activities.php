@@ -147,10 +147,15 @@ return new class extends Migration
             $table->renameColumn('task_id', 'activity_id');
         });
 
-        Schema::rename('daily_plan_task', 'daily_plan_activity');
-        Schema::table('daily_plan_activity', function (Blueprint $table): void {
-            $table->renameColumn('task_id', 'activity_id');
-        });
+        // Guardado pelo mesmo motivo do `down()`: o pivô do plano diário
+        // foi dropado de vez pelo ritual matinal (issue #147), então esta
+        // renomeação só se aplica quando ele ainda existe.
+        if (Schema::hasTable('daily_plan_task')) {
+            Schema::rename('daily_plan_task', 'daily_plan_activity');
+            Schema::table('daily_plan_activity', function (Blueprint $table): void {
+                $table->renameColumn('task_id', 'activity_id');
+            });
+        }
 
         Schema::drop('features');
     }
@@ -194,10 +199,17 @@ return new class extends Migration
             ]);
         }
 
-        Schema::rename('daily_plan_activity', 'daily_plan_task');
-        Schema::table('daily_plan_task', function (Blueprint $table): void {
-            $table->renameColumn('activity_id', 'task_id');
-        });
+        // O pivô do plano diário foi dropado de vez pelo ritual matinal
+        // (issue #147), então ele pode simplesmente não existir quando se
+        // rola a história até aqui. Reverter o que existe é o certo;
+        // estourar por causa de uma tabela que outra migração já removeu
+        // deixaria o rollback inteiro inutilizável.
+        if (Schema::hasTable('daily_plan_activity')) {
+            Schema::rename('daily_plan_activity', 'daily_plan_task');
+            Schema::table('daily_plan_task', function (Blueprint $table): void {
+                $table->renameColumn('activity_id', 'task_id');
+            });
+        }
 
         Schema::rename('activity_commits', 'task_commits');
         Schema::table('task_commits', function (Blueprint $table): void {

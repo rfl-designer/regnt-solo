@@ -17,7 +17,6 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -85,6 +84,7 @@ class Activity extends Model
             'emergency_since' => 'datetime',
             'due_date' => 'date',
             'completed_at' => 'datetime',
+            'archived_at' => 'datetime',
         ];
     }
 
@@ -188,16 +188,6 @@ class Activity extends Model
     public function statusChanges(): HasMany
     {
         return $this->hasMany(ActivityStatusChange::class)->orderBy('changed_at');
-    }
-
-    /**
-     * Get the daily plans this activity belongs to.
-     */
-    public function dailyPlans(): BelongsToMany
-    {
-        return $this->belongsToMany(DailyPlan::class, 'daily_plan_activity', 'activity_id', 'daily_plan_id')
-            ->withPivot('sort_order', 'completed_at')
-            ->withTimestamps();
     }
 
     /**
@@ -683,6 +673,66 @@ class Activity extends Model
     public function scopeForProject(Builder $query, int $projectId): void
     {
         $query->where('project_id', $projectId);
+    }
+
+    /**
+     * Scope to activities the user has already filed away (issue #147).
+     */
+    public function scopeArchived(Builder $query): void
+    {
+        $query->whereNotNull('archived_at');
+    }
+
+    /**
+     * Scope to activities still awaiting the ritual's first step — what the
+     * Feito column shows, in place of the old "só a semana corrente".
+     */
+    public function scopeNotArchived(Builder $query): void
+    {
+        $query->whereNull('archived_at');
+    }
+
+    /**
+     * Whether this activity has been archived.
+     */
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
+    /**
+     * File the activity away.
+     *
+     * Archiving is *only* this timestamp. The status is deliberately left
+     * exactly where it is — the flow metrics (cycle time, SLE, aging) are
+     * derived from {@see ActivityStatusChange}, so moving an archived item
+     * out of Feito would reopen its clock and silently change the board's
+     * promise. Nothing here writes a status, and nothing here may.
+     *
+     * Already-archived items are left alone, so "Arquivar tudo" run twice
+     * doesn't rewrite the first pass's timestamps.
+     */
+    public function archive(): void
+    {
+        if ($this->archived_at !== null) {
+            return;
+        }
+
+        $this->archived_at = now();
+        $this->save();
+    }
+
+    /**
+     * Bring an archived activity back into view.
+     */
+    public function unarchive(): void
+    {
+        if ($this->archived_at === null) {
+            return;
+        }
+
+        $this->archived_at = null;
+        $this->save();
     }
 
     /**

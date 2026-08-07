@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Services\EmergencySlotService;
 use App\Services\PullQueueEntry;
@@ -79,6 +80,13 @@ class GetPullQueueTool extends Tool
     {
         $activity = $entry->activity;
 
+        // The due date travels only for a Data fixa. A Padrão can carry a
+        // date as a soft target, and emitting it here — next to a
+        // countdown — would read as "this one is date-driven too" and
+        // invite a client to reorder around a date the queue deliberately
+        // ignored.
+        $isFixedDate = $activity->service_class === ServiceClass::FixedDate;
+
         return [
             'position' => $index + 1,
             'id' => $activity->id,
@@ -88,8 +96,8 @@ class GetPullQueueTool extends Tool
             'client' => $activity->effective_client?->name,
             'reason' => $entry->reason->value,
             'reason_detail' => $entry->positionReason(),
-            'due_date' => $activity->due_date?->toDateString(),
-            'days_to_due_date' => $entry->daysToDueDate,
+            'due_date' => $isFixedDate ? $activity->due_date?->toDateString() : null,
+            'days_to_due_date' => $isFixedDate ? $entry->daysToDueDate : null,
             'age_days' => $entry->ageInDays(),
             'in_pronto_since' => $entry->readySince->toDateTimeString(),
         ];

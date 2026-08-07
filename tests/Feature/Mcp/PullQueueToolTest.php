@@ -75,9 +75,9 @@ test('each queued item reports class, project, client, due date and age', functi
         Activity::factory()->issue()->todo()->fixedDate(today()->addDays(2)->toDateString())->create([
             'title' => 'Entregar relatório',
             'project_id' => $project->id,
-            'created_at' => now()->subDays(6),
+            'created_at' => now()->subDays(20),
         ]),
-        '2026-08-02 09:00'
+        now()->subDays(6)->toDateTimeString()
     );
 
     $item = pullQueuePayload()['queue'][0];
@@ -89,7 +89,32 @@ test('each queued item reports class, project, client, due date and age', functi
     expect($item['client'])->toBe($project->client?->name);
     expect($item['due_date'])->toBe(today()->addDays(2)->toDateString());
     expect($item['days_to_due_date'])->toBe(2);
+    // Age counts from the board, and this item entered Pronto six days
+    // ago — the twenty days since creation are not board time.
     expect($item['age_days'])->toBe(6);
+});
+
+test('the due date travels only for a Data fixa', function () {
+    $standard = queuedInPronto(
+        Activity::factory()->issue()->todo()->create([
+            'title' => 'Padrão com data alvo',
+            'due_date' => today()->addDays(2),
+        ]),
+        '2026-08-01 09:00'
+    );
+    $fixedDate = queuedInPronto(
+        Activity::factory()->issue()->todo()->fixedDate(today()->addDays(2)->toDateString())->create(),
+        '2026-08-02 09:00'
+    );
+
+    $items = collect(pullQueuePayload()['queue'])->keyBy('id');
+
+    expect($items[$standard->id]['reason'])->toBe('fifo');
+    expect($items[$standard->id]['due_date'])->toBeNull();
+    expect($items[$standard->id]['days_to_due_date'])->toBeNull();
+
+    expect($items[$fixedDate->id]['due_date'])->toBe(today()->addDays(2)->toDateString());
+    expect($items[$fixedDate->id]['days_to_due_date'])->toBe(2);
 });
 
 test('get-pull-queue reports the Fazendo WIP and the active Emergência as context', function () {

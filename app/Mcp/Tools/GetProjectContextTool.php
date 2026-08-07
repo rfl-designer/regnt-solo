@@ -43,7 +43,7 @@ class GetProjectContextTool extends Tool
         $activeTasks = Activity::query()
             ->where('project_id', $project->id)
             ->where('status', '!=', ActivityStatus::Done)
-            ->orderByRaw("CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END")
+            ->orderByServiceClass()
             ->orderBy('due_date')
             ->get();
 

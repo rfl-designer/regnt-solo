@@ -436,11 +436,27 @@ class Activity extends Model
     }
 
     /**
-     * Scope to order by priority then sort_order.
+     * The canonical service-class ordering, as a `CASE` SQL fragment:
+     * Emergência -> Data fixa -> Padrão -> Intangível. This is the single
+     * ordering axis for activities and must be reused everywhere a query
+     * needs to rank by service class, rather than duplicated inline.
+     */
+    public const string SERVICE_CLASS_ORDER_SQL = "CASE service_class WHEN 'emergency' THEN 0 WHEN 'fixed_date' THEN 1 WHEN 'standard' THEN 2 WHEN 'intangible' THEN 3 END";
+
+    /**
+     * Scope to order by the canonical service-class ranking (no tie-breaker).
+     */
+    public function scopeOrderByServiceClass(Builder $query): void
+    {
+        $query->orderByRaw(self::SERVICE_CLASS_ORDER_SQL);
+    }
+
+    /**
+     * Scope to order by service class then sort_order.
      */
     public function scopeOrdered(Builder $query): void
     {
-        $query->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END")
+        $query->orderByServiceClass()
             ->orderBy('sort_order');
     }
 

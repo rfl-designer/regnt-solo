@@ -1,7 +1,14 @@
-@props(['entry'])
+@props(['entry', 'agingBorder' => null, 'agingTooltip' => null])
 
 @php
     $task = $entry->activity;
+
+    // The card already explains its position; when it is also burning
+    // through the SLE (issue #145), that goes in the same tooltip rather
+    // than a second one stacked on top of it.
+    $tooltip = $agingTooltip
+        ? $entry->positionReason().' · '.$agingTooltip
+        : $entry->positionReason();
 @endphp
 
 {{-- A card in the Pronto column (issue #144).
@@ -12,9 +19,9 @@
      column. The tooltip carries the motivo of the position, so "why is
      this one on top" is answerable without leaving the board. --}}
 <li wire:key="task-{{ $task->id }}" wire:sort:item="{{ $task->id }}" class="kanban-card">
-    <flux:tooltip :content="$entry->positionReason()">
+    <flux:tooltip :content="$tooltip">
         <div
-            class="group cursor-pointer rounded-lg border border-zinc-700 bg-zinc-800 p-3 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
+            class="group cursor-pointer rounded-lg border {{ $agingBorder ?? 'border-zinc-700' }} bg-zinc-800 p-3 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
             wire:click="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
         >
             {{-- Card Top: Title --}}

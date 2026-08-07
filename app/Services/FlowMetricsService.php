@@ -53,6 +53,16 @@ class FlowMetricsService
     private ?array $memoizedSample = null;
 
     /**
+     * Clocks already read from the history, keyed by activity id. Missing
+     * ends are kept as an empty array so an item with no clock is
+     * remembered as "asked and there is nothing" instead of being queried
+     * again on every card that renders it.
+     *
+     * @var array<int, array{started_at?: CarbonInterface, finished_at?: CarbonInterface}>
+     */
+    private array $clockCache = [];
+
+    /**
      * The four columns where an item is already committed work and its
      * clock is running — the ones where aging means something. Backlog and
      * Aguardando aprovação are excluded for the same reason they are
@@ -159,7 +169,7 @@ class FlowMetricsService
             return $this->memoizedSample = [];
         }
 
-        $clocks = $this->clockMap($completed->modelKeys());
+        $clocks = $this->clocks($completed->modelKeys());
 
         return $this->memoizedSample = $completed
             ->map(fn (Activity $activity): ?float => $this->cycleTimeFromClock($clocks[$activity->id] ?? []))
@@ -225,7 +235,7 @@ class FlowMetricsService
      */
     public function cycleTimeDays(Activity $activity): ?float
     {
-        return $this->cycleTimeFromClock($this->clockMap([$activity->id])[$activity->id] ?? []);
+        return $this->cycleTimeFromClock($this->clocks([$activity->id])[$activity->id] ?? []);
     }
 
     /**
@@ -235,7 +245,7 @@ class FlowMetricsService
      */
     public function ageDays(Activity $activity): ?float
     {
-        $startedAt = $this->clockMap([$activity->id])[$activity->id]['started_at'] ?? null;
+        $startedAt = $this->clocks([$activity->id])[$activity->id]['started_at'] ?? null;
 
         return $startedAt === null ? null : $startedAt->floatDiffInDays(now());
     }
@@ -407,6 +417,48 @@ class FlowMetricsService
         }
 
         return $started->floatDiffInDays($finished);
+    }
+
+    /**
+     * Read the clocks of a whole set of activities up front.
+     *
+     * A board renders dozens of cards and each one asks for its aging;
+     * without this the answer would cost one query per card. Callers that
+     * already hold the collection (the Kanban's columns) warm it once and
+     * every subsequent lookup is free.
+     *
+     * @param  iterable<Activity>  $activities
+     */
+    public function warm(iterable $activities): void
+    {
+        $ids = [];
+
+        foreach ($activities as $activity) {
+            $ids[] = $activity->id;
+        }
+
+        $this->clocks($ids);
+    }
+
+    /**
+     * The clocks for these ids, reading only the ones not seen yet.
+     *
+     * @param  list<int>  $activityIds
+     * @return array<int, array{started_at?: CarbonInterface, finished_at?: CarbonInterface}>
+     */
+    private function clocks(array $activityIds): array
+    {
+        $missing = array_values(array_diff($activityIds, array_keys($this->clockCache)));
+
+        if ($missing !== []) {
+            $found = $this->clockMap($missing);
+
+            foreach ($missing as $id) {
+                $this->clockCache[$id] = $found[$id] ?? [];
+            }
+        }
+
+        return array_intersect_key($this->clockCache, array_flip($activityIds));
     }
 
     /**

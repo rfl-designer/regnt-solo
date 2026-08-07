@@ -6,6 +6,7 @@ use App\Exceptions\SingleActiveEmergencyException;
 use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
+use App\Services\FlowMetricsService;
 use App\Services\PullQueueService;
 use Carbon\Carbon;
 use Flux\Flux;
@@ -205,6 +206,18 @@ new class extends Component
     }
 
     /**
+     * The flow metrics behind the SLE chip and the cards' aging
+     * (issue #145). Held as a computed so a single instance serves the
+     * whole render: it caches the status-history clocks it reads, which is
+     * what keeps "one query per card" from happening.
+     */
+    #[Computed]
+    public function flow(): FlowMetricsService
+    {
+        return app(FlowMetricsService::class);
+    }
+
+    /**
      * The WIP limit for Fazendo. Read straight from config on every render
      * so the "n/2" indicator can never drift from the number the guard in
      * ActivityObserver enforces.
@@ -244,7 +257,7 @@ new class extends Component
     #[On('task-created')]
     public function refreshBoard(): void
     {
-        unset($this->projects, $this->pullQueue);
+        unset($this->projects, $this->pullQueue, $this->flow);
     }
 
     /**
@@ -336,7 +349,26 @@ new class extends Component
 <div class="flex h-full w-full flex-1 flex-col p-4 sm:p-6">
     {{-- Header --}}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <flux:heading size="xl">Kanban</flux:heading>
+        <div class="flex items-center gap-3">
+            <flux:heading size="xl">Kanban</flux:heading>
+
+            {{-- The SLE chip (issue #145): the board's promise, or the
+                 honest admission that it doesn't have one yet. Clicking it
+                 goes to Fluxo, where the number is explained rather than
+                 just asserted. --}}
+            <flux:tooltip content="Ver a página Fluxo: baseline, distribuição e o que está envelhecendo.">
+                <a href="{{ route('flow') }}" wire:navigate data-test="sle-chip">
+                    <flux:badge
+                        size="sm"
+                        :color="$this->flow->isUsable() ? 'emerald' : 'zinc'"
+                        icon="arrow-trending-up"
+                        class="cursor-pointer"
+                    >
+                        {{ $this->flow->label() }}
+                    </flux:badge>
+                </a>
+            </flux:tooltip>
+        </div>
 
         <div class="flex items-center gap-3">
             {{-- Project filter --}}
@@ -408,6 +440,12 @@ new class extends Component
                 $unassignedTasks = $isTodo ? collect() : $this->getColumnTasks($status, withProject: false);
                 $queueEntries = $isTodo ? $this->pullQueue->take($limit) : collect();
                 $total = $isTodo ? $this->pullQueue->count() : $this->getColumnTotal($status);
+
+                // One history read for the whole column instead of one per
+                // card — see FlowMetricsService::warm().
+                $this->flow->warm($tasks);
+                $this->flow->warm($unassignedTasks);
+                $this->flow->warm($queueEntries->map(fn ($entry) => $entry->activity));
 
                 $estimate = $this->getColumnEstimate($status);
                 $estimateFormatted = $this->formatDuration($estimate);
@@ -569,7 +607,11 @@ new class extends Component
                                     @php $previousReason = $entry->reason; @endphp
                                 @endif
 
-                                <x-pull-queue-card :entry="$entry" />
+                                <x-pull-queue-card
+                                    :entry="$entry"
+                                    :aging-border="$this->flow->agingBorderClass($entry->activity)"
+                                    :aging-tooltip="$this->flow->agingTooltip($entry->activity)"
+                                />
                             @empty
                                 <li class="py-8 text-center text-sm text-zinc-600">
                                     Nenhuma task
@@ -584,9 +626,19 @@ new class extends Component
                         class="kanban-dropzone flex min-h-[2rem] flex-col gap-2 rounded-lg transition-colors duration-200"
                     >
                         @forelse ($tasks as $task)
+                            @php
+                                // Aging (issue #145): the card wears the SLE
+                                // it is burning through. Null on both counts
+                                // when there is no usable baseline — no
+                                // promise, no alarm.
+                                $agingBorder = $this->flow->agingBorderClass($task);
+                                $agingTooltip = $this->flow->agingTooltip($task);
+                            @endphp
+
                             <li wire:key="task-{{ $task->id }}" wire:sort:item="{{ $task->id }}" class="kanban-card">
+                                <x-maybe-tooltip :content="$agingTooltip">
                                 <div
-                                    class="group cursor-pointer rounded-lg border border-zinc-700 bg-zinc-800 p-3 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
+                                    class="group cursor-pointer rounded-lg border {{ $agingBorder ?? 'border-zinc-700' }} bg-zinc-800 p-3 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
                                     wire:click="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
                                 >
                                     {{-- Card Top: Handle + Title --}}
@@ -676,6 +728,7 @@ new class extends Component
                                         @endif
                                     </div>
                                 </div>
+                                </x-maybe-tooltip>
                             </li>
                         @empty
                             @if ($unassignedTasks->isEmpty())
@@ -701,9 +754,15 @@ new class extends Component
                                 class="kanban-dropzone flex flex-col gap-2 rounded-lg transition-colors duration-200"
                             >
                                 @foreach ($unassignedTasks as $task)
+                                    @php
+                                        $agingBorder = $this->flow->agingBorderClass($task);
+                                        $agingTooltip = $this->flow->agingTooltip($task);
+                                    @endphp
+
                                     <li wire:key="task-{{ $task->id }}" wire:sort:item="{{ $task->id }}" class="kanban-card">
+                                        <x-maybe-tooltip :content="$agingTooltip">
                                         <div
-                                            class="group cursor-pointer rounded-lg border border-zinc-700/50 bg-zinc-800/50 p-3 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
+                                            class="group cursor-pointer rounded-lg border {{ $agingBorder ?? 'border-zinc-700/50' }} bg-zinc-800/50 p-3 transition-all duration-200 hover:border-zinc-500 hover:shadow-lg hover:shadow-zinc-900/50"
                                             wire:click="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
                                         >
                                             {{-- Card Top: Handle + Title --}}
@@ -773,6 +832,7 @@ new class extends Component
                                                 @endif
                                             </div>
                                         </div>
+                                        </x-maybe-tooltip>
                                     </li>
                                 @endforeach
                             </ul>

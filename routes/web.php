@@ -72,6 +72,10 @@ Route::livewire('analytics', 'pages::analytics')
     ->middleware(['auth'])
     ->name('analytics');
 
+Route::livewire('flow', 'pages::flow')
+    ->middleware(['auth'])
+    ->name('flow');
+
 Route::livewire('templates', 'pages::templates')
     ->middleware(['auth'])
     ->name('templates');

@@ -25,4 +25,25 @@ return [
     |
     */
     'wip_limit_doing' => (int) env('SOLOBOARD_WIP_LIMIT_DOING', 2),
+
+    /*
+    |--------------------------------------------------------------------------
+    | "Data fixa em risco" window, in days (issue #144)
+    |--------------------------------------------------------------------------
+    |
+    | How close a Data fixa has to be to its due date before the pull queue
+    | promotes it above the FIFO degrau. An item is at risk when it has N
+    | days or fewer left — an overdue one is, of course, still at risk.
+    |
+    | This N is a stand-in, not the final answer: once the board has enough
+    | history for a usable SLE (Service Level Expectation), the queue will
+    | derive the window from the measured lead time and this constant stops
+    | being consulted. That swap belongs to the metrics slice; until it
+    | lands, N is the honest approximation.
+    |
+    | Config-only for the same reason as the WIP limit above: it is part of
+    | the method, not a preference to toggle from the UI.
+    |
+    */
+    'fixed_date_risk_days' => (int) env('SOLOBOARD_FIXED_DATE_RISK_DAYS', 7),
 ];

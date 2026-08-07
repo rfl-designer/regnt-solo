@@ -65,6 +65,11 @@ class GetPullQueueTool extends Tool
                 ->all(),
             'total_in_pronto' => $entries->count(),
             'risk_window_days' => $queue->riskWindowDays(),
+            // Where the window came from: the measured SLE once the
+            // baseline is big enough, the configured N-day guess until
+            // then (issue #145). Without this the same number would mean
+            // two very different things to a reader.
+            'risk_window_source' => $queue->riskWindowFromSle() ? 'sle' : 'config',
             'context' => $this->context($emergencySlot),
         ];
 

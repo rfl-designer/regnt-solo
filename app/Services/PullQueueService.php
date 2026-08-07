@@ -29,8 +29,8 @@ use Illuminate\Support\Collection;
  * 1. **Emergência.** At most one can be active (guarded by
  *    {@see ActivityObserver}), and it always leads.
  * 2. **Data fixa em risco**, by due date ascending — "em risco" meaning
- *    the due date is within `soloboard.fixed_date_risk_days` (an overdue
- *    one is at risk too). A Data fixa still comfortably far out is *not*
+ *    the due date is within {@see riskWindowDays()} (an overdue one is at
+ *    risk too). A Data fixa still comfortably far out is *not*
  *    promoted; it waits its turn in FIFO like everything else, which is
  *    the whole point of classifying by date rather than by shouting.
  * 3. **Everything else** (Padrão, Intangível, Data fixa fora de risco) in
@@ -45,18 +45,37 @@ use Illuminate\Support\Collection;
  */
 class PullQueueService
 {
+    public function __construct(private readonly FlowMetricsService $metrics) {}
+
     /**
-     * The risk window, in days. Read from config on every call so the
-     * queue can never drift from the configured method.
+     * The risk window, in days: how long before its due date a Data fixa
+     * has to be pulled to still be delivered on time.
      *
-     * The SLE (Service Level Expectation) is meant to replace this number
-     * once the board has enough measured lead time to compute one; that
-     * substitution belongs to the metrics slice and deliberately isn't
-     * implemented here.
+     * There are two answers, and the queue uses the better one available.
+     * Once the board has enough measured history the window *is* the SLE
+     * — "we finish 85% of items in Y days, so a Data fixa less than Y days
+     * out is already at risk" is a measured statement, and it replaces the
+     * configured N-day guess automatically, with no switch to flip
+     * (issue #145). Below the minimum sample the SLE is not a promise, so
+     * `soloboard.fixed_date_risk_days` stays in charge — the honest
+     * approximation beats an under-powered percentile.
+     *
+     * Both are read on every call so the queue can never drift from the
+     * configured method or from the current baseline.
      */
     public function riskWindowDays(): int
     {
-        return (int) config('soloboard.fixed_date_risk_days', 7);
+        return $this->metrics->sleDays() ?? (int) config('soloboard.fixed_date_risk_days', 7);
+    }
+
+    /**
+     * Whether the window above currently comes from the measured SLE. The
+     * Kanban's chip and the Fluxo page read this to explain *why* an item
+     * was promoted, instead of leaving the number unattributed.
+     */
+    public function riskWindowFromSle(): bool
+    {
+        return $this->metrics->sleDays() !== null;
     }
 
     /**

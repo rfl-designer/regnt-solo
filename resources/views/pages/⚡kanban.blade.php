@@ -6,6 +6,7 @@ use App\Exceptions\SingleActiveEmergencyException;
 use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
+use App\Services\PullQueueService;
 use Carbon\Carbon;
 use Flux\Flux;
 use Illuminate\Support\Facades\DB;
@@ -75,6 +76,23 @@ new class extends Component
             ->orderBy('created_at', 'desc')
             ->limit($this->limits[$status->value])
             ->get();
+    }
+
+    /**
+     * The Pronto column, in pull order (issue #144).
+     *
+     * The page doesn't rank anything itself: it asks
+     * {@see PullQueueService} for the same queue the `get-pull-queue` MCP
+     * tool reads, scoped by whatever filters the toolbar has on. That is
+     * why the column no longer sorts by `sort_order` — the order is
+     * derived, so there is nothing for a drag inside the column to change.
+     *
+     * @return \Illuminate\Support\Collection<int, \App\Services\PullQueueEntry>
+     */
+    #[Computed]
+    public function pullQueue(): \Illuminate\Support\Collection
+    {
+        return app(PullQueueService::class)->queue(fn ($query) => $this->applyFilters($query));
     }
 
     /**
@@ -162,7 +180,14 @@ new class extends Component
                     $task->update(['status' => $newStatus]);
                 }
 
-                $this->reorderColumn($newStatus, $task->id, $position);
+                // Pronto has no manual order to write: the column renders
+                // whatever the pull queue ranks (issue #144), so a drop
+                // inside it only ever means "this is where you let go",
+                // never "this is the new position". Moves into and out of
+                // the column are untouched — only the reordering is gone.
+                if ($newStatus !== ActivityStatus::Todo) {
+                    $this->reorderColumn($newStatus, $task->id, $position);
+                }
             });
         } catch (SingleActiveEmergencyException) {
             // Dragging a concluded Emergência back onto the board would
@@ -219,7 +244,7 @@ new class extends Component
     #[On('task-created')]
     public function refreshBoard(): void
     {
-        unset($this->projects);
+        unset($this->projects, $this->pullQueue);
     }
 
     /**
@@ -240,6 +265,18 @@ new class extends Component
             ]);
         }
 
+        $this->applyFilters($query);
+
+        return $query;
+    }
+
+    /**
+     * Apply the toolbar filters to a column query. Shared with the pull
+     * queue, so the Pronto column is filtered exactly like every other
+     * column even though its ordering comes from elsewhere.
+     */
+    private function applyFilters(\Illuminate\Database\Eloquent\Builder $query): void
+    {
         if ($this->filterProject !== '') {
             $query->where('project_id', (int) $this->filterProject);
         }
@@ -263,8 +300,6 @@ new class extends Component
             $query->whereNotNull('due_date')
                 ->where('due_date', '<', Carbon::today());
         }
-
-        return $query;
     }
 
     /**
@@ -372,6 +407,8 @@ new class extends Component
             @php
                 $isDone = $status === \App\Enums\ActivityStatus::Done;
                 $isDoing = $status === \App\Enums\ActivityStatus::Doing;
+                $isTodo = $status === \App\Enums\ActivityStatus::Todo;
+                $queueEntries = $isTodo ? $this->pullQueue->take($limit) : collect();
                 $wipLimit = $this->wipLimit();
                 $wipCount = $isDoing ? $this->doingWipCount() : 0;
             @endphp
@@ -471,6 +508,47 @@ new class extends Component
                     @if ($isDone) x-show="!doneCollapsed" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" @endif
                     class="flex-1 overflow-y-auto p-2"
                 >
+                    @if ($isTodo)
+                        {{-- Pronto: the pull queue, not a hand-sorted list
+                             (issue #144). Cards can still be dragged out (and
+                             dropped in), but there is no order to rearrange
+                             here — the degraus below are derived. --}}
+                        <div class="mb-2 flex items-center gap-1.5 px-1 text-xs text-zinc-500">
+                            <flux:icon name="bars-arrow-down" class="size-3.5" />
+                            <span>Ordem automática da fila</span>
+                        </div>
+
+                        <ul
+                            wire:sort="handleSort"
+                            wire:sort:group="tasks"
+                            wire:sort:group-id="{{ $status->value }}"
+                            class="kanban-dropzone flex min-h-[2rem] flex-col gap-2 rounded-lg transition-colors duration-200"
+                        >
+                            @php $previousReason = null; @endphp
+
+                            @forelse ($queueEntries as $entry)
+                                @if ($entry->reason !== $previousReason)
+                                    <li
+                                        wire:key="pull-queue-degrau-{{ $entry->reason->value }}"
+                                        wire:sort:ignore
+                                        class="flex items-center gap-2 pt-1 first:pt-0"
+                                    >
+                                        <span class="text-[0.65rem] font-medium tracking-wide text-{{ $entry->reason->color() }}-400/80 uppercase">
+                                            {{ $entry->reason->label() }}
+                                        </span>
+                                        <span class="h-px flex-1 bg-zinc-700/60"></span>
+                                    </li>
+                                    @php $previousReason = $entry->reason; @endphp
+                                @endif
+
+                                <x-pull-queue-card :entry="$entry" />
+                            @empty
+                                <li class="py-8 text-center text-sm text-zinc-600">
+                                    Nenhuma task
+                                </li>
+                            @endforelse
+                        </ul>
+                    @else
                     <ul
                         wire:sort="handleSort"
                         wire:sort:group="tasks"
@@ -671,6 +749,7 @@ new class extends Component
                                 @endforeach
                             </ul>
                         </div>
+                    @endif
                     @endif
 
                     {{-- Load More Button --}}

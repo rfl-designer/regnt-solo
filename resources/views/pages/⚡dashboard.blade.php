@@ -2,7 +2,6 @@
 
 use App\Enums\ActivityStatus;
 use App\Models\Activity;
-use App\Models\DailyPlan;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Services\AiAssistantService;
@@ -393,17 +392,23 @@ new class extends Component
             ->where('created_at', '<', Carbon::now()->subDays(14))
             ->count();
 
-        $dailyPlans = DailyPlan::query()
-            ->whereDate('date', '>=', $weekAgo)
-            ->whereDate('date', '<=', $today)
-            ->with('tasks')
+        // What the day actually delivered, read from the board itself
+        // (issue #147). This used to be the daily plan's completion rate —
+        // a percentage of a list the user maintained by hand, which
+        // measured the list as much as the work. Items concluded per day
+        // needs nobody to keep a second record.
+        $completedPerDay = Activity::query()
+            ->leaf()
+            ->where('status', ActivityStatus::Done)
+            ->whereDate('completed_at', '>=', $weekAgo)
+            ->whereDate('completed_at', '<=', $today)
             ->get()
-            ->keyBy(fn (DailyPlan $plan): string => $plan->date->toDateString());
+            ->countBy(fn (Activity $activity): string => $activity->completed_at->toDateString());
 
-        $completionRates = [];
+        $itemsCompletedPerDay = [];
         for ($i = 6; $i >= 0; $i--) {
             $dateString = $today->copy()->subDays($i)->toDateString();
-            $completionRates[$dateString] = $dailyPlans->get($dateString)?->completionRate() ?? 0;
+            $itemsCompletedPerDay[$dateString] = $completedPerDay->get($dateString, 0);
         }
 
         return [
@@ -411,7 +416,7 @@ new class extends Component
             'projects' => $projects,
             'hours_per_day' => $hoursPerDay,
             'stale_backlog_count' => $staleBacklogTasks,
-            'completion_rates' => $completionRates,
+            'items_completed_per_day' => $itemsCompletedPerDay,
         ];
     }
 

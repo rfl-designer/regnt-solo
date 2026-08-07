@@ -11,8 +11,6 @@ use App\Exceptions\SingleActiveEmergencyException;
 use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Activity;
 use App\Models\ActivityStatusChange;
-use App\Models\DailyPlan;
-use Carbon\Carbon;
 
 class ActivityObserver
 {
@@ -336,7 +334,6 @@ class ActivityObserver
      * Handle the Activity "created" event.
      *
      * Records the initial status when an activity is created.
-     * Auto-adds activity to today's daily plan if due_date is today.
      */
     public function created(Activity $activity): void
     {
@@ -348,16 +345,17 @@ class ActivityObserver
                 'changed_at' => now(),
             ]);
         }
-
-        $this->addToDailyPlanIfDueToday($activity);
     }
 
     /**
      * Handle the Activity "updating" event.
      *
      * Records a status change when the status field is modified.
-     * Auto-adds activity to today's daily plan if due_date changes to today.
-     * Syncs pivot_completed_at when status changes to/from done.
+     *
+     * Nothing here touches a daily plan any more (issue #147): the plan is
+     * gone, and with it the two hidden writes it used to trigger — an item
+     * due today silently joining a list, and concluding an item silently
+     * ticking it off in a second place. The board is the only record.
      */
     public function updating(Activity $activity): void
     {
@@ -370,59 +368,7 @@ class ActivityObserver
                 'to_status' => $activity->status,
                 'changed_at' => now(),
             ]);
-
-            $this->syncDailyPlanCompletedAt($activity);
         }
-
-        if ($activity->isDirty('due_date')) {
-            $this->addToDailyPlanIfDueToday($activity);
-        }
-    }
-
-    /**
-     * Sync the pivot completed_at when status changes to/from done.
-     */
-    private function syncDailyPlanCompletedAt(Activity $activity): void
-    {
-        $plan = DailyPlan::query()
-            ->whereDate('date', Carbon::today())
-            ->first();
-
-        if (! $plan) {
-            return;
-        }
-
-        if (! $plan->tasks()->where('activities.id', $activity->id)->exists()) {
-            return;
-        }
-
-        $newStatus = $activity->status;
-        $oldStatus = $activity->getOriginal('status');
-
-        if ($newStatus === ActivityStatus::Done && $oldStatus !== ActivityStatus::Done) {
-            $plan->tasks()->updateExistingPivot($activity->id, ['completed_at' => now()]);
-        } elseif ($newStatus !== ActivityStatus::Done && $oldStatus === ActivityStatus::Done) {
-            $plan->tasks()->updateExistingPivot($activity->id, ['completed_at' => null]);
-        }
-    }
-
-    /**
-     * Add the activity to today's daily plan if due_date is today.
-     */
-    private function addToDailyPlanIfDueToday(Activity $activity): void
-    {
-        if ($activity->due_date === null || ! $activity->due_date->isToday()) {
-            return;
-        }
-
-        $plan = DailyPlan::getOrCreateForDate(Carbon::today());
-
-        if ($plan->tasks()->where('activities.id', $activity->id)->exists()) {
-            return;
-        }
-
-        $maxOrder = $plan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
-        $plan->tasks()->attach($activity->id, ['sort_order' => $maxOrder + 1]);
     }
 
     /**

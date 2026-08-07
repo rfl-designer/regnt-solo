@@ -27,26 +27,6 @@ class AiAssistantService
     }
 
     /**
-     * Suggest a daily plan based on available tasks and completion history.
-     *
-     * @param  Collection<int, Activity>  $tasks
-     * @param  array<string, mixed>  $history
-     * @return array<int, array{task_id: int, reason: string, priority_score: int}>
-     */
-    public function suggestDailyPlan(Collection $tasks, array $history = []): array
-    {
-        if (! $this->isEnabled() || $tasks->isEmpty()) {
-            return [];
-        }
-
-        $prompts = $this->buildDailyPlanPrompt($tasks, $history);
-
-        $response = $this->callAnthropic($prompts['system'], $prompts['user']);
-
-        return $this->parseJsonResponse($response);
-    }
-
-    /**
      * Analyze backlog tasks and suggest actions for each.
      *
      * @param  Collection<int, Activity>  $tasks
@@ -126,38 +106,6 @@ class AiAssistantService
 
             return [];
         }
-    }
-
-    /**
-     * Build system and user prompts for daily plan suggestions.
-     *
-     * @param  Collection<int, Activity>  $tasks
-     * @param  array<string, mixed>  $history
-     * @return array{system: string, user: string}
-     */
-    private function buildDailyPlanPrompt(Collection $tasks, array $history): array
-    {
-        $systemPrompt = self::BASE_SYSTEM_PROMPT.' Focus on suggesting the most impactful tasks for today\'s work session. Consider task service class (emergency, fixed_date, standard, intangible), due dates, estimated time, and the developer\'s recent completion patterns. Respond with a JSON array where each item has: task_id (int), reason (string explaining why this task should be prioritized), and priority_score (int from 1-100, higher means more important).';
-
-        $taskData = $tasks->map(fn ($task) => [
-            'id' => $task->id,
-            'title' => $task->title,
-            'status' => $task->status->value,
-            'service_class' => $task->service_class->value,
-            'due_date' => $task->due_date?->toDateString(),
-            'estimated_minutes' => $task->estimated_minutes,
-            'project' => $task->project?->name,
-        ])->values()->toArray();
-
-        $userMessage = 'Here are my available tasks: '.json_encode($taskData, JSON_THROW_ON_ERROR);
-
-        if (! empty($history)) {
-            $userMessage .= "\n\nHere is my recent completion history: ".json_encode($history, JSON_THROW_ON_ERROR);
-        }
-
-        $userMessage .= "\n\nSuggest the best tasks for my daily plan today. Return only a JSON array.";
-
-        return ['system' => $systemPrompt, 'user' => $userMessage];
     }
 
     /**

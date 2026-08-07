@@ -4,7 +4,6 @@ use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Models\Client;
-use App\Models\DailyPlan;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -55,8 +54,7 @@ test('command prefix shows available commands', function () {
         ->assertSee('timer')
         ->assertSee('deletar')
         ->assertSee('projeto')
-        ->assertSee('classe')
-        ->assertSee('planejar');
+        ->assertSee('classe');
 });
 
 test('command mover changes task status', function () {
@@ -137,28 +135,6 @@ test('command classe emergency defers to the blocking emergency modal instead of
         ->assertDispatched('open-emergency-modal', taskId: $task->id);
 
     expect($task->fresh()->service_class)->toBe(ServiceClass::Intangible);
-});
-
-test('command planejar adds task to today plan', function () {
-    $task = Activity::factory()->todo()->create();
-
-    Livewire::test('command-palette')
-        ->call('executeCommand', 'planejar:'.$task->id);
-
-    $plan = DailyPlan::whereDate('date', now()->toDateString())->first();
-    expect($plan)->not->toBeNull();
-    expect($plan->tasks()->where('activity_id', $task->id)->exists())->toBeTrue();
-});
-
-test('command planejar does not duplicate task in plan', function () {
-    $task = Activity::factory()->todo()->create();
-    $plan = DailyPlan::create(['date' => now()->toDateString()]);
-    $plan->tasks()->attach($task->id, ['sort_order' => 0]);
-
-    Livewire::test('command-palette')
-        ->call('executeCommand', 'planejar:'.$task->id);
-
-    expect($plan->tasks()->where('activity_id', $task->id)->count())->toBe(1);
 });
 
 test('open task dispatches event and resets search', function () {

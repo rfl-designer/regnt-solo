@@ -186,7 +186,7 @@ test('kanban and daily planner load without javascript errors with waiting activ
         'status' => ActivityStatus::Doing,
     ]);
 
-    visit(['/kanban', '/daily', '/inbox', '/tasks'])
+    visit(['/kanban', '/ritual', '/inbox', '/tasks'])
         ->assertNoJavaScriptErrors()
         ->assertNoBrokenImages();
 });

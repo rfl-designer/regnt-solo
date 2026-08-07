@@ -268,6 +268,30 @@ test('update-issue marks done and stops timers when status changes to done', fun
     expect($entry->stopped_at)->not->toBeNull();
 });
 
+test('update-issue rejects status=done combined with an invalid fixed_date and rolls back all side effects', function () {
+    $issue = Activity::factory()->issue()->create(['status' => ActivityStatus::Doing, 'due_date' => null]);
+    $entry = TimeEntry::factory()->running()->create(['activity_id' => $issue->id]);
+
+    $response = SoloBoardServer::tool(UpdateIssueTool::class, [
+        'issue_id' => $issue->id,
+        'status' => 'done',
+        'service_class' => 'fixed_date',
+    ]);
+
+    $response->assertHasErrors();
+
+    $issue->refresh();
+    $entry->refresh();
+
+    // markAsDone() runs before the guarded update in source order, but the
+    // whole thing is one transaction — none of its side effects may stick
+    // once the fixed_date/due_date combination is refused.
+    expect($issue->status)->toBe(ActivityStatus::Doing);
+    expect($issue->completed_at)->toBeNull();
+    expect($issue->service_class->value)->not->toBe('fixed_date');
+    expect($entry->stopped_at)->toBeNull();
+});
+
 test('update-issue persists github fields', function () {
     $issue = Activity::factory()->issue()->create();
 

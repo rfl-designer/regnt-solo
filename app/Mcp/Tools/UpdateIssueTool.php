@@ -8,6 +8,7 @@ use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -46,11 +47,6 @@ class UpdateIssueTool extends Tool
         ]);
 
         $issue = Activity::query()->issues()->findOrFail($validated['issue_id']);
-
-        if (isset($validated['status']) && $validated['status'] === ActivityStatus::Done->value && $issue->status !== ActivityStatus::Done) {
-            $issue->markAsDone();
-            $issue->refresh();
-        }
 
         $updates = [];
 
@@ -94,15 +90,26 @@ class UpdateIssueTool extends Tool
             $updates['github_synced_hash'] = $validated['github_synced_hash'];
         }
 
-        if (! empty($updates)) {
-            try {
-                $issue->update($updates);
-            } catch (FixedDateRequiresDueDateException $e) {
-                return Response::error($e->getMessage());
-            }
+        // Applied inside one transaction: a request combining status=done
+        // with an invalid service_class/due_date pairing must not leave
+        // markAsDone's side effects (status, completed_at, stopped timers)
+        // committed when the rest of the update is refused.
+        try {
+            DB::transaction(function () use ($issue, $validated, $updates): void {
+                if (isset($validated['status']) && $validated['status'] === ActivityStatus::Done->value && $issue->status !== ActivityStatus::Done) {
+                    $issue->markAsDone();
+                    $issue->refresh();
+                }
+
+                if (! empty($updates)) {
+                    $issue->update($updates);
+                }
+            });
+        } catch (FixedDateRequiresDueDateException $e) {
+            return Response::error($e->getMessage());
         }
 
-        $issue->load('project');
+        $issue->refresh()->load('project');
 
         $data = [
             'id' => $issue->id,

@@ -142,6 +142,28 @@ test('an item with no Pronto history falls back to created_at', function () {
     expect(queuedIds())->toBe([$noHistory->id, $withHistory->id]);
 });
 
+test('two entries into Pronto in the same second keep the order they were recorded in', function () {
+    // `changed_at` is a dateTime (second precision), so the timestamps are
+    // identical and only the status-change id can tell the two moves
+    // apart. The older activity is the one that moved *second*, which is
+    // exactly the case an activity-id tie-break would invert.
+    $older = Activity::factory()->issue()->todo()->create(['title' => 'Voltou depois']);
+    $newer = Activity::factory()->issue()->todo()->create(['title' => 'Voltou antes']);
+
+    ActivityStatusChange::query()->whereIn('activity_id', [$older->id, $newer->id])->delete();
+
+    foreach ([$newer, $older] as $activity) {
+        ActivityStatusChange::factory()->create([
+            'activity_id' => $activity->id,
+            'from_status' => ActivityStatus::Doing,
+            'to_status' => ActivityStatus::Todo,
+            'changed_at' => Carbon::parse('2026-08-04 09:00:00'),
+        ]);
+    }
+
+    expect(queuedIds())->toBe([$newer->id, $older->id]);
+});
+
 test('FIFO ties are broken deterministically by id', function () {
     $a = readyAt(Activity::factory()->issue()->todo()->create(), '2026-08-01 09:00');
     $b = readyAt(Activity::factory()->issue()->todo()->create(), '2026-08-01 09:00');
@@ -212,14 +234,68 @@ test('an overdue Data fixa reads how late it is', function () {
     expect(app(PullQueueService::class)->queue()->first()->positionReason())->toBe('em risco: atrasada há 1 dia');
 });
 
-test('an entry reports its age on the board', function () {
+test('the age on the board is counted from the first board column, not from creation', function () {
+    // Sat in the Caixa de Entrada for a month; it has only been *on the
+    // board* since it was triaged into Backlog ten days ago.
     $activity = Activity::factory()->issue()->todo()->create([
-        'created_at' => now()->subDays(9),
+        'created_at' => now()->subDays(30),
     ]);
-    readyAt($activity, now()->subDays(2)->toDateTimeString());
+
+    ActivityStatusChange::query()->where('activity_id', $activity->id)->delete();
+
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $activity->id,
+        'from_status' => null,
+        'to_status' => ActivityStatus::Inbox,
+        'changed_at' => now()->subDays(30),
+    ]);
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $activity->id,
+        'from_status' => ActivityStatus::Inbox,
+        'to_status' => ActivityStatus::Backlog,
+        'changed_at' => now()->subDays(10),
+    ]);
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $activity->id,
+        'from_status' => ActivityStatus::Backlog,
+        'to_status' => ActivityStatus::Todo,
+        'changed_at' => now()->subDays(2),
+    ]);
 
     $entry = app(PullQueueService::class)->queue()->first();
 
-    expect($entry->ageInDays())->toBe(9);
+    expect($entry->ageInDays())->toBe(10);
     expect($entry->readyDays())->toBe(2);
+});
+
+test('an item triaged straight from Inbox into Pronto is one day old on the board, not thirty', function () {
+    $activity = Activity::factory()->issue()->todo()->create([
+        'created_at' => now()->subDays(30),
+    ]);
+
+    ActivityStatusChange::query()->where('activity_id', $activity->id)->delete();
+
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $activity->id,
+        'from_status' => null,
+        'to_status' => ActivityStatus::Inbox,
+        'changed_at' => now()->subDays(30),
+    ]);
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $activity->id,
+        'from_status' => ActivityStatus::Inbox,
+        'to_status' => ActivityStatus::Todo,
+        'changed_at' => now()->subDay(),
+    ]);
+
+    expect(app(PullQueueService::class)->queue()->first()->ageInDays())->toBe(1);
+});
+
+test('the age falls back to created_at when there is no board history', function () {
+    $activity = Activity::factory()->issue()->todo()->create([
+        'created_at' => now()->subDays(4),
+    ]);
+    ActivityStatusChange::query()->where('activity_id', $activity->id)->delete();
+
+    expect(app(PullQueueService::class)->queue()->first()->ageInDays())->toBe(4);
 });

@@ -73,12 +73,12 @@ class PullQueueService
             return collect();
         }
 
-        $readySince = $this->readySinceMap($activities);
+        $history = $this->historyMap($activities);
 
         return $activities
             ->map(fn (Activity $activity): PullQueueEntry => $this->entryFor(
                 $activity,
-                $readySince[$activity->id] ?? $activity->created_at,
+                $history[$activity->id] ?? [],
             ))
             ->sort(fn (PullQueueEntry $a, PullQueueEntry $b): int => $a->sortKey() <=> $b->sortKey())
             ->values();
@@ -120,27 +120,28 @@ class PullQueueService
     /**
      * Build the entry for one activity: which degrau it lands on, and the
      * facts that justify it.
+     *
+     * @param  array{ready_at?: CarbonInterface, ready_sequence?: int, board_since?: CarbonInterface}  $history
      */
-    private function entryFor(Activity $activity, CarbonInterface $readySince): PullQueueEntry
+    private function entryFor(Activity $activity, array $history): PullQueueEntry
     {
-        if ($activity->service_class === ServiceClass::Emergency) {
-            return new PullQueueEntry($activity, PullQueueReason::Emergency, $readySince);
-        }
+        $readySince = $history['ready_at'] ?? $activity->created_at;
+        $readySequence = $history['ready_sequence'] ?? 0;
+        $boardSince = $history['board_since'] ?? null;
 
-        if ($this->isAtRisk($activity)) {
-            return new PullQueueEntry(
-                $activity,
-                PullQueueReason::FixedDateAtRisk,
-                $readySince,
-                $this->daysToDueDate($activity),
-            );
-        }
+        $reason = match (true) {
+            $activity->service_class === ServiceClass::Emergency => PullQueueReason::Emergency,
+            $this->isAtRisk($activity) => PullQueueReason::FixedDateAtRisk,
+            default => PullQueueReason::Fifo,
+        };
 
         return new PullQueueEntry(
             $activity,
-            PullQueueReason::Fifo,
+            $reason,
             $readySince,
             $activity->due_date === null ? null : $this->daysToDueDate($activity),
+            $readySequence,
+            $boardSince,
         );
     }
 
@@ -153,21 +154,47 @@ class PullQueueService
     }
 
     /**
-     * The last entry into Pronto for each activity, in one query.
+     * The two facts the queue reads from the status history, for every
+     * queued activity, in one query:
+     *
+     * - `ready_at` / `ready_sequence`: the *last* entry into Pronto and the
+     *   id of the change that recorded it. The id is kept because
+     *   `changed_at` only has second precision, so it is the only thing
+     *   that can order two moves made within the same second.
+     * - `board_since`: the *first* entry into any board column. Inbox is
+     *   triage, not the board, so it doesn't start the clock — this is
+     *   what makes "idade no quadro" mean what it says.
      *
      * @param  EloquentCollection<int, Activity>  $activities
-     * @return array<int, CarbonInterface>
+     * @return array<int, array{ready_at?: CarbonInterface, ready_sequence?: int, board_since?: CarbonInterface}>
      */
-    private function readySinceMap(EloquentCollection $activities): array
+    private function historyMap(EloquentCollection $activities): array
     {
+        $boardStatuses = array_map(
+            fn (ActivityStatus $status): string => $status->value,
+            ActivityStatus::boardOrder()
+        );
+
         return ActivityStatusChange::query()
             ->whereIn('activity_id', $activities->modelKeys())
-            ->where('to_status', ActivityStatus::Todo)
             ->orderBy('changed_at')
             ->orderBy('id')
-            ->get(['id', 'activity_id', 'changed_at'])
+            ->get(['id', 'activity_id', 'to_status', 'changed_at'])
             ->groupBy('activity_id')
-            ->map(fn (Collection $changes): CarbonInterface => $changes->last()->changed_at)
+            ->map(function (Collection $changes) use ($boardStatuses): array {
+                $lastReady = $changes
+                    ->filter(fn (ActivityStatusChange $change): bool => $change->to_status === ActivityStatus::Todo)
+                    ->last();
+
+                $firstOnBoard = $changes
+                    ->first(fn (ActivityStatusChange $change): bool => in_array($change->to_status->value, $boardStatuses, true));
+
+                return array_filter([
+                    'ready_at' => $lastReady?->changed_at,
+                    'ready_sequence' => $lastReady?->id,
+                    'board_since' => $firstOnBoard?->changed_at,
+                ], fn (mixed $value): bool => $value !== null);
+            })
             ->all();
     }
 }

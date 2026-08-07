@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ActivityStatus;
 use App\Enums\PullQueueReason;
 use App\Models\Activity;
 use Carbon\CarbonInterface;
@@ -22,12 +23,16 @@ final readonly class PullQueueEntry
      * @param  PullQueueReason  $reason  The degrau it landed on.
      * @param  CarbonInterface  $readySince  Last entry into Pronto (or the fallback).
      * @param  int|null  $daysToDueDate  Whole days until the Data fixa is due — negative when overdue, null when the item has no due date.
+     * @param  int  $readySequence  Id of the status change that put it in Pronto — the FIFO tie-breaker within one second.
+     * @param  CarbonInterface|null  $boardSince  First entry into a board column (Inbox doesn't count); null when the item has no such history.
      */
     public function __construct(
         public Activity $activity,
         public PullQueueReason $reason,
         public CarbonInterface $readySince,
         public ?int $daysToDueDate = null,
+        public int $readySequence = 0,
+        public ?CarbonInterface $boardSince = null,
     ) {}
 
     /**
@@ -44,12 +49,21 @@ final readonly class PullQueueEntry
     }
 
     /**
-     * How many whole days the item has been on the board, counted from
-     * creation — the "idade no quadro" the MCP tool reports.
+     * The "idade no quadro": whole days since the item first entered a
+     * board column.
+     *
+     * Creation is deliberately *not* the origin. Inbox is triage, not the
+     * board (see {@see ActivityStatus::boardOrder()}), so an
+     * idea that sat in the Caixa de Entrada for a month and was triaged
+     * into Pronto today is one day old on the board, not thirty. Items
+     * with no such history fall back to `created_at`, which for anything
+     * created straight onto the board is the same answer.
      */
     public function ageInDays(): int
     {
-        return (int) $this->activity->created_at->copy()->startOfDay()->diffInDays(now()->startOfDay());
+        $origin = $this->boardSince ?? $this->activity->created_at;
+
+        return (int) $origin->copy()->startOfDay()->diffInDays(now()->startOfDay());
     }
 
     /**
@@ -62,13 +76,21 @@ final readonly class PullQueueEntry
 
     /**
      * The sort key for this entry: degrau first, then the axis that degrau
-     * orders by, then the id as the deterministic tie-breaker.
+     * orders by, then two tie-breakers.
      *
      * Keeping the key here (rather than in the service's comparator) is
      * what makes "Emergência, then due date ascending, then FIFO" a single
      * readable statement instead of a nested set of ifs.
      *
-     * @return array{int, int, int}
+     * The first tie-breaker is the id of the status change that put the
+     * item in Pronto, and it matters: `activity_status_changes.changed_at`
+     * is a `dateTime` with second precision, so two moves in the same
+     * second are indistinguishable by timestamp alone. Falling straight
+     * back to the activity id there would invert the real FIFO whenever
+     * the older activity was the one moved second. The activity id remains
+     * the last resort, so the order is always total and deterministic.
+     *
+     * @return array{int, int, int, int}
      */
     public function sortKey(): array
     {
@@ -79,7 +101,7 @@ final readonly class PullQueueEntry
             PullQueueReason::Fifo => $this->readySince->getTimestamp(),
         };
 
-        return [$this->reason->rank(), $axis, $this->activity->id];
+        return [$this->reason->rank(), $axis, $this->readySequence, $this->activity->id];
     }
 
     /**

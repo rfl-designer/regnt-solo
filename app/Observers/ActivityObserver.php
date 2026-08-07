@@ -16,9 +16,21 @@ class ActivityObserver
      * Handle the Activity "saving" event.
      *
      * Enforces the domain invariant that classifying an activity as "Data
-     * fixa" requires a due date. This is the single choke point for the
-     * guard — it fires on every save regardless of origin (Kanban, Task
-     * Modal, MCP tools, tinker), so no surface can bypass it.
+     * fixa" requires a due date. This is the application-level choke point
+     * for the guard — it fires on every model save regardless of origin
+     * (Kanban, Task Modal, MCP tools, tinker), producing the friendly
+     * {@see FixedDateRequiresDueDateException} with a PT-BR message.
+     *
+     * Limitation: this observer only fires for saves that go through an
+     * Eloquent model instance. Bulk writes that skip model events —
+     * `Activity::query()->update([...])`, `Activity::query()->upsert(...)`,
+     * and raw `DB::table('activities')->update([...])` — never reach this
+     * method. Those are backstopped by the `chk_activities_fixed_date_
+     * requires_due_date` CHECK constraint added in
+     * `2026_08_07_092633_add_fixed_date_due_date_check_to_activities_table`,
+     * which is the actual source of truth for the invariant at the
+     * database level; this method exists to turn that into a readable
+     * PT-BR error before the query ever reaches the database.
      */
     public function saving(Activity $activity): void
     {

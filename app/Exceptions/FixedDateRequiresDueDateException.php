@@ -12,8 +12,15 @@ use DomainException;
  */
 class FixedDateRequiresDueDateException extends DomainException
 {
+    /**
+     * The single canonical PT-BR message for this refusal. UI toasts and
+     * MCP error responses must reuse this constant verbatim rather than
+     * writing their own wording, so the "não" is identical everywhere.
+     */
+    public const string MESSAGE = 'Classificar como Data fixa exige uma data de vencimento.';
+
     public function __construct()
     {
-        parent::__construct('Classificar como Data fixa exige uma data de vencimento (due date).');
+        parent::__construct(self::MESSAGE);
     }
 }

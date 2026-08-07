@@ -5,21 +5,21 @@ namespace App\Mcp\Tools;
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
 use App\Enums\ServiceClass;
-use App\Exceptions\DoingWipLimitExceededException;
-use App\Exceptions\EmergencyRequiresReasonException;
-use App\Exceptions\FixedDateRequiresDueDateException;
-use App\Exceptions\SingleActiveEmergencyException;
-use App\Exceptions\WaitingRequiresWaitingForException;
+use App\Exceptions\DomainRefusal;
+use App\Mcp\Concerns\TranslatesDomainRefusals;
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
+use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Tool;
 
 class CreateIssueTool extends Tool
 {
+    use TranslatesDomainRefusals;
+
     protected string $name = 'create-issue';
 
     protected string $description = 'Creates a roadmap issue (type=Issue). Issues mirror GitHub issues without the type:prd label; their client-facing label (Fatia/Follow-up/Avulsa) is derived from parent_id. Accepts status, project_id and parent_id, and upserts by github_issue_number. Classifying as fixed_date requires due_date — the request is refused otherwise. When status is "done", the issue is marked done (completed_at set, running timers stopped).';
@@ -27,7 +27,7 @@ class CreateIssueTool extends Tool
     /**
      * Handle the tool request.
      */
-    public function handle(Request $request): Response
+    public function handle(Request $request): Response|ResponseFactory
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -80,13 +80,8 @@ class CreateIssueTool extends Tool
             } else {
                 $issue = Activity::create($payload);
             }
-        } catch (SingleActiveEmergencyException $e) {
-            // The board's single emergency slot is taken. The refusal embeds
-            // the active emergency and the two-call swap recipe — there is
-            // deliberately no `force` parameter to override it.
-            return Response::error($e->toMcpError());
-        } catch (FixedDateRequiresDueDateException|WaitingRequiresWaitingForException|EmergencyRequiresReasonException|DoingWipLimitExceededException $e) {
-            return Response::error($e->getMessage());
+        } catch (DomainRefusal $e) {
+            return $this->refusalResponse($e);
         }
 
         if ($issue->status === ActivityStatus::Done && $issue->completed_at === null) {

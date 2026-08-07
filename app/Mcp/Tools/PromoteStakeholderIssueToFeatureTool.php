@@ -5,9 +5,8 @@ namespace App\Mcp\Tools;
 use App\Enums\ActivityType;
 use App\Enums\ServiceClass;
 use App\Enums\StakeholderIssueStatus;
-use App\Exceptions\EmergencyRequiresReasonException;
-use App\Exceptions\FixedDateRequiresDueDateException;
-use App\Exceptions\SingleActiveEmergencyException;
+use App\Exceptions\DomainRefusal;
+use App\Mcp\Concerns\TranslatesDomainRefusals;
 use App\Models\Activity;
 use App\Models\StakeholderIssue;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -15,12 +14,15 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
+use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[IsIdempotent]
 class PromoteStakeholderIssueToFeatureTool extends Tool
 {
+    use TranslatesDomainRefusals;
+
     protected string $name = 'promote-stakeholder-issue';
 
     protected string $description = 'Converts a stakeholder issue into a feature and links both records. Use after triaging stakeholder feedback.';
@@ -28,7 +30,7 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
     /**
      * Handle the tool request.
      */
-    public function handle(Request $request): Response
+    public function handle(Request $request): Response|ResponseFactory
     {
         $validated = $request->validate([
             'issue_id' => 'required|integer|exists:stakeholder_issues,id',
@@ -75,10 +77,8 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
                 'emergency_reason' => $validated['emergency_reason'] ?? null,
                 'due_date' => $validated['due_date'] ?? null,
             ]);
-        } catch (SingleActiveEmergencyException $e) {
-            return Response::error($e->toMcpError());
-        } catch (FixedDateRequiresDueDateException|EmergencyRequiresReasonException $e) {
-            return Response::error($e->getMessage());
+        } catch (DomainRefusal $e) {
+            return $this->refusalResponse($e);
         }
 
         $issue->update([

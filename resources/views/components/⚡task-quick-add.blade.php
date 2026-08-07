@@ -216,7 +216,7 @@ new class extends Component
                 'due_date' => $dueDate,
                 'session_prompt' => $sessionPrompt,
             ]);
-        } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
+        } catch (\App\Exceptions\DomainRefusal $e) {
             Flux::toast(variant: 'danger', heading: 'Não foi possível criar a task', text: $e->getMessage());
 
             return;

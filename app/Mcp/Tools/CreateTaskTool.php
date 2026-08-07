@@ -5,21 +5,21 @@ namespace App\Mcp\Tools;
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
 use App\Enums\ServiceClass;
-use App\Exceptions\DoingWipLimitExceededException;
-use App\Exceptions\EmergencyRequiresReasonException;
-use App\Exceptions\FixedDateRequiresDueDateException;
-use App\Exceptions\SingleActiveEmergencyException;
-use App\Exceptions\WaitingRequiresWaitingForException;
+use App\Exceptions\DomainRefusal;
+use App\Mcp\Concerns\TranslatesDomainRefusals;
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
+use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Tool;
 
 class CreateTaskTool extends Tool
 {
+    use TranslatesDomainRefusals;
+
     protected string $name = 'create-task';
 
     protected string $description = 'Creates a personal task (type=Task). Personal tasks are local operational/personal to-dos with no GitHub mirror; they never appear on the stakeholder board. Project and parent are optional: a task may stand alone, or hang off an Epic or Issue via parent_id. A task may also be linked directly to a client via client_id when it has no project — setting both project_id and client_id keeps only the project link. Use list-clients to find available client ids (it also returns clients with no project, which is exactly the case for a direct link). Defaults to status inbox and service class standard. Classifying as fixed_date requires due_date — the request is refused otherwise. Setting status to awaiting_approval, waiting or awaiting_validation (the three waiting statuses) requires waiting_for — client-side waits (awaiting_approval/awaiting_validation) auto-fill it from the effective client when omitted, waiting has no default and is refused without one. When status is "done", the task is marked done (completed_at set, running timers stopped).';
@@ -27,7 +27,7 @@ class CreateTaskTool extends Tool
     /**
      * Handle the tool request.
      */
-    public function handle(Request $request): Response
+    public function handle(Request $request): Response|ResponseFactory
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -65,13 +65,8 @@ class CreateTaskTool extends Tool
                 'due_date' => $validated['due_date'] ?? null,
                 'estimated_minutes' => $validated['estimated_minutes'] ?? null,
             ]);
-        } catch (SingleActiveEmergencyException $e) {
-            // The board's single emergency slot is taken. The refusal embeds
-            // the active emergency and the two-call swap recipe — there is
-            // deliberately no `force` parameter to override it.
-            return Response::error($e->toMcpError());
-        } catch (FixedDateRequiresDueDateException|WaitingRequiresWaitingForException|EmergencyRequiresReasonException|DoingWipLimitExceededException $e) {
-            return Response::error($e->getMessage());
+        } catch (DomainRefusal $e) {
+            return $this->refusalResponse($e);
         }
 
         if ($task->status === ActivityStatus::Done && $task->completed_at === null) {

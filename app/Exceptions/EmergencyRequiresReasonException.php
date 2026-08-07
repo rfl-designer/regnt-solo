@@ -15,7 +15,7 @@ use DomainException;
  * Kanban, Task Modal, Inbox, Command Palette, MCP tools, tinker — gets the
  * same refusal with the same PT-BR wording.
  */
-class EmergencyRequiresReasonException extends DomainException
+class EmergencyRequiresReasonException extends DomainException implements DomainRefusal
 {
     /**
      * The single canonical PT-BR message for this refusal. UI toasts and

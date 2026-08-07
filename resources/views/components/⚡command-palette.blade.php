@@ -3,7 +3,6 @@
 use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
 use App\Enums\ActivityType;
-use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
@@ -240,7 +239,7 @@ new class extends Component
             } else {
                 $task->update(['status' => $status, 'completed_at' => null]);
             }
-        } catch (WaitingRequiresWaitingForException|\App\Exceptions\DoingWipLimitExceededException $e) {
+        } catch (\App\Exceptions\DomainRefusal $e) {
             Flux::toast(variant: 'danger', heading: 'Não foi possível mover', text: $e->getMessage());
 
             return;
@@ -332,7 +331,7 @@ new class extends Component
 
         try {
             $task->update(['service_class' => $serviceClass]);
-        } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
+        } catch (\App\Exceptions\DomainRefusal $e) {
             Flux::toast(variant: 'danger', heading: 'Não foi possível alterar', text: $e->getMessage());
 
             return;

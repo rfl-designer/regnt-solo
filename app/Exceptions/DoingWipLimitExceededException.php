@@ -16,7 +16,7 @@ use DomainException;
  * as Emergência, which is allowed through precisely because it is the
  * escape hatch the limit is designed to make expensive.
  */
-class DoingWipLimitExceededException extends DomainException
+class DoingWipLimitExceededException extends DomainException implements DomainRefusal
 {
     public function __construct(public readonly int $limit)
     {

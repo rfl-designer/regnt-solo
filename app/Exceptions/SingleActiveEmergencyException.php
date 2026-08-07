@@ -24,7 +24,7 @@ use DomainException;
  * `force` parameter anywhere: a swap must always be a decision about which
  * of the two is the emergency, never a flag.
  */
-class SingleActiveEmergencyException extends DomainException
+class SingleActiveEmergencyException extends DomainException implements DomainRefusal
 {
     public function __construct(public readonly Activity $activeEmergency)
     {
@@ -58,19 +58,5 @@ class SingleActiveEmergencyException extends DomainException
             'reason' => $this->activeEmergency->emergency_reason,
             'age_in_days' => $this->activeEmergency->emergencyDays(),
         ];
-    }
-
-    /**
-     * The refusal as an MCP error body: the message, the active Emergência
-     * embedded, and the two-call swap recipe. Kept here rather than in each
-     * tool so every tool answers a second Emergência the same way.
-     */
-    public function toMcpError(): string
-    {
-        return $this->getMessage()."\n\n".json_encode([
-            'error' => 'single_active_emergency',
-            'active_emergency' => $this->activeEmergencyContext(),
-            'how_to_swap' => 'There is no force parameter. To swap, make two calls: first demote the active emergency (service_class="standard" on id '.$this->activeEmergency->id.'), then classify the new one as "emergency" with an emergency_reason.',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 }

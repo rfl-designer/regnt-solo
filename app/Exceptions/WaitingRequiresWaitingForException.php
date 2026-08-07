@@ -17,7 +17,7 @@ use DomainException;
  * on, or for the internal wait (Esperando), which always requires an
  * explicit name.
  */
-class WaitingRequiresWaitingForException extends DomainException
+class WaitingRequiresWaitingForException extends DomainException implements DomainRefusal
 {
     /**
      * The single canonical PT-BR message for this refusal. UI toasts and

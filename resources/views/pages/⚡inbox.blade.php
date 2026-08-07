@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
 use App\Models\Activity;
@@ -30,7 +29,7 @@ new class extends Component
 
     public ?string $deletingTaskTitle = null;
 
-    /** @var array<int, array{task_id: int, action: string, reason: string, suggested_priority: string|null, suggested_project: string|null}> */
+    /** @var array<int, array{task_id: int, action: string, reason: string, suggested_service_class: string|null, suggested_project: string|null}> */
     public array $backlogAnalysis = [];
 
     public bool $showBacklogAnalysis = false;
@@ -306,12 +305,18 @@ new class extends Component
             return;
         }
 
-        match ($action) {
-            'archive' => $task->update(['status' => ActivityStatus::Done, 'completed_at' => now()]),
-            'prioritize' => $this->applyPrioritySuggestion($task, $taskId),
-            'estimate' => $task->update(['status' => ActivityStatus::Todo]),
-            default => null,
-        };
+        try {
+            match ($action) {
+                'archive' => $task->update(['status' => ActivityStatus::Done, 'completed_at' => now()]),
+                'prioritize' => $this->applyServiceClassSuggestion($task, $taskId),
+                'estimate' => $task->update(['status' => ActivityStatus::Todo]),
+                default => null,
+            };
+        } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível aplicar', text: $e->getMessage());
+
+            return;
+        }
 
         $this->backlogAnalysis = array_values(
             array_filter($this->backlogAnalysis, fn (array $a): bool => $a['task_id'] !== $taskId)
@@ -323,18 +328,18 @@ new class extends Component
     }
 
     /**
-     * Apply priority suggestion from AI analysis.
+     * Apply service class suggestion from AI analysis.
      */
-    private function applyPrioritySuggestion(Activity $task, int $taskId): void
+    private function applyServiceClassSuggestion(Activity $task, int $taskId): void
     {
         $suggestion = collect($this->backlogAnalysis)->firstWhere('task_id', $taskId);
-        $priority = $suggestion['suggested_priority'] ?? null;
+        $serviceClass = $suggestion['suggested_service_class'] ?? null;
 
-        $priorityEnum = $priority ? ActivityPriority::tryFrom($priority) : null;
+        $serviceClassEnum = $serviceClass ? ServiceClass::tryFrom($serviceClass) : null;
 
         $task->update([
             'status' => ActivityStatus::Todo,
-            'priority' => $priorityEnum ?? $task->priority,
+            'service_class' => $serviceClassEnum ?? $task->service_class,
         ]);
     }
 
@@ -634,10 +639,15 @@ new class extends Component
                                             </div>
                                             <flux:text class="mt-1 text-xs text-zinc-400">{{ $analysis['reason'] }}</flux:text>
 
-                                            @if ($analysis['suggested_priority'] ?? null)
-                                                <flux:text class="mt-1 text-xs text-zinc-500">
-                                                    Prioridade sugerida: {{ ucfirst($analysis['suggested_priority']) }}
-                                                </flux:text>
+                                            @if ($analysis['suggested_service_class'] ?? null)
+                                                @php
+                                                    $suggestedServiceClass = \App\Enums\ServiceClass::tryFrom($analysis['suggested_service_class']);
+                                                @endphp
+                                                @if ($suggestedServiceClass)
+                                                    <flux:text class="mt-1 text-xs text-zinc-500">
+                                                        Classe de serviço sugerida: {{ $suggestedServiceClass->label() }}
+                                                    </flux:text>
+                                                @endif
                                             @endif
                                         </div>
 

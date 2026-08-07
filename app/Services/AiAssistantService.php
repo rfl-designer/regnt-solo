@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Activity;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -28,7 +29,7 @@ class AiAssistantService
     /**
      * Suggest a daily plan based on available tasks and completion history.
      *
-     * @param  Collection<int, \App\Models\Activity>  $tasks
+     * @param  Collection<int, Activity>  $tasks
      * @param  array<string, mixed>  $history
      * @return array<int, array{task_id: int, reason: string, priority_score: int}>
      */
@@ -48,8 +49,8 @@ class AiAssistantService
     /**
      * Analyze backlog tasks and suggest actions for each.
      *
-     * @param  Collection<int, \App\Models\Activity>  $tasks
-     * @return array<int, array{task_id: int, action: string, reason: string, suggested_priority: string|null, suggested_project: string|null}>
+     * @param  Collection<int, Activity>  $tasks
+     * @return array<int, array{task_id: int, action: string, reason: string, suggested_service_class: string|null, suggested_project: string|null}>
      */
     public function analyzeBacklog(Collection $tasks): array
     {
@@ -130,19 +131,19 @@ class AiAssistantService
     /**
      * Build system and user prompts for daily plan suggestions.
      *
-     * @param  Collection<int, \App\Models\Activity>  $tasks
+     * @param  Collection<int, Activity>  $tasks
      * @param  array<string, mixed>  $history
      * @return array{system: string, user: string}
      */
     private function buildDailyPlanPrompt(Collection $tasks, array $history): array
     {
-        $systemPrompt = self::BASE_SYSTEM_PROMPT.' Focus on suggesting the most impactful tasks for today\'s work session. Consider task priority, due dates, estimated time, and the developer\'s recent completion patterns. Respond with a JSON array where each item has: task_id (int), reason (string explaining why this task should be prioritized), and priority_score (int from 1-100, higher means more important).';
+        $systemPrompt = self::BASE_SYSTEM_PROMPT.' Focus on suggesting the most impactful tasks for today\'s work session. Consider task service class (emergency, fixed_date, standard, intangible), due dates, estimated time, and the developer\'s recent completion patterns. Respond with a JSON array where each item has: task_id (int), reason (string explaining why this task should be prioritized), and priority_score (int from 1-100, higher means more important).';
 
         $taskData = $tasks->map(fn ($task) => [
             'id' => $task->id,
             'title' => $task->title,
             'status' => $task->status->value,
-            'priority' => $task->priority->value,
+            'service_class' => $task->service_class->value,
             'due_date' => $task->due_date?->toDateString(),
             'estimated_minutes' => $task->estimated_minutes,
             'project' => $task->project?->name,
@@ -162,19 +163,19 @@ class AiAssistantService
     /**
      * Build system and user prompts for backlog analysis.
      *
-     * @param  Collection<int, \App\Models\Activity>  $tasks
+     * @param  Collection<int, Activity>  $tasks
      * @return array{system: string, user: string}
      */
     private function buildBacklogPrompt(Collection $tasks): array
     {
-        $systemPrompt = self::BASE_SYSTEM_PROMPT.' Focus on analyzing backlog and inbox tasks. Suggest concrete actions for each task: archive (if stale or irrelevant), prioritize (if important), or estimate (if missing time estimates). Respond with a JSON array where each item has: task_id (int), action (string: "archive", "prioritize", or "estimate"), reason (string), suggested_priority (string or null: "urgent", "high", "medium", "low"), and suggested_project (string or null).';
+        $systemPrompt = self::BASE_SYSTEM_PROMPT.' Focus on analyzing backlog and inbox tasks. Suggest concrete actions for each task: archive (if stale or irrelevant), prioritize (if important), or estimate (if missing time estimates). Respond with a JSON array where each item has: task_id (int), action (string: "archive", "prioritize", or "estimate"), reason (string), suggested_service_class (string or null: "emergency", "fixed_date", "standard", "intangible" — only use "fixed_date" when a due date is known), and suggested_project (string or null).';
 
         $taskData = $tasks->map(fn ($task) => [
             'id' => $task->id,
             'title' => $task->title,
             'description' => $task->description,
             'status' => $task->status->value,
-            'priority' => $task->priority->value,
+            'service_class' => $task->service_class->value,
             'due_date' => $task->due_date?->toDateString(),
             'estimated_minutes' => $task->estimated_minutes,
             'project' => $task->project?->name,

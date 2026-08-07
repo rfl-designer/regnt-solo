@@ -79,14 +79,14 @@ test('analyzeBacklog returns analysis with mocked API', function () {
             'task_id' => $tasks[0]->id,
             'action' => 'prioritize',
             'reason' => 'This task aligns with current project goals',
-            'suggested_priority' => 'high',
+            'suggested_service_class' => 'emergency',
             'suggested_project' => null,
         ],
         [
             'task_id' => $tasks[1]->id,
             'action' => 'archive',
             'reason' => 'Task has been inactive for too long',
-            'suggested_priority' => null,
+            'suggested_service_class' => null,
             'suggested_project' => null,
         ],
     ];
@@ -104,7 +104,7 @@ test('analyzeBacklog returns analysis with mocked API', function () {
 
     expect($result)->toHaveCount(2)
         ->and($result[0]['action'])->toBe('prioritize')
-        ->and($result[0]['suggested_priority'])->toBe('high')
+        ->and($result[0]['suggested_service_class'])->toBe('emergency')
         ->and($result[1]['action'])->toBe('archive');
 
     Http::assertSentCount(1);

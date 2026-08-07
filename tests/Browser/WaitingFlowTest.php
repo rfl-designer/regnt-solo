@@ -140,11 +140,11 @@ test('task modal shows the esperando quem field while the task is waiting', func
 
 test('quick add from a waiting column lands in the inbox', function (): void {
     // A waiting column cannot take a brand new task (nobody is being waited
-    // on yet), so the quick add falls back to the Inbox. Note the component
-    // also fires a "Criada na Inbox" warning toast, but <flux:toast/> is a
-    // singleton region here (no <flux:toast.group/>), so the success toast
-    // dispatched right after replaces it before the user can read it — the
-    // landing status below is the only part actually observable in browser.
+    // on yet), so the quick add falls back to the Inbox. The component fires
+    // both a "Criada na Inbox" warning toast and the regular success toast in
+    // the same request; the layout wraps <flux:toast/> in <flux:toast.group/>
+    // precisely so the two stack instead of the second silently replacing
+    // the first, so both must be readable here.
     visit('/kanban')
         ->assertNoJavaScriptErrors()
         ->click('[title="Nova task em Esperando"]')
@@ -153,6 +153,8 @@ test('quick add from a waiting column lands in the inbox', function (): void {
         ->click('Criar Task')
         ->waitForText('Task criada')
         ->assertSee('Task criada da coluna de espera → Caixa de Entrada')
+        ->assertSee('Criada na Inbox')
+        ->assertSee('Quick-Add sempre cria na Inbox')
         ->assertNoJavaScriptErrors();
 
     $created = Activity::query()->where('title', 'Task criada da coluna de espera')->firstOrFail();

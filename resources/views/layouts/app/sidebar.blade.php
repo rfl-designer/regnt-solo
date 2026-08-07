@@ -160,8 +160,15 @@
         <livewire:timer-notes-modal />
         <livewire:waiting-for-modal />
 
+        {{-- flux:toast.group stacks multiple toasts fired in the same
+             request instead of the last one silently replacing the first
+             (a bare <flux:toast /> is a singleton region) — needed since
+             Quick-Add's Inbox fallback for waiting columns can fire a
+             warning toast followed by the success toast. --}}
         @persist('toast')
-            <flux:toast />
+            <flux:toast.group>
+                <flux:toast />
+            </flux:toast.group>
         @endpersist
 
         @fluxScripts

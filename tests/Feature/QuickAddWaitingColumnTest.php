@@ -9,6 +9,13 @@ beforeEach(function () {
     $this->actingAs(User::factory()->create());
 });
 
+// These cover the underlying behavior (lands in Inbox, no exception). The
+// "Criada na Inbox" warning toast actually being visible alongside the
+// success toast (both fire in the same request) is a DOM/Alpine stacking
+// concern covered by the browser test
+// (tests/Browser/WaitingFlowTest.php::'quick add from a waiting column
+// lands in the inbox'), not observable at this Livewire-test layer.
+
 test('opening quick add from the awaiting_approval column still creates in inbox', function () {
     Livewire::test('task-quick-add')
         ->dispatch('open-quick-add-with-status', status: 'awaiting_approval')

@@ -1,7 +1,8 @@
 <?php
 
 use App\Enums\ActivityStatus;
-use App\Exceptions\WaitingRequiresWaitingForException;
+use App\Exceptions\DomainRefusal;
+use App\Exceptions\SingleActiveEmergencyException;
 use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
@@ -163,9 +164,55 @@ new class extends Component
 
                 $this->reorderColumn($newStatus, $task->id, $position);
             });
-        } catch (WaitingRequiresWaitingForException $e) {
+        } catch (SingleActiveEmergencyException) {
+            // Dragging a concluded Emergência back onto the board would
+            // light a second one. That is a choice, not a dead end: hand the
+            // pending move to the shared modal, which asks "Manter a atual /
+            // Substituir" and applies the move itself if the user swaps.
+            $this->dispatch('open-emergency-modal', taskId: $task->id, status: $newStatus->value);
+        } catch (DomainRefusal $e) {
+            // No client-side pre-block: the drop is optimistic, the domain
+            // guard is the authority, and the re-render that follows this
+            // request puts the card back where it came from. The toast is
+            // what explains why it bounced.
             Flux::toast(variant: 'danger', heading: 'Não foi possível mover', text: $e->getMessage());
         }
+    }
+
+    /**
+     * The WIP limit for Fazendo. Read straight from config on every render
+     * so the "n/2" indicator can never drift from the number the guard in
+     * ActivityObserver enforces.
+     */
+    public function wipLimit(): int
+    {
+        return (int) config('soloboard.wip_limit_doing', 2);
+    }
+
+    /**
+     * How many board items are in Fazendo right now — deliberately ignoring
+     * the column filters, because the limit is about the whole board and a
+     * filtered "1/2" would be a lie.
+     */
+    public function doingWipCount(): int
+    {
+        return Activity::query()
+            ->leaf()
+            ->where('status', ActivityStatus::Doing)
+            ->count();
+    }
+
+    /**
+     * The colour of the "n/2" badge: red from the moment the column is
+     * full, and it stays red at 3/2 when an Emergência has furado o limite.
+     * Exposed as a method so the decision itself is testable, rather than
+     * only inferrable from rendered HTML.
+     */
+    public function wipBadgeColor(): string
+    {
+        return $this->doingWipCount() >= $this->wipLimit()
+            ? 'red'
+            : ActivityStatus::Doing->color();
     }
 
     #[On('task-updated')]
@@ -324,6 +371,9 @@ new class extends Component
 
             @php
                 $isDone = $status === \App\Enums\ActivityStatus::Done;
+                $isDoing = $status === \App\Enums\ActivityStatus::Doing;
+                $wipLimit = $this->wipLimit();
+                $wipCount = $isDoing ? $this->doingWipCount() : 0;
             @endphp
 
             <div
@@ -392,7 +442,18 @@ new class extends Component
                             @if ($estimateFormatted)
                                 <flux:badge size="sm" color="zinc" icon="clock">{{ $estimateFormatted }}</flux:badge>
                             @endif
-                            <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                            @if ($isDoing)
+                                {{-- "n/2": red once the column is full, and it
+                                     legitimately reads "3/2" when an Emergência
+                                     has furado o limite. --}}
+                                <flux:tooltip content="Limite de {{ $wipLimit }} itens em Fazendo — só uma Emergência fura o limite.">
+                                    <flux:badge size="sm" color="{{ $this->wipBadgeColor() }}">
+                                        {{ $wipCount }}/{{ $wipLimit }}
+                                    </flux:badge>
+                                </flux:tooltip>
+                            @else
+                                <flux:badge size="sm" color="{{ $status->color() }}">{{ $total }}</flux:badge>
+                            @endif
                             <flux:button
                                 wire:click="$dispatch('open-quick-add-with-status', { status: '{{ $status->value }}' })"
                                 variant="ghost"
@@ -450,8 +511,16 @@ new class extends Component
                                             {{ $task->derivedLabel() }}
                                         </flux:badge>
 
-                                        {{-- Service Class Badge --}}
-                                        @if ($task->service_class)
+                                        {{-- Service Class Badge — an Emergência
+                                             carries its motivo in the tooltip, so
+                                             the justification travels with the card. --}}
+                                        @if ($task->service_class === \App\Enums\ServiceClass::Emergency)
+                                            <flux:tooltip :content="$task->emergency_reason ?? 'Emergência'">
+                                                <flux:badge size="sm" color="red" icon="fire">
+                                                    {{ $task->service_class->label() }}
+                                                </flux:badge>
+                                            </flux:tooltip>
+                                        @elseif ($task->service_class)
                                             <flux:badge size="sm" color="{{ $task->service_class->color() }}" icon="{{ $task->service_class->icon() }}">
                                                 {{ $task->service_class->label() }}
                                             </flux:badge>
@@ -546,7 +615,13 @@ new class extends Component
 
                                             {{-- Badges Row --}}
                                             <div class="mt-2 flex flex-wrap items-center gap-1.5" wire:sort:ignore>
-                                                @if ($task->service_class)
+                                                @if ($task->service_class === \App\Enums\ServiceClass::Emergency)
+                                                    <flux:tooltip :content="$task->emergency_reason ?? 'Emergência'">
+                                                        <flux:badge size="sm" color="red" icon="fire">
+                                                            {{ $task->service_class->label() }}
+                                                        </flux:badge>
+                                                    </flux:tooltip>
+                                                @elseif ($task->service_class)
                                                     <flux:badge size="sm" color="{{ $task->service_class->color() }}" icon="{{ $task->service_class->icon() }}">
                                                         {{ $task->service_class->label() }}
                                                     </flux:badge>

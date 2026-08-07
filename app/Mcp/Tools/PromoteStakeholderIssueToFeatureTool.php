@@ -5,7 +5,8 @@ namespace App\Mcp\Tools;
 use App\Enums\ActivityType;
 use App\Enums\ServiceClass;
 use App\Enums\StakeholderIssueStatus;
-use App\Exceptions\FixedDateRequiresDueDateException;
+use App\Exceptions\DomainRefusal;
+use App\Mcp\Concerns\TranslatesDomainRefusals;
 use App\Models\Activity;
 use App\Models\StakeholderIssue;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -13,12 +14,15 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
+use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[IsIdempotent]
 class PromoteStakeholderIssueToFeatureTool extends Tool
 {
+    use TranslatesDomainRefusals;
+
     protected string $name = 'promote-stakeholder-issue';
 
     protected string $description = 'Converts a stakeholder issue into a feature and links both records. Use after triaging stakeholder feedback.';
@@ -26,13 +30,14 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
     /**
      * Handle the tool request.
      */
-    public function handle(Request $request): Response
+    public function handle(Request $request): Response|ResponseFactory
     {
         $validated = $request->validate([
             'issue_id' => 'required|integer|exists:stakeholder_issues,id',
             'title' => 'nullable|string|max:255',
             'spec' => 'nullable|string',
             'service_class' => ['nullable', 'string', Rule::enum(ServiceClass::class)],
+            'emergency_reason' => 'nullable|string|max:1000',
             'due_date' => 'nullable|date',
         ], [
             'issue_id.required' => 'You must provide the issue_id to promote.',
@@ -69,10 +74,11 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
                 'title' => $title,
                 'spec' => $spec,
                 'service_class' => $validated['service_class'] ?? ServiceClass::Standard,
+                'emergency_reason' => $validated['emergency_reason'] ?? null,
                 'due_date' => $validated['due_date'] ?? null,
             ]);
-        } catch (FixedDateRequiresDueDateException $e) {
-            return Response::error($e->getMessage());
+        } catch (DomainRefusal $e) {
+            return $this->refusalResponse($e);
         }
 
         $issue->update([
@@ -106,6 +112,7 @@ class PromoteStakeholderIssueToFeatureTool extends Tool
             'title' => $schema->string()->description('Optional feature title override. Defaults to a title generated from the issue comment.'),
             'spec' => $schema->string()->description('Optional feature spec in markdown. Defaults to an auto-generated spec based on the issue comment.'),
             'service_class' => $schema->string()->enum(['emergency', 'fixed_date', 'standard', 'intangible'])->description('Feature service class. Default: standard. "fixed_date" requires due_date to also be set — the request is refused otherwise.'),
+            'emergency_reason' => $schema->string()->description('Why this is an Emergência. Required when service_class is "emergency"; at most one emergency may be active on the board at a time.'),
             'due_date' => $schema->string()->description('Optional due date in YYYY-MM-DD format.'),
         ];
     }

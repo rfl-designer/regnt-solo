@@ -4,17 +4,21 @@ namespace App\Mcp\Tools;
 
 use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
-use App\Exceptions\WaitingRequiresWaitingForException;
+use App\Exceptions\DomainRefusal;
+use App\Mcp\Concerns\TranslatesDomainRefusals;
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
+use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Tool;
 
 class UpdateEpicTool extends Tool
 {
+    use TranslatesDomainRefusals;
+
     protected string $name = 'update-epic';
 
     protected string $description = 'Updates an existing roadmap epic (type=Epic). The epic status is manual (ADR 0002) and may be changed here. Setting status to awaiting_approval, waiting or awaiting_validation requires waiting_for — client-side waits auto-fill it from the effective client when omitted, waiting (internal) has no default and is refused without one. Provide only the fields you want to change.';
@@ -22,7 +26,7 @@ class UpdateEpicTool extends Tool
     /**
      * Handle the tool request.
      */
-    public function handle(Request $request): Response
+    public function handle(Request $request): Response|ResponseFactory
     {
         $validated = $request->validate([
             'epic_id' => 'required|integer|exists:activities,id',
@@ -86,8 +90,8 @@ class UpdateEpicTool extends Tool
         if (! empty($updates)) {
             try {
                 $epic->update($updates);
-            } catch (WaitingRequiresWaitingForException $e) {
-                return Response::error($e->getMessage());
+            } catch (DomainRefusal $e) {
+                return $this->refusalResponse($e);
             }
         }
 

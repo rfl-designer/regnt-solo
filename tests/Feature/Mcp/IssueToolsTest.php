@@ -100,6 +100,7 @@ test('create-issue accepts project_id and parent_id', function () {
         'parent_id' => $epic->id,
         'status' => 'todo',
         'service_class' => 'emergency',
+        'emergency_reason' => 'Produção fora do ar',
     ]);
 
     $response->assertOk();
@@ -220,6 +221,7 @@ test('update-issue updates fields, project and parent', function () {
         'issue_id' => $issue->id,
         'title' => 'New Title',
         'service_class' => 'emergency',
+        'emergency_reason' => 'Produção fora do ar',
         'project_id' => $project->id,
         'parent_id' => $epic->id,
     ]);

@@ -210,12 +210,19 @@ class ActivityFactory extends Factory
     }
 
     /**
-     * Indicate that the activity is classified as Emergência.
+     * Indicate that the activity is classified as Emergência, with the
+     * mandatory motivo already filled in.
+     *
+     * This state is the only way a factory produces an Emergência: there is
+     * deliberately no global repair that quietly fills a missing motivo,
+     * because that would make an incomplete fixture — and a caller that
+     * forgot the new field — look valid.
      */
-    public function emergency(): static
+    public function emergency(string $reason = 'Produção fora do ar.'): static
     {
         return $this->state(fn (array $attributes) => [
             'service_class' => ServiceClass::Emergency,
+            'emergency_reason' => $reason,
         ]);
     }
 

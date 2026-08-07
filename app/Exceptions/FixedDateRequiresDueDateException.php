@@ -10,7 +10,7 @@ use DomainException;
  * Eloquent seam (Activity saving), so every origin — Kanban, Task Modal,
  * MCP tools, tinker — gets the same refusal.
  */
-class FixedDateRequiresDueDateException extends DomainException
+class FixedDateRequiresDueDateException extends DomainException implements DomainRefusal
 {
     /**
      * The single canonical PT-BR message for this refusal. UI toasts and

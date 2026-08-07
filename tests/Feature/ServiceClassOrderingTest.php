@@ -7,7 +7,7 @@ test('scopeOrdered ranks all four service classes canonically: emergency, fixed_
     $intangible = Activity::factory()->create(['service_class' => ServiceClass::Intangible]);
     $standard = Activity::factory()->create(['service_class' => ServiceClass::Standard]);
     $fixedDate = Activity::factory()->create(['service_class' => ServiceClass::FixedDate, 'due_date' => now()->addDays(5)]);
-    $emergency = Activity::factory()->create(['service_class' => ServiceClass::Emergency]);
+    $emergency = Activity::factory()->emergency()->create();
 
     $ordered = Activity::query()->ordered()->pluck('id')->all();
 
@@ -18,7 +18,7 @@ test('scopeOrderByServiceClass ranks the four classes without a tie-breaker', fu
     $intangible = Activity::factory()->create(['service_class' => ServiceClass::Intangible]);
     $standard = Activity::factory()->create(['service_class' => ServiceClass::Standard]);
     $fixedDate = Activity::factory()->create(['service_class' => ServiceClass::FixedDate, 'due_date' => now()->addDays(5)]);
-    $emergency = Activity::factory()->create(['service_class' => ServiceClass::Emergency]);
+    $emergency = Activity::factory()->emergency()->create();
 
     $ordered = Activity::query()->orderByServiceClass()->pluck('id')->all();
 

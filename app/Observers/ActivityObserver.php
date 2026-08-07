@@ -4,7 +4,10 @@ namespace App\Observers;
 
 use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
+use App\Exceptions\DoingWipLimitExceededException;
+use App\Exceptions\EmergencyRequiresReasonException;
 use App\Exceptions\FixedDateRequiresDueDateException;
+use App\Exceptions\SingleActiveEmergencyException;
 use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Activity;
 use App\Models\ActivityStatusChange;
@@ -40,6 +43,173 @@ class ActivityObserver
         }
 
         $this->handleWaitingState($activity);
+        $this->handleEmergencyState($activity);
+        $this->enforceDoingWipLimit($activity);
+    }
+
+    /**
+     * Concurrency note for the two cross-row guards below (WIP limit and
+     * single Emergência): both read the current board state and then let
+     * the save write, so two *simultaneous* writers could each see room and
+     * both get in. That is accepted, not overlooked.
+     *
+     * SoloBoard is single-user by design (no `user_id` anywhere, one seeded
+     * account), so there is no second human racing the first; the only way
+     * to produce the interleaving is to drive two requests at the same
+     * instant on purpose. The alternatives all cost more than the risk:
+     * neither invariant is expressible as a portable database constraint
+     * ("one active Emergência" is cross-row, and MySQL has no partial
+     * unique index), and serializing every board write through a singleton
+     * lock row would add a bottleneck and a new failure mode to a
+     * single-user app to defend against a race that has no realistic
+     * trigger.
+     *
+     * What does hold: the swap flows that *deliberately* touch two rows
+     * (demote one Emergência, promote another) run both writes inside one
+     * transaction and re-validate the slot under that transaction, so the
+     * one multi-row operation the feature actually performs is consistent.
+     */
+
+    /**
+     * Enforce the two Emergência invariants (issue #143):
+     *
+     * - **Motivo obrigatório.** Being an Emergência is what lets an item
+     *   jump the WIP limit, so it must always be justified: any save that
+     *   leaves the activity classified as Emergência with a blank
+     *   `emergency_reason` is refused. Blank/whitespace-only reasons are
+     *   normalized to null first, so `'   '` never counts as a motivo.
+     * - **Uma só Emergência ativa.** At most one activity may be an
+     *   Emergência outside Feito at any time. The refusal carries the
+     *   conflicting activity ({@see SingleActiveEmergencyException}) so
+     *   every caller can offer the same "manter a atual / substituir"
+     *   choice instead of a silent failure.
+     *
+     * Reclassifying to another service class clears both the motivo and
+     * `emergency_since` — the justification belongs to the classification,
+     * not to the activity. Concluding it does *not* clear them: a done
+     * Emergência keeps its motivo as history, and stops occupying the slot
+     * only because it left the board.
+     *
+     * `emergency_since` is stamped fresh on every genuine *entry* into the
+     * class (a new record created as Emergência, or a reclassification into
+     * it), which is also what stops it being forged: it isn't fillable
+     * ({@see Activity::$fillable}) and any entry overwrites it with now().
+     *
+     * The uniqueness check only runs on saves that could actually create a
+     * second active Emergência — entering the class, or a status change
+     * that brings an existing Emergência back onto the board (e.g. Feito ->
+     * Fazendo). Editing an Emergência that already holds the slot never
+     * trips over itself.
+     */
+    private function handleEmergencyState(Activity $activity): void
+    {
+        $activity->emergency_reason = $this->normalizeBlankToNull($activity->emergency_reason);
+
+        if ($activity->service_class !== ServiceClass::Emergency) {
+            $activity->emergency_reason = null;
+            $activity->emergency_since = null;
+
+            return;
+        }
+
+        if (blank($activity->emergency_reason)) {
+            throw new EmergencyRequiresReasonException;
+        }
+
+        $enteringEmergencyThisSave = ! $activity->exists || $activity->isDirty('service_class');
+
+        if ($activity->isActiveEmergency() && ($enteringEmergencyThisSave || $activity->isDirty('status'))) {
+            $conflict = Activity::query()
+                ->activeEmergency()
+                ->when($activity->exists, fn ($query) => $query->whereKeyNot($activity->getKey()))
+                ->orderBy('emergency_since')
+                ->orderBy('id')
+                ->first();
+
+            if ($conflict !== null) {
+                throw new SingleActiveEmergencyException($conflict);
+            }
+        }
+
+        if ($enteringEmergencyThisSave || $activity->emergency_since === null) {
+            $activity->emergency_since = now();
+        }
+    }
+
+    /**
+     * Enforce the WIP limit on "Fazendo" (issue #143).
+     *
+     * The guard runs whenever *this save* is what makes the activity a
+     * counting item in Fazendo. That is two distinct transitions, not one:
+     *
+     * - entering the column (a new record created there, or a status change
+     *   into it); and
+     * - **losing the Emergência exemption while already there** — demoting
+     *   the Emergência that was furando o limite would otherwise quietly
+     *   leave three ordinary items in Fazendo, and that is exactly what the
+     *   "Substituir" flow does when the current Emergência sits in the
+     *   column. Refusing it is the honest answer: take something out of
+     *   Fazendo first, then swap.
+     *
+     * Saves that change neither of those are never gated, so an over-limit
+     * column (which the Emergência exception legitimately produces, hence
+     * the board's "3/2") never becomes unusable.
+     *
+     * Two deliberate exclusions:
+     *
+     * - **Emergência passes.** This is the whole point of classifying
+     *   something as an Emergência, and the reason the classification is
+     *   guarded so tightly above.
+     * - **Only board items count.** The limit is about the board, so it
+     *   counts and gates exactly what the board renders as a card
+     *   ({@see Activity::isLeaf()} / {@see Activity::scopeLeaf()}) —
+     *   issues and atomic epics. Personal tasks and parent epics never
+     *   appear as Fazendo cards and are neither counted nor refused.
+     *
+     * Known gap: an epic in Fazendo that becomes a leaf because its last
+     * child was deleted starts counting without any save of its own passing
+     * through here. Refusing a child's deletion because of its parent's
+     * column would be a worse answer than briefly reading "3/2", so the
+     * count simply catches up.
+     */
+    private function enforceDoingWipLimit(Activity $activity): void
+    {
+        if ($activity->status !== ActivityStatus::Doing) {
+            return;
+        }
+
+        if ($activity->service_class === ServiceClass::Emergency) {
+            return;
+        }
+
+        $enteringDoingThisSave = ! $activity->exists || $activity->isDirty('status');
+        $losingEmergencyExemption = $activity->exists
+            && $activity->isDirty('service_class')
+            && $activity->getOriginal('service_class') === ServiceClass::Emergency;
+
+        if (! $enteringDoingThisSave && ! $losingEmergencyExemption) {
+            return;
+        }
+
+        if (! $activity->isLeaf()) {
+            return;
+        }
+
+        $limit = (int) config('soloboard.wip_limit_doing', 2);
+
+        if ($limit <= 0) {
+            return;
+        }
+
+        $inDoing = Activity::query()
+            ->leaf()
+            ->where('status', ActivityStatus::Doing)
+            ->when($activity->exists, fn ($query) => $query->whereKeyNot($activity->getKey()))
+            ->count();
+
+        if ($inDoing >= $limit) {
+            throw new DoingWipLimitExceededException($limit);
+        }
     }
 
     /**
@@ -80,7 +250,7 @@ class ActivityObserver
      */
     private function handleWaitingState(Activity $activity): void
     {
-        $activity->waiting_for = $this->normalizeWaitingFor($activity->waiting_for);
+        $activity->waiting_for = $this->normalizeBlankToNull($activity->waiting_for);
 
         $newStatus = $activity->status;
 
@@ -133,10 +303,11 @@ class ActivityObserver
     }
 
     /**
-     * Trim `waiting_for` and treat a blank result as absent, so a
-     * whitespace-only value never counts as "esperando quem" being set.
+     * Trim a free-text guard input ("esperando quem", "motivo da
+     * Emergência") and treat a blank result as absent, so a
+     * whitespace-only value never counts as the field being set.
      */
-    private function normalizeWaitingFor(?string $value): ?string
+    private function normalizeBlankToNull(?string $value): ?string
     {
         if ($value === null) {
             return null;

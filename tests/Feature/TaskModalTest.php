@@ -2,6 +2,7 @@
 
 use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
+use App\Exceptions\EmergencyRequiresReasonException;
 use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Models\Activity;
 use App\Models\Client;
@@ -113,10 +114,37 @@ test('can update task service class', function () {
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
-        ->set('serviceClass', 'emergency')
+        ->set('serviceClass', 'intangible')
         ->call('saveTask');
 
-    expect($task->fresh()->service_class)->toBe(ServiceClass::Emergency);
+    expect($task->fresh()->service_class)->toBe(ServiceClass::Intangible);
+});
+
+test('classifying as emergency blocks the save until a motivo is given', function () {
+    $task = Activity::factory()->create(['service_class' => ServiceClass::Standard]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->set('serviceClass', 'emergency')
+        ->call('saveTask')
+        ->assertSet('showEmergencyReasonPrompt', true)
+        ->assertSee(EmergencyRequiresReasonException::MESSAGE);
+
+    expect($task->fresh()->service_class)->toBe(ServiceClass::Standard);
+});
+
+test('classifying as emergency with a motivo saves it on the task', function () {
+    $task = Activity::factory()->create(['service_class' => ServiceClass::Standard]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->set('serviceClass', 'emergency')
+        ->set('emergencyReason', 'Produção fora do ar')
+        ->call('saveTask')
+        ->assertSet('showEmergencyReasonPrompt', false);
+
+    expect($task->fresh()->service_class)->toBe(ServiceClass::Emergency)
+        ->and($task->fresh()->emergency_reason)->toBe('Produção fora do ar');
 });
 
 test('classifying as fixed_date without a due date is refused with a toast', function () {

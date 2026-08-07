@@ -212,7 +212,7 @@ test('update service class to fixed_date without a due date is refused with a to
 });
 
 test('inbox shows service class dropdown for each task', function () {
-    Activity::factory()->create(['service_class' => ServiceClass::Emergency]);
+    Activity::factory()->emergency()->create();
 
     Livewire::test('pages::inbox')
         ->assertSee('Emergência')

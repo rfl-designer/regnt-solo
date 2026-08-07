@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Models\Project;
 use App\Services\AiAssistantService;
@@ -29,7 +29,7 @@ new class extends Component
 
     public ?string $deletingTaskTitle = null;
 
-    /** @var array<int, array{task_id: int, action: string, reason: string, suggested_priority: string|null, suggested_project: string|null}> */
+    /** @var array<int, array{task_id: int, action: string, reason: string, suggested_service_class: string|null, suggested_project: string|null}> */
     public array $backlogAnalysis = [];
 
     public bool $showBacklogAnalysis = false;
@@ -92,17 +92,23 @@ new class extends Component
         Flux::toast(variant: 'success', heading: 'Projeto atualizado', text: $task->title);
     }
 
-    public function updatePriority(int $taskId, string $priority): void
+    public function updateServiceClass(int $taskId, string $serviceClass): void
     {
         $task = Activity::inbox()->findOrFail($taskId);
 
-        $newPriority = ActivityPriority::from($priority);
+        $newServiceClass = ServiceClass::from($serviceClass);
 
-        $task->update(['priority' => $newPriority]);
+        try {
+            $task->update(['service_class' => $newServiceClass]);
+        } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível atualizar', text: $e->getMessage());
+
+            return;
+        }
 
         unset($this->tasks);
 
-        Flux::toast(variant: 'success', heading: 'Prioridade atualizada', text: $task->title);
+        Flux::toast(variant: 'success', heading: 'Classe de serviço atualizada', text: $task->title);
     }
 
     /**
@@ -299,12 +305,18 @@ new class extends Component
             return;
         }
 
-        match ($action) {
-            'archive' => $task->update(['status' => ActivityStatus::Done, 'completed_at' => now()]),
-            'prioritize' => $this->applyPrioritySuggestion($task, $taskId),
-            'estimate' => $task->update(['status' => ActivityStatus::Todo]),
-            default => null,
-        };
+        try {
+            match ($action) {
+                'archive' => $task->update(['status' => ActivityStatus::Done, 'completed_at' => now()]),
+                'prioritize' => $this->applyServiceClassSuggestion($task, $taskId),
+                'estimate' => $task->update(['status' => ActivityStatus::Todo]),
+                default => null,
+            };
+        } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível aplicar', text: $e->getMessage());
+
+            return;
+        }
 
         $this->backlogAnalysis = array_values(
             array_filter($this->backlogAnalysis, fn (array $a): bool => $a['task_id'] !== $taskId)
@@ -316,18 +328,18 @@ new class extends Component
     }
 
     /**
-     * Apply priority suggestion from AI analysis.
+     * Apply service class suggestion from AI analysis.
      */
-    private function applyPrioritySuggestion(Activity $task, int $taskId): void
+    private function applyServiceClassSuggestion(Activity $task, int $taskId): void
     {
         $suggestion = collect($this->backlogAnalysis)->firstWhere('task_id', $taskId);
-        $priority = $suggestion['suggested_priority'] ?? null;
+        $serviceClass = $suggestion['suggested_service_class'] ?? null;
 
-        $priorityEnum = $priority ? ActivityPriority::tryFrom($priority) : null;
+        $serviceClassEnum = $serviceClass ? ServiceClass::tryFrom($serviceClass) : null;
 
         $task->update([
             'status' => ActivityStatus::Todo,
-            'priority' => $priorityEnum ?? $task->priority,
+            'service_class' => $serviceClassEnum ?? $task->service_class,
         ]);
     }
 
@@ -437,7 +449,7 @@ new class extends Component
                     />
                 </flux:table.column>
                 <flux:table.column sortable :sorted="$sortBy === 'title'" :direction="$sortDirection" wire:click="sort('title')">Task</flux:table.column>
-                <flux:table.column sortable :sorted="$sortBy === 'priority'" :direction="$sortDirection" wire:click="sort('priority')">Prioridade</flux:table.column>
+                <flux:table.column sortable :sorted="$sortBy === 'service_class'" :direction="$sortDirection" wire:click="sort('service_class')">Classe de serviço</flux:table.column>
                 <flux:table.column>Projeto</flux:table.column>
                 <flux:table.column sortable :sorted="$sortBy === 'created_at'" :direction="$sortDirection" wire:click="sort('created_at')">Criada</flux:table.column>
                 <flux:table.column align="end">Ações</flux:table.column>
@@ -455,16 +467,16 @@ new class extends Component
 
                         <flux:table.cell>
                             <flux:select
-                                wire:change="updatePriority({{ $task->id }}, $event.target.value)"
+                                wire:change="updateServiceClass({{ $task->id }}, $event.target.value)"
                                 size="sm"
                                 class="min-w-32"
                             >
-                                @foreach (ActivityPriority::cases() as $priority)
+                                @foreach (ServiceClass::cases() as $serviceClass)
                                     <option
-                                        value="{{ $priority->value }}"
-                                        @selected($task->priority === $priority)
+                                        value="{{ $serviceClass->value }}"
+                                        @selected($task->service_class === $serviceClass)
                                     >
-                                        {{ $priority->label() }}
+                                        {{ $serviceClass->label() }}
                                     </option>
                                 @endforeach
                             </flux:select>
@@ -627,10 +639,15 @@ new class extends Component
                                             </div>
                                             <flux:text class="mt-1 text-xs text-zinc-400">{{ $analysis['reason'] }}</flux:text>
 
-                                            @if ($analysis['suggested_priority'] ?? null)
-                                                <flux:text class="mt-1 text-xs text-zinc-500">
-                                                    Prioridade sugerida: {{ ucfirst($analysis['suggested_priority']) }}
-                                                </flux:text>
+                                            @if ($analysis['suggested_service_class'] ?? null)
+                                                @php
+                                                    $suggestedServiceClass = \App\Enums\ServiceClass::tryFrom($analysis['suggested_service_class']);
+                                                @endphp
+                                                @if ($suggestedServiceClass)
+                                                    <flux:text class="mt-1 text-xs text-zinc-500">
+                                                        Classe de serviço sugerida: {{ $suggestedServiceClass->label() }}
+                                                    </flux:text>
+                                                @endif
                                             @endif
                                         </div>
 

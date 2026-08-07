@@ -2,10 +2,13 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -17,7 +20,7 @@ class UpdateIssueTool extends Tool
 {
     protected string $name = 'update-issue';
 
-    protected string $description = 'Updates an existing roadmap issue (type=Issue). Accepts status, project_id and parent_id (the parent_id link is the second pass of the sync, where the tree is wired up). When status is changed to "done", the issue is marked done (stops running timers and sets completed_at). Provide only the fields you want to change.';
+    protected string $description = 'Updates an existing roadmap issue (type=Issue). Accepts status, project_id and parent_id (the parent_id link is the second pass of the sync, where the tree is wired up). When status is changed to "done", the issue is marked done (stops running timers and sets completed_at). Classifying as fixed_date requires due_date — the request is refused otherwise. Provide only the fields you want to change.';
 
     /**
      * Handle the tool request.
@@ -31,7 +34,7 @@ class UpdateIssueTool extends Tool
             'project_id' => 'nullable|integer|exists:projects,id',
             'parent_id' => 'nullable|integer|exists:activities,id',
             'status' => ['nullable', 'string', Rule::enum(ActivityStatus::class)],
-            'priority' => ['nullable', 'string', Rule::enum(ActivityPriority::class)],
+            'service_class' => ['nullable', 'string', Rule::enum(ServiceClass::class)],
             'due_date' => 'nullable|date',
             'estimated_minutes' => 'nullable|integer|min:1',
             'github_issue_number' => 'nullable|integer',
@@ -44,11 +47,6 @@ class UpdateIssueTool extends Tool
         ]);
 
         $issue = Activity::query()->issues()->findOrFail($validated['issue_id']);
-
-        if (isset($validated['status']) && $validated['status'] === ActivityStatus::Done->value && $issue->status !== ActivityStatus::Done) {
-            $issue->markAsDone();
-            $issue->refresh();
-        }
 
         $updates = [];
 
@@ -72,8 +70,8 @@ class UpdateIssueTool extends Tool
             $updates['status'] = $validated['status'];
         }
 
-        if (isset($validated['priority'])) {
-            $updates['priority'] = $validated['priority'];
+        if (isset($validated['service_class'])) {
+            $updates['service_class'] = $validated['service_class'];
         }
 
         if (isset($validated['due_date'])) {
@@ -92,17 +90,32 @@ class UpdateIssueTool extends Tool
             $updates['github_synced_hash'] = $validated['github_synced_hash'];
         }
 
-        if (! empty($updates)) {
-            $issue->update($updates);
+        // Applied inside one transaction: a request combining status=done
+        // with an invalid service_class/due_date pairing must not leave
+        // markAsDone's side effects (status, completed_at, stopped timers)
+        // committed when the rest of the update is refused.
+        try {
+            DB::transaction(function () use ($issue, $validated, $updates): void {
+                if (isset($validated['status']) && $validated['status'] === ActivityStatus::Done->value && $issue->status !== ActivityStatus::Done) {
+                    $issue->markAsDone();
+                    $issue->refresh();
+                }
+
+                if (! empty($updates)) {
+                    $issue->update($updates);
+                }
+            });
+        } catch (FixedDateRequiresDueDateException $e) {
+            return Response::error($e->getMessage());
         }
 
-        $issue->load('project');
+        $issue->refresh()->load('project');
 
         $data = [
             'id' => $issue->id,
             'title' => $issue->title,
             'status' => $issue->status->value,
-            'priority' => $issue->priority->value,
+            'service_class' => $issue->service_class->value,
             'project' => $issue->project?->name,
             'parent_id' => $issue->parent_id,
             'due_date' => $issue->due_date?->toDateString(),
@@ -121,7 +134,7 @@ class UpdateIssueTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\JsonSchema\Types\Type>
+     * @return array<string, Type>
      */
     public function schema(JsonSchema $schema): array
     {
@@ -132,7 +145,7 @@ class UpdateIssueTool extends Tool
             'project_id' => $schema->integer()->description('Id of the project to assign the issue to.'),
             'parent_id' => $schema->integer()->description('Id of the parent activity (an Epic -> Fatia, or another Issue -> Follow-up). Set null for a loose issue (Avulsa).'),
             'status' => $schema->string()->enum(['inbox', 'backlog', 'todo', 'doing', 'done'])->description('New status. Setting to "done" will stop running timers and set completed_at.'),
-            'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('New priority.'),
+            'service_class' => $schema->string()->enum(['emergency', 'fixed_date', 'standard', 'intangible'])->description('New service class (replaces priority). "fixed_date" requires due_date to also be set — the request is refused otherwise.'),
             'due_date' => $schema->string()->description('New due date in YYYY-MM-DD format.'),
             'estimated_minutes' => $schema->integer()->description('New estimated time in minutes.'),
             'github_issue_number' => $schema->integer()->description('GitHub issue number this issue mirrors (upsert key).'),

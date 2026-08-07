@@ -16,7 +16,7 @@ class ListTasksTool extends Tool
 {
     protected string $name = 'list-tasks';
 
-    protected string $description = 'Lists personal tasks (type=Task) with optional filtering by project id, status, and limit. Personal tasks are local operational/personal to-dos ("email the designer", "chase the brand manual"); they have no GitHub mirror and never appear on the stakeholder board. Returns task id, title, status, priority, project, parent_id, client (resolved from the project, or the task\'s direct link) and due_date.';
+    protected string $description = 'Lists personal tasks (type=Task) with optional filtering by project id, status, and limit. Personal tasks are local operational/personal to-dos ("email the designer", "chase the brand manual"); they have no GitHub mirror and never appear on the stakeholder board. Returns task id, title, status, service_class, project, parent_id, client (resolved from the project, or the task\'s direct link) and due_date.';
 
     /**
      * Handle the tool request.
@@ -50,7 +50,7 @@ class ListTasksTool extends Tool
             'id' => $task->id,
             'title' => $task->title,
             'status' => $task->status->value,
-            'priority' => $task->priority->value,
+            'service_class' => $task->service_class->value,
             'project' => $task->project?->name,
             'parent_id' => $task->parent_id,
             'client' => $task->effective_client?->name,

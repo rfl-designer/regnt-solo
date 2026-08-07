@@ -7,6 +7,7 @@ use App\Models\Activity;
 use App\Models\DailyPlan;
 use Carbon\Carbon;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -17,7 +18,7 @@ class SuggestTasksTool extends Tool
 {
     protected string $name = 'suggest-tasks';
 
-    protected string $description = 'Suggests up to 10 priority tasks that are not yet in today\'s plan. Prioritizes: overdue tasks first, then "doing" tasks, then "todo" tasks ordered by priority.';
+    protected string $description = 'Suggests up to 10 priority tasks that are not yet in today\'s plan. Prioritizes: overdue tasks first, then "doing" tasks, then "todo" tasks ordered by service class.';
 
     /**
      * Handle the tool request.
@@ -34,7 +35,7 @@ class SuggestTasksTool extends Tool
             ->with('project')
             ->overdue()
             ->whereNotIn('id', $existingTaskIds)
-            ->orderByRaw("CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END")
+            ->orderByServiceClass()
             ->get();
         $suggestions = $suggestions->merge($overdue);
 
@@ -45,12 +46,12 @@ class SuggestTasksTool extends Tool
                 ->byStatus(ActivityStatus::Doing)
                 ->whereNotIn('id', $existingTaskIds)
                 ->whereNotIn('id', $suggestions->pluck('id'))
-                ->orderByRaw("CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END")
+                ->orderByServiceClass()
                 ->get();
             $suggestions = $suggestions->merge($doing);
         }
 
-        // 3. Todo tasks ordered by priority
+        // 3. Todo tasks ordered by service class
         if ($suggestions->count() < 10) {
             $remaining = 10 - $suggestions->count();
             $todo = Activity::query()
@@ -58,7 +59,7 @@ class SuggestTasksTool extends Tool
                 ->byStatus(ActivityStatus::Todo)
                 ->whereNotIn('id', $existingTaskIds)
                 ->whereNotIn('id', $suggestions->pluck('id'))
-                ->orderByRaw("CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END")
+                ->orderByServiceClass()
                 ->limit($remaining)
                 ->get();
             $suggestions = $suggestions->merge($todo);
@@ -68,11 +69,11 @@ class SuggestTasksTool extends Tool
             'id' => $task->id,
             'title' => $task->title,
             'status' => $task->status->value,
-            'priority' => $task->priority->value,
+            'service_class' => $task->service_class->value,
             'project' => $task->project?->name,
             'due_date' => $task->due_date?->toDateString(),
             'is_overdue' => $task->isOverdue(),
-            'reason' => $task->isOverdue() ? 'overdue' : ($task->status->value === 'doing' ? 'in progress' : 'todo by priority'),
+            'reason' => $task->isOverdue() ? 'overdue' : ($task->status->value === 'doing' ? 'in progress' : 'todo by service class'),
         ])->values()->all();
 
         return Response::text(json_encode([
@@ -84,7 +85,7 @@ class SuggestTasksTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\JsonSchema\Types\Type>
+     * @return array<string, Type>
      */
     public function schema(JsonSchema $schema): array
     {

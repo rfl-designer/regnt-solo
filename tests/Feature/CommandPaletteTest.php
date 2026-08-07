@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
@@ -54,7 +54,7 @@ test('command prefix shows available commands', function () {
         ->assertSee('timer')
         ->assertSee('deletar')
         ->assertSee('projeto')
-        ->assertSee('prioridade')
+        ->assertSee('classe')
         ->assertSee('planejar');
 });
 
@@ -118,14 +118,14 @@ test('command projeto assigns task to project', function () {
     expect($task->project_id)->toBe($project->id);
 });
 
-test('command prioridade changes task priority', function () {
-    $task = Activity::factory()->create(['priority' => ActivityPriority::Low]);
+test('command classe changes task service class', function () {
+    $task = Activity::factory()->create(['service_class' => ServiceClass::Intangible]);
 
     Livewire::test('command-palette')
-        ->call('executeCommand', 'prioridade:'.$task->id.':urgent');
+        ->call('executeCommand', 'classe:'.$task->id.':emergency');
 
     $task->refresh();
-    expect($task->priority)->toBe(ActivityPriority::Urgent);
+    expect($task->service_class)->toBe(ServiceClass::Emergency);
 });
 
 test('command planejar adds task to today plan', function () {
@@ -195,12 +195,12 @@ test('projeto with invalid slug shows warning', function () {
     expect($task->project_id)->toBeNull();
 });
 
-test('prioridade with invalid value shows warning', function () {
-    $task = Activity::factory()->create(['priority' => ActivityPriority::Medium]);
+test('classe with invalid value shows warning', function () {
+    $task = Activity::factory()->create(['service_class' => ServiceClass::Standard]);
 
     Livewire::test('command-palette')
-        ->call('executeCommand', 'prioridade:'.$task->id.':invalid');
+        ->call('executeCommand', 'classe:'.$task->id.':invalid');
 
     $task->refresh();
-    expect($task->priority)->toBe(ActivityPriority::Medium);
+    expect($task->service_class)->toBe(ServiceClass::Standard);
 });

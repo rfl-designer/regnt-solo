@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\StakeholderIssueStatus;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Mcp\Prompts\StakeholderIssuePlanningPrompt;
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\ListStakeholderIssuesTool;
@@ -9,6 +10,7 @@ use App\Models\Activity;
 use App\Models\Project;
 use App\Models\Stakeholder;
 use App\Models\StakeholderIssue;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 test('list-stakeholder-issues returns issues and supports filters', function () {
     $projectA = Project::factory()->create();
@@ -60,7 +62,7 @@ test('promote-stakeholder-issue creates feature and links issue', function () {
     $response = SoloBoardServer::tool(PromoteStakeholderIssueToFeatureTool::class, [
         'issue_id' => $issue->id,
         'title' => 'Stakeholder report by period',
-        'priority' => 'high',
+        'service_class' => 'emergency',
     ]);
 
     $response->assertOk();
@@ -77,8 +79,74 @@ test('promote-stakeholder-issue creates feature and links issue', function () {
         'id' => $issue->activity_id,
         'project_id' => $project->id,
         'title' => 'Stakeholder report by period',
-        'priority' => 'high',
+        'service_class' => 'emergency',
     ]);
+});
+
+test('promote-stakeholder-issue no longer accepts a priority field', function () {
+    $issue = StakeholderIssue::factory()->toFeature()->create();
+
+    $response = SoloBoardServer::tool(PromoteStakeholderIssueToFeatureTool::class, [
+        'issue_id' => $issue->id,
+        'title' => 'Priority-less feature',
+        'priority' => 'urgent',
+    ]);
+
+    $response->assertOk();
+
+    $issue->refresh();
+
+    // The unvalidated `priority` field is silently ignored; the created
+    // activity gets the database default, not the legacy input.
+    $this->assertDatabaseHas('activities', [
+        'id' => $issue->activity_id,
+        'priority' => 'medium',
+    ]);
+});
+
+test('promote-stakeholder-issue defaults service_class to standard and accepts an explicit value', function () {
+    $issue = StakeholderIssue::factory()->toFeature()->create();
+
+    $response = SoloBoardServer::tool(PromoteStakeholderIssueToFeatureTool::class, [
+        'issue_id' => $issue->id,
+        'title' => 'Default service class feature',
+    ]);
+
+    $response->assertOk();
+    $response->assertSee('"feature_service_class": "standard"');
+
+    $issue2 = StakeholderIssue::factory()->toFeature()->create();
+
+    $response2 = SoloBoardServer::tool(PromoteStakeholderIssueToFeatureTool::class, [
+        'issue_id' => $issue2->id,
+        'title' => 'Emergency feature',
+        'service_class' => 'emergency',
+    ]);
+
+    $response2->assertOk();
+    $response2->assertSee('"feature_service_class": "emergency"');
+
+    $issue2->refresh();
+
+    $this->assertDatabaseHas('activities', [
+        'id' => $issue2->activity_id,
+        'service_class' => 'emergency',
+    ]);
+});
+
+test('promote-stakeholder-issue refuses fixed_date without a due date', function () {
+    $issue = StakeholderIssue::factory()->toFeature()->create();
+
+    $response = SoloBoardServer::tool(PromoteStakeholderIssueToFeatureTool::class, [
+        'issue_id' => $issue->id,
+        'title' => 'Fixed date feature',
+        'service_class' => 'fixed_date',
+    ]);
+
+    $response->assertHasErrors([FixedDateRequiresDueDateException::MESSAGE]);
+
+    $issue->refresh();
+    expect($issue->activity_id)->toBeNull();
 });
 
 test('promote-stakeholder-issue is idempotent when issue already has feature', function () {
@@ -134,4 +202,4 @@ test('stakeholder issue planning prompt fails for non-existent issue', function 
     SoloBoardServer::prompt(StakeholderIssuePlanningPrompt::class, [
         'issue_id' => '99999',
     ]);
-})->throws(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+})->throws(ModelNotFoundException::class);

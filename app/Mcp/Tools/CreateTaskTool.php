@@ -2,9 +2,10 @@
 
 namespace App\Mcp\Tools;
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
+use App\Enums\ServiceClass;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
@@ -17,7 +18,7 @@ class CreateTaskTool extends Tool
 {
     protected string $name = 'create-task';
 
-    protected string $description = 'Creates a personal task (type=Task). Personal tasks are local operational/personal to-dos with no GitHub mirror; they never appear on the stakeholder board. Project and parent are optional: a task may stand alone, or hang off an Epic or Issue via parent_id. A task may also be linked directly to a client via client_id when it has no project — setting both project_id and client_id keeps only the project link. Use list-clients to find available client ids (it also returns clients with no project, which is exactly the case for a direct link). Defaults to status inbox and priority medium. When status is "done", the task is marked done (completed_at set, running timers stopped).';
+    protected string $description = 'Creates a personal task (type=Task). Personal tasks are local operational/personal to-dos with no GitHub mirror; they never appear on the stakeholder board. Project and parent are optional: a task may stand alone, or hang off an Epic or Issue via parent_id. A task may also be linked directly to a client via client_id when it has no project — setting both project_id and client_id keeps only the project link. Use list-clients to find available client ids (it also returns clients with no project, which is exactly the case for a direct link). Defaults to status inbox and service class standard. Classifying as fixed_date requires due_date — the request is refused otherwise. When status is "done", the task is marked done (completed_at set, running timers stopped).';
 
     /**
      * Handle the tool request.
@@ -31,7 +32,7 @@ class CreateTaskTool extends Tool
             'parent_id' => 'nullable|integer|exists:activities,id',
             'client_id' => 'nullable|integer|exists:clients,id',
             'status' => ['nullable', 'string', Rule::enum(ActivityStatus::class)],
-            'priority' => ['nullable', 'string', Rule::enum(ActivityPriority::class)],
+            'service_class' => ['nullable', 'string', Rule::enum(ServiceClass::class)],
             'due_date' => 'nullable|date',
             'estimated_minutes' => 'nullable|integer|min:1',
         ], [
@@ -40,21 +41,25 @@ class CreateTaskTool extends Tool
             'parent_id.exists' => 'Parent not found. Use list-epics or list-issues to find available ids.',
             'client_id.exists' => 'Client not found. Use list-clients to find available client ids.',
             'status.Illuminate\Validation\Rules\Enum' => 'Invalid status. Valid values: inbox, backlog, todo, doing, done.',
-            'priority.Illuminate\Validation\Rules\Enum' => 'Invalid priority. Valid values: urgent, high, medium, low.',
+            'service_class.Illuminate\Validation\Rules\Enum' => 'Invalid service_class. Valid values: emergency, fixed_date, standard, intangible.',
         ]);
 
-        $task = Activity::create([
-            'type' => ActivityType::Task,
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'project_id' => $validated['project_id'] ?? null,
-            'parent_id' => $validated['parent_id'] ?? null,
-            'client_id' => $validated['client_id'] ?? null,
-            'status' => $validated['status'] ?? ActivityStatus::Inbox,
-            'priority' => $validated['priority'] ?? ActivityPriority::Medium,
-            'due_date' => $validated['due_date'] ?? null,
-            'estimated_minutes' => $validated['estimated_minutes'] ?? null,
-        ]);
+        try {
+            $task = Activity::create([
+                'type' => ActivityType::Task,
+                'title' => $validated['title'],
+                'description' => $validated['description'] ?? null,
+                'project_id' => $validated['project_id'] ?? null,
+                'parent_id' => $validated['parent_id'] ?? null,
+                'client_id' => $validated['client_id'] ?? null,
+                'status' => $validated['status'] ?? ActivityStatus::Inbox,
+                'service_class' => $validated['service_class'] ?? ServiceClass::Standard,
+                'due_date' => $validated['due_date'] ?? null,
+                'estimated_minutes' => $validated['estimated_minutes'] ?? null,
+            ]);
+        } catch (FixedDateRequiresDueDateException $e) {
+            return Response::error($e->getMessage());
+        }
 
         if ($task->status === ActivityStatus::Done && $task->completed_at === null) {
             $task->markAsDone();
@@ -67,7 +72,7 @@ class CreateTaskTool extends Tool
             'id' => $task->id,
             'title' => $task->title,
             'status' => $task->status->value,
-            'priority' => $task->priority->value,
+            'service_class' => $task->service_class->value,
             'project' => $task->project?->name,
             'parent_id' => $task->parent_id,
             'client' => $task->effective_client?->name,
@@ -93,7 +98,7 @@ class CreateTaskTool extends Tool
             'parent_id' => $schema->integer()->description('Id of the parent activity (an Epic or Issue) to hang the task off. Optional.'),
             'client_id' => $schema->integer()->description('Id of the client to link the task to directly. Optional, and only meaningful when project_id is not set — setting both keeps only the project link. Use list-clients to find available ids.'),
             'status' => $schema->string()->enum(['inbox', 'backlog', 'todo', 'doing', 'done'])->description('Task status. Default: inbox. Setting to "done" stops running timers and sets completed_at.'),
-            'priority' => $schema->string()->enum(['urgent', 'high', 'medium', 'low'])->description('Task priority. Default: medium.'),
+            'service_class' => $schema->string()->enum(['emergency', 'fixed_date', 'standard', 'intangible'])->description('Task service class (replaces priority). Default: standard. "fixed_date" requires due_date to also be set — the request is refused otherwise.'),
             'due_date' => $schema->string()->description('Due date in YYYY-MM-DD format.'),
             'estimated_minutes' => $schema->integer()->description('Estimated time in minutes to complete the task.'),
         ];

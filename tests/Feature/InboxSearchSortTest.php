@@ -1,6 +1,6 @@
 <?php
 
-use App\Enums\ActivityPriority;
+use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Models\User;
 use Livewire\Livewire;
@@ -94,24 +94,24 @@ test('inbox resets direction to asc on new column', function () {
         ->assertSet('sortDirection', 'asc');
 });
 
-test('inbox sorts tasks by priority', function () {
+test('inbox sorts tasks by service class', function () {
     Activity::factory()->create([
-        'title' => 'Low task',
+        'title' => 'Intangible task',
         'status' => 'inbox',
-        'priority' => ActivityPriority::Low,
+        'service_class' => ServiceClass::Intangible,
     ]);
     Activity::factory()->create([
-        'title' => 'Urgent task',
+        'title' => 'Emergency task',
         'status' => 'inbox',
-        'priority' => ActivityPriority::Urgent,
+        'service_class' => ServiceClass::Emergency,
     ]);
 
     Livewire::test('pages::inbox')
-        ->call('sort', 'priority')
-        ->assertSet('sortBy', 'priority')
+        ->call('sort', 'service_class')
+        ->assertSet('sortBy', 'service_class')
         ->assertSet('sortDirection', 'asc')
-        ->assertSee('Low task')
-        ->assertSee('Urgent task');
+        ->assertSee('Intangible task')
+        ->assertSee('Emergency task');
 });
 
 test('inbox sorts tasks by created_at', function () {

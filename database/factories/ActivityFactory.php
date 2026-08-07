@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
+use App\Enums\ServiceClass;
 use App\Models\Activity;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -26,6 +27,7 @@ class ActivityFactory extends Factory
             'title' => fake()->sentence(4),
             'status' => ActivityStatus::Inbox,
             'priority' => ActivityPriority::Medium,
+            'service_class' => ServiceClass::Standard,
             'due_date' => null,
             'estimated_minutes' => null,
             'sort_order' => 0,
@@ -164,6 +166,37 @@ class ActivityFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'priority' => ActivityPriority::Low,
+        ]);
+    }
+
+    /**
+     * Indicate that the activity is classified as Emergência.
+     */
+    public function emergency(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'service_class' => ServiceClass::Emergency,
+        ]);
+    }
+
+    /**
+     * Indicate that the activity is classified as Data fixa (requires a due date).
+     */
+    public function fixedDate(?string $date = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'service_class' => ServiceClass::FixedDate,
+            'due_date' => $date ?? fake()->dateTimeBetween('now', '+30 days'),
+        ]);
+    }
+
+    /**
+     * Indicate that the activity is classified as Intangível.
+     */
+    public function intangible(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'service_class' => ServiceClass::Intangible,
         ]);
     }
 

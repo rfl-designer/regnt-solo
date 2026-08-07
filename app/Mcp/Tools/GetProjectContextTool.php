@@ -43,7 +43,7 @@ class GetProjectContextTool extends Tool
         $activeTasks = Activity::query()
             ->where('project_id', $project->id)
             ->where('status', '!=', ActivityStatus::Done)
-            ->orderByRaw("CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END")
+            ->orderByServiceClass()
             ->orderBy('due_date')
             ->get();
 
@@ -85,7 +85,7 @@ class GetProjectContextTool extends Tool
                 'id' => $task->id,
                 'title' => $task->title,
                 'status' => $task->status->value,
-                'priority' => $task->priority->value,
+                'service_class' => $task->service_class->value,
                 'session_prompt' => $task->session_prompt,
                 'due_date' => $task->due_date?->toDateString(),
                 'is_overdue' => $task->isOverdue(),
@@ -104,7 +104,7 @@ class GetProjectContextTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\Contracts\JsonSchema\JsonSchema>
+     * @return array<string, JsonSchema>
      */
     public function schema(JsonSchema $schema): array
     {

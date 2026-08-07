@@ -1,12 +1,14 @@
 <?php
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Models\Activity;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Livewire\Livewire;
 
 beforeEach(function () {
@@ -35,7 +37,7 @@ test('loads task data correctly when opened', function () {
         'title' => 'Test Task',
         'description' => 'Test description',
         'status' => ActivityStatus::Todo,
-        'priority' => ActivityPriority::High,
+        'service_class' => ServiceClass::Intangible,
         'due_date' => '2026-03-15',
         'estimated_minutes' => 90,
     ]);
@@ -44,7 +46,7 @@ test('loads task data correctly when opened', function () {
         ->dispatch('open-task-modal', taskId: $task->id)
         ->assertSet('title', 'Test Task')
         ->assertSet('projectId', (string) $project->id)
-        ->assertSet('priority', 'high')
+        ->assertSet('serviceClass', 'intangible')
         ->assertSet('status', 'todo')
         ->assertSet('dueDate', '2026-03-15')
         ->assertSet('estimatedMinutes', 90);
@@ -106,15 +108,42 @@ test('validates title max length', function () {
         ->assertHasErrors(['title' => 'max']);
 });
 
-test('can update task priority', function () {
-    $task = Activity::factory()->create(['priority' => ActivityPriority::Medium]);
+test('can update task service class', function () {
+    $task = Activity::factory()->create(['service_class' => ServiceClass::Standard]);
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
-        ->set('priority', 'urgent')
+        ->set('serviceClass', 'emergency')
         ->call('saveTask');
 
-    expect($task->fresh()->priority)->toBe(ActivityPriority::Urgent);
+    expect($task->fresh()->service_class)->toBe(ServiceClass::Emergency);
+});
+
+test('classifying as fixed_date without a due date is refused with a toast', function () {
+    $task = Activity::factory()->create(['service_class' => ServiceClass::Standard, 'due_date' => null]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->set('serviceClass', 'fixed_date')
+        ->set('dueDate', null)
+        ->call('saveTask')
+        ->assertDispatched('toast-show', function (string $name, array $params): bool {
+            return ($params['slots']['text'] ?? null) === FixedDateRequiresDueDateException::MESSAGE;
+        });
+
+    expect($task->fresh()->service_class)->toBe(ServiceClass::Standard);
+});
+
+test('classifying as fixed_date with a due date succeeds', function () {
+    $task = Activity::factory()->create(['service_class' => ServiceClass::Standard, 'due_date' => null]);
+
+    Livewire::test('task-modal')
+        ->dispatch('open-task-modal', taskId: $task->id)
+        ->set('serviceClass', 'fixed_date')
+        ->set('dueDate', '2026-09-01')
+        ->call('saveTask');
+
+    expect($task->fresh()->service_class)->toBe(ServiceClass::FixedDate);
 });
 
 test('can update task status', function () {
@@ -273,7 +302,7 @@ test('cannot delete time entry from another task', function () {
     expect(fn () => Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
         ->call('deleteTimeEntry', $entry->id)
-    )->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    )->toThrow(ModelNotFoundException::class);
 
     expect(TimeEntry::find($entry->id))->not->toBeNull();
 });
@@ -345,14 +374,14 @@ test('dispatches task-updated event on delete', function () {
         ->assertDispatched('task-updated');
 });
 
-test('validates invalid priority value', function () {
+test('validates invalid service class value', function () {
     $task = Activity::factory()->create();
 
     Livewire::test('task-modal')
         ->dispatch('open-task-modal', taskId: $task->id)
-        ->set('priority', 'invalid')
+        ->set('serviceClass', 'invalid')
         ->call('saveTask')
-        ->assertHasErrors(['priority']);
+        ->assertHasErrors(['serviceClass']);
 });
 
 test('validates invalid status value', function () {

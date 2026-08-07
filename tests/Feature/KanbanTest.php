@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Models\Client;
 use App\Models\DailyPlan;
@@ -99,17 +99,17 @@ test('kanban filters by project', function () {
         ->assertDontSee('Other task');
 });
 
-test('kanban filters by priority', function () {
-    Activity::factory()->issue()->backlog()->urgent()->create(['title' => 'Urgent task']);
+test('kanban filters by service class', function () {
+    Activity::factory()->issue()->backlog()->emergency()->create(['title' => 'Emergency task']);
     Activity::factory()->issue()->backlog()->create([
-        'title' => 'Low task',
-        'priority' => ActivityPriority::Low,
+        'title' => 'Intangible task',
+        'service_class' => ServiceClass::Intangible,
     ]);
 
     Livewire::test('pages::kanban')
-        ->set('filterPriority', ActivityPriority::Urgent->value)
-        ->assertSee('Urgent task')
-        ->assertDontSee('Low task');
+        ->set('filterServiceClass', ServiceClass::Emergency->value)
+        ->assertSee('Emergency task')
+        ->assertDontSee('Intangible task');
 });
 
 test('kanban filters overdue tasks', function () {
@@ -202,11 +202,11 @@ test('kanban shows the client dot for a task linked directly to a client', funct
         ->assertSee('Direct Client Co');
 });
 
-test('kanban shows priority badges', function () {
-    Activity::factory()->backlog()->urgent()->create();
+test('kanban shows service class badges', function () {
+    Activity::factory()->issue()->backlog()->emergency()->create();
 
     Livewire::test('pages::kanban')
-        ->assertSee('Urgente');
+        ->assertSee('Emergência');
 });
 
 test('kanban shows estimate badges', function () {

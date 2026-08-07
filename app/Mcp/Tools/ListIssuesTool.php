@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Enums\ActivityStatus;
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -15,7 +16,7 @@ class ListIssuesTool extends Tool
 {
     protected string $name = 'list-issues';
 
-    protected string $description = 'Lists roadmap issues (type=Issue) with optional filtering by project id, status, and limit. Returns issue id, title, status, priority, project, parent_id, due_date, and GitHub mirror fields. Used by the sync to reconcile mirrored issues by github_issue_number.';
+    protected string $description = 'Lists roadmap issues (type=Issue) with optional filtering by project id, status, and limit. Returns issue id, title, status, service_class, project, parent_id, due_date, and GitHub mirror fields. Used by the sync to reconcile mirrored issues by github_issue_number.';
 
     /**
      * Handle the tool request.
@@ -49,7 +50,7 @@ class ListIssuesTool extends Tool
             'id' => $issue->id,
             'title' => $issue->title,
             'status' => $issue->status->value,
-            'priority' => $issue->priority->value,
+            'service_class' => $issue->service_class->value,
             'project' => $issue->project?->name,
             'parent_id' => $issue->parent_id,
             'due_date' => $issue->due_date?->toDateString(),
@@ -65,7 +66,7 @@ class ListIssuesTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\JsonSchema\Types\Type>
+     * @return array<string, Type>
      */
     public function schema(JsonSchema $schema): array
     {

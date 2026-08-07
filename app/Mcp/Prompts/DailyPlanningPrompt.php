@@ -45,7 +45,7 @@ class DailyPlanningPrompt extends Prompt
         $overdueTasks = Activity::query()->overdue()->with('project')->get();
         $doingTasks = Activity::query()->byStatus(ActivityStatus::Doing)->with('project')->get();
         $todoTasks = Activity::query()->byStatus(ActivityStatus::Todo)->with('project')
-            ->orderByRaw("CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END")
+            ->orderByServiceClass()
             ->limit(10)
             ->get();
 
@@ -73,7 +73,7 @@ class DailyPlanningPrompt extends Prompt
         if ($overdueTasks->isNotEmpty()) {
             $context .= "\n## Overdue Tasks (URGENT)\n";
             foreach ($overdueTasks as $task) {
-                $context .= "- [{$task->priority->value}] {$task->title} (due: {$task->due_date->toDateString()})";
+                $context .= "- [{$task->service_class->value}] {$task->title} (due: {$task->due_date->toDateString()})";
                 if ($task->project) {
                     $context .= " [{$task->project->name}]";
                 }
@@ -95,7 +95,7 @@ class DailyPlanningPrompt extends Prompt
         if ($todoTasks->isNotEmpty()) {
             $context .= "\n## Top Priority Todo\n";
             foreach ($todoTasks as $task) {
-                $context .= "- [{$task->priority->value}] {$task->title}";
+                $context .= "- [{$task->service_class->value}] {$task->title}";
                 if ($task->project) {
                     $context .= " [{$task->project->name}]";
                 }

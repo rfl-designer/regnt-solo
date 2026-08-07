@@ -78,7 +78,7 @@ class ProjectOverviewResource extends Resource
                 'title' => $task->title,
                 'due_date' => $task->due_date->toDateString(),
                 'project' => $task->project?->name,
-                'priority' => $task->priority->value,
+                'service_class' => $task->service_class->value,
             ])->all();
 
         $todayEntries = TimeEntry::query()

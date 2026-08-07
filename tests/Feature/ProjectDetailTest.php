@@ -4,6 +4,7 @@ use App\Enums\ActivityStatus;
 use App\Enums\ProjectStatus;
 use App\Enums\StakeholderIssueStatus;
 use App\Models\Activity;
+use App\Models\Document;
 use App\Models\Project;
 use App\Models\Stakeholder;
 use App\Models\StakeholderIssue;
@@ -220,7 +221,7 @@ test('project detail shows kanban column headers', function () {
 
 test('project detail docs tab shows documents list', function () {
     $project = Project::factory()->create();
-    $document = \App\Models\Document::factory()->create([
+    $document = Document::factory()->create([
         'project_id' => $project->id,
         'title' => 'Meu Documento de Teste',
     ]);
@@ -299,7 +300,7 @@ test('project detail can archive stakeholder issue', function () {
 
 test('project detail can select document for preview', function () {
     $project = Project::factory()->create();
-    $document = \App\Models\Document::factory()->create([
+    $document = Document::factory()->create([
         'project_id' => $project->id,
         'title' => 'Documento Preview',
         'content' => '# Conteúdo do documento',
@@ -315,7 +316,7 @@ test('project detail can select document for preview', function () {
 
 test('project detail can clear document selection by setting to null', function () {
     $project = Project::factory()->create();
-    $document = \App\Models\Document::factory()->create(['project_id' => $project->id]);
+    $document = Document::factory()->create(['project_id' => $project->id]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug])
         ->call('selectDocument', $document->id)
@@ -326,7 +327,7 @@ test('project detail can clear document selection by setting to null', function 
 
 test('project detail selectedDocument computed returns correct document', function () {
     $project = Project::factory()->create();
-    $document = \App\Models\Document::factory()->create([
+    $document = Document::factory()->create([
         'project_id' => $project->id,
         'title' => 'Documento Selecionado',
     ]);
@@ -342,7 +343,7 @@ test('project detail selectedDocument computed returns correct document', functi
 
 test('project detail selectedDocument computed returns null when no selection', function () {
     $project = Project::factory()->create();
-    \App\Models\Document::factory()->create(['project_id' => $project->id]);
+    Document::factory()->create(['project_id' => $project->id]);
 
     $component = Livewire::test('pages::project-detail', ['slug' => $project->slug]);
 
@@ -503,4 +504,23 @@ test('project detail toggleExpanded toggles feature expansion', function () {
     $component->call('toggleExpanded', $feature->id);
 
     expect($component->instance()->isExpanded($feature->id))->toBeTrue();
+});
+
+test('expanded feature card shows the child task service class indicator, not priority', function () {
+    $project = Project::factory()->create();
+    $feature = Activity::factory()->epic()->create(['project_id' => $project->id]);
+    $childTask = Activity::factory()->task()->emergency()->forParent($feature)->create([
+        'title' => 'Emergency child task',
+    ]);
+
+    $component = Livewire::test('pages::project-detail', ['slug' => $project->slug])
+        ->call('toggleExpanded', $feature->id);
+
+    $component->assertSee('Emergency child task');
+
+    // feature-card.blade.php renders the child task's service_class icon
+    // as text-{color}-400; Emergency's color is red, so this string only
+    // appears if the icon is driven by service_class (not the legacy
+    // priority, whose Medium value colors blue).
+    $component->assertSeeHtml('text-red-400');
 });

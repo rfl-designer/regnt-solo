@@ -18,7 +18,7 @@ new class extends Component
     public string $filterProject = '';
 
     #[Url]
-    public string $filterPriority = '';
+    public string $filterServiceClass = '';
 
     #[Url(as: 'due')]
     public string $filterDueDate = '';
@@ -184,8 +184,8 @@ new class extends Component
             $query->where('project_id', (int) $this->filterProject);
         }
 
-        if ($this->filterPriority !== '') {
-            $query->where('priority', $this->filterPriority);
+        if ($this->filterServiceClass !== '') {
+            $query->where('service_class', $this->filterServiceClass);
         }
 
         if ($this->filterDueDate !== '') {
@@ -252,11 +252,11 @@ new class extends Component
                 @endforeach
             </flux:select>
 
-            {{-- Priority filter --}}
-            <flux:select wire:model.live="filterPriority" size="sm" class="w-32">
-                <option value="">Prioridades</option>
-                @foreach (App\Enums\ActivityPriority::cases() as $priority)
-                    <option value="{{ $priority->value }}">{{ $priority->label() }}</option>
+            {{-- Service class filter --}}
+            <flux:select wire:model.live="filterServiceClass" size="sm" class="w-36">
+                <option value="">Classes de serviço</option>
+                @foreach (App\Enums\ServiceClass::cases() as $serviceClass)
+                    <option value="{{ $serviceClass->value }}">{{ $serviceClass->label() }}</option>
                 @endforeach
             </flux:select>
 
@@ -437,10 +437,10 @@ new class extends Component
                                             {{ $task->derivedLabel() }}
                                         </flux:badge>
 
-                                        {{-- Priority Badge --}}
-                                        @if ($task->priority)
-                                            <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
-                                                {{ $task->priority->label() }}
+                                        {{-- Service Class Badge --}}
+                                        @if ($task->service_class)
+                                            <flux:badge size="sm" color="{{ $task->service_class->color() }}" icon="{{ $task->service_class->icon() }}">
+                                                {{ $task->service_class->label() }}
                                             </flux:badge>
                                         @endif
 
@@ -526,9 +526,9 @@ new class extends Component
 
                                             {{-- Badges Row --}}
                                             <div class="mt-2 flex flex-wrap items-center gap-1.5" wire:sort:ignore>
-                                                @if ($task->priority)
-                                                    <flux:badge size="sm" color="{{ $task->priority->color() }}" icon="{{ $task->priority->icon() }}">
-                                                        {{ $task->priority->label() }}
+                                                @if ($task->service_class)
+                                                    <flux:badge size="sm" color="{{ $task->service_class->color() }}" icon="{{ $task->service_class->icon() }}">
+                                                        {{ $task->service_class->label() }}
                                                     </flux:badge>
                                                 @endif
 

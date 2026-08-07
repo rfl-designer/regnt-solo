@@ -369,9 +369,9 @@ new class extends Component
                             >
                                 <div class="size-2 shrink-0 rounded-full bg-{{ $task->status->color() }}-400"></div>
                                 <span class="flex-1 truncate text-zinc-300">{{ $task->title }}</span>
-                                @if ($task->priority)
-                                    <flux:badge size="sm" color="{{ $task->priority->color() }}">
-                                        {{ $task->priority->label() }}
+                                @if ($task->service_class)
+                                    <flux:badge size="sm" color="{{ $task->service_class->color() }}">
+                                        {{ $task->service_class->label() }}
                                     </flux:badge>
                                 @endif
                             </button>

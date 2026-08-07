@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Models\DailyPlan;
 use Carbon\Carbon;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -29,7 +30,7 @@ class TodayPlanTool extends Tool
             'id' => $task->id,
             'title' => $task->title,
             'status' => $task->status->value,
-            'priority' => $task->priority->value,
+            'service_class' => $task->service_class->value,
             'project' => $task->project?->name,
             'completed_in_plan' => $task->pivot->completed_at !== null,
             'completed_at' => $task->pivot->completed_at,
@@ -50,7 +51,7 @@ class TodayPlanTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\JsonSchema\Types\Type>
+     * @return array<string, Type>
      */
     public function schema(JsonSchema $schema): array
     {

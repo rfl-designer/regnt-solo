@@ -164,11 +164,11 @@
                                 {{-- Title --}}
                                 <span class="flex-1 truncate text-zinc-300">{{ $task->title }}</span>
 
-                                {{-- Priority --}}
-                                @if ($task->priority)
+                                {{-- Service Class --}}
+                                @if ($task->service_class)
                                     <flux:icon
-                                        :name="$task->priority->icon()"
-                                        class="size-3 shrink-0 text-{{ $task->priority->color() }}-400"
+                                        :name="$task->service_class->icon()"
+                                        class="size-3 shrink-0 text-{{ $task->service_class->color() }}-400"
                                     />
                                 @endif
                             </li>

@@ -156,7 +156,7 @@ SYSTEM;
         $context .= "- **ID**: {$task->id}\n";
         $context .= "- **Título**: {$task->title}\n";
         $context .= "- **Status atual**: {$task->status->label()}\n";
-        $context .= "- **Prioridade**: {$task->priority->label()}\n";
+        $context .= "- **Classe de serviço**: {$task->service_class->label()}\n";
 
         if ($task->due_date) {
             $daysUntil = Carbon::today()->diffInDays($task->due_date, false);
@@ -267,7 +267,7 @@ SYSTEM;
             ->where('id', '!=', $task->id)
             ->whereIn('status', [ActivityStatus::Doing, ActivityStatus::Todo])
             ->orderByRaw("CASE status WHEN 'doing' THEN 1 WHEN 'todo' THEN 2 END")
-            ->orderByRaw("CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 END")
+            ->orderByServiceClass()
             ->limit(5)
             ->get();
 

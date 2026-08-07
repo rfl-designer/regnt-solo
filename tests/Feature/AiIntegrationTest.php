@@ -1,6 +1,8 @@
 <?php
 
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\User;
@@ -201,7 +203,7 @@ test('analyzeBacklog calls service and shows analysis', function () {
             'task_id' => $task->id,
             'action' => 'prioritize',
             'reason' => 'This task is important',
-            'suggested_priority' => 'high',
+            'suggested_service_class' => 'emergency',
             'suggested_project' => null,
         ],
     ];
@@ -299,7 +301,7 @@ test('applyBacklogSuggestion with prioritize action updates task', function () {
                 'task_id' => $task->id,
                 'action' => 'prioritize',
                 'reason' => 'Important task',
-                'suggested_priority' => 'high',
+                'suggested_service_class' => 'emergency',
                 'suggested_project' => null,
             ],
         ])
@@ -310,7 +312,40 @@ test('applyBacklogSuggestion with prioritize action updates task', function () {
     $task->refresh();
 
     expect($task->status)->toBe(ActivityStatus::Todo)
-        ->and($task->priority->value)->toBe('high');
+        ->and($task->service_class->value)->toBe('emergency');
+});
+
+test('applyBacklogSuggestion with prioritize action refuses fixed_date without due date', function () {
+    config([
+        'soloboard.ai_enabled' => true,
+        'soloboard.ai_api_key' => 'test-key',
+    ]);
+
+    $task = Activity::factory()->create([
+        'title' => 'Task para priorizar',
+        'service_class' => ServiceClass::Standard,
+        'due_date' => null,
+    ]);
+
+    Livewire::test('pages::inbox')
+        ->set('backlogAnalysis', [
+            [
+                'task_id' => $task->id,
+                'action' => 'prioritize',
+                'reason' => 'Important task',
+                'suggested_service_class' => 'fixed_date',
+                'suggested_project' => null,
+            ],
+        ])
+        ->set('showBacklogAnalysis', true)
+        ->call('applyBacklogSuggestion', $task->id, 'prioritize')
+        ->assertDispatched('toast-show', function (string $name, array $params): bool {
+            return ($params['slots']['text'] ?? null) === FixedDateRequiresDueDateException::MESSAGE;
+        });
+
+    $task->refresh();
+
+    expect($task->service_class->value)->toBe('standard');
 });
 
 test('applyBacklogSuggestion with archive action archives task', function () {
@@ -327,7 +362,7 @@ test('applyBacklogSuggestion with archive action archives task', function () {
                 'task_id' => $task->id,
                 'action' => 'archive',
                 'reason' => 'Stale task',
-                'suggested_priority' => null,
+                'suggested_service_class' => null,
                 'suggested_project' => null,
             ],
         ])
@@ -352,8 +387,8 @@ test('dismissBacklogSuggestion removes suggestion from list', function () {
 
     Livewire::test('pages::inbox')
         ->set('backlogAnalysis', [
-            ['task_id' => $task1->id, 'action' => 'prioritize', 'reason' => 'R1', 'suggested_priority' => null, 'suggested_project' => null],
-            ['task_id' => $task2->id, 'action' => 'archive', 'reason' => 'R2', 'suggested_priority' => null, 'suggested_project' => null],
+            ['task_id' => $task1->id, 'action' => 'prioritize', 'reason' => 'R1', 'suggested_service_class' => null, 'suggested_project' => null],
+            ['task_id' => $task2->id, 'action' => 'archive', 'reason' => 'R2', 'suggested_service_class' => null, 'suggested_project' => null],
         ])
         ->set('showBacklogAnalysis', true)
         ->call('dismissBacklogSuggestion', $task1->id)
@@ -371,7 +406,7 @@ test('dismissBacklogSuggestion closes modal when last suggestion dismissed', fun
 
     Livewire::test('pages::inbox')
         ->set('backlogAnalysis', [
-            ['task_id' => $task->id, 'action' => 'archive', 'reason' => 'R1', 'suggested_priority' => null, 'suggested_project' => null],
+            ['task_id' => $task->id, 'action' => 'archive', 'reason' => 'R1', 'suggested_service_class' => null, 'suggested_project' => null],
         ])
         ->set('showBacklogAnalysis', true)
         ->call('dismissBacklogSuggestion', $task->id)

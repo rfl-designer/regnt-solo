@@ -1,4 +1,4 @@
-@props(['type' => 'all']) {{-- 'status', 'priority', 'all' --}}
+@props(['type' => 'all']) {{-- 'status', 'service_class', 'all' --}}
 
 <flux:dropdown position="bottom" align="end">
     <flux:button variant="ghost" size="sm" icon="swatch" class="text-zinc-400">
@@ -37,30 +37,30 @@
             </flux:menu.group>
         @endif
 
-        @if ($type === 'priority' || $type === 'all')
+        @if ($type === 'service_class' || $type === 'all')
             @if ($type === 'all')
                 <flux:menu.separator />
             @endif
 
-            <flux:menu.group heading="Prioridade">
-                @foreach (\App\Enums\ActivityPriority::cases() as $priority)
+            <flux:menu.group heading="Classe de serviço">
+                @foreach (\App\Enums\ServiceClass::cases() as $serviceClass)
                     <div class="flex items-center gap-3 px-3 py-1.5">
-                        <flux:badge size="sm" color="{{ $priority->color() }}" icon="{{ $priority->icon() }}" class="w-32 shrink-0 justify-center">
-                            {{ $priority->label() }}
+                        <flux:badge size="sm" color="{{ $serviceClass->color() }}" icon="{{ $serviceClass->icon() }}" class="w-32 shrink-0 justify-center">
+                            {{ $serviceClass->label() }}
                         </flux:badge>
                         <flux:text size="xs" class="whitespace-nowrap text-zinc-500">
-                            @switch($priority)
-                                @case(\App\Enums\ActivityPriority::Urgent)
-                                    Crítico
+                            @switch($serviceClass)
+                                @case(\App\Enums\ServiceClass::Emergency)
+                                    Crítico, fura o WIP
                                     @break
-                                @case(\App\Enums\ActivityPriority::High)
-                                    Alta prioridade
+                                @case(\App\Enums\ServiceClass::FixedDate)
+                                    Tem prazo definido
                                     @break
-                                @case(\App\Enums\ActivityPriority::Medium)
-                                    Prioridade padrão
+                                @case(\App\Enums\ServiceClass::Standard)
+                                    Fila FIFO padrão
                                     @break
-                                @case(\App\Enums\ActivityPriority::Low)
-                                    Pode esperar
+                                @case(\App\Enums\ServiceClass::Intangible)
+                                    Sem urgência definida
                                     @break
                             @endswitch
                         </flux:text>

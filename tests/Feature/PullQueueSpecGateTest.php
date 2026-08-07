@@ -4,6 +4,7 @@ use App\Enums\ActivityStatus;
 use App\Models\Activity;
 use App\Services\PullQueueService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
 /**
@@ -139,4 +140,77 @@ test('the Kanban still shows the blocked card, with the spec signal and outside 
         ->assertSee('Fatia aprovada')
         ->assertSee('spec em aprovação')
         ->assertSeeInOrder(['Fatia aprovada', 'Spec em aprovação', 'Fatia esperando a spec']);
+});
+
+test('approving from the feature modal refreshes the board that is watching', function () {
+    $epic = pendingEpic();
+    $child = Activity::factory()->issue()->todo()->create([
+        'parent_id' => $epic->id,
+        'title' => 'Fatia esperando a spec',
+    ]);
+    withSpecHistory($child, [[ActivityStatus::Todo, '2026-08-01 09:00']]);
+
+    $board = Livewire::test('pages::kanban');
+
+    $board->assertSee('spec em aprovação');
+
+    // Moving the Épico *is* the lifecycle event, and it never touches the
+    // child — so the board only finds out if it listens to `feature-updated`.
+    $epic->update(['status' => ActivityStatus::Todo]);
+
+    $board->dispatch('feature-updated')->assertDontSee('spec em aprovação');
+});
+
+test('Pronto keeps one lazy-loading budget for both halves of the column', function () {
+    $epic = pendingEpic();
+
+    // 25 blocked cards on their own would render in full, blowing past the
+    // 20 every other column respects.
+    collect(range(1, 25))->each(function (int $i) use ($epic): void {
+        $blocked = Activity::factory()->issue()->todo()->create([
+            'parent_id' => $epic->id,
+            'title' => "Bloqueada {$i}",
+        ]);
+        withSpecHistory($blocked, [[ActivityStatus::Todo, '2026-08-01 09:00']]);
+    });
+
+    collect(range(1, 5))->each(function (int $i): void {
+        $ranked = Activity::factory()->issue()->todo()->create(['title' => "Ranqueada {$i}"]);
+        withSpecHistory($ranked, [[ActivityStatus::Todo, '2026-08-02 09:00']]);
+    });
+
+    $html = Livewire::test('pages::kanban')->html();
+
+    $rendered = collect(range(1, 25))->filter(fn (int $i): bool => str_contains($html, "Bloqueada {$i}"))->count()
+        + collect(range(1, 5))->filter(fn (int $i): bool => str_contains($html, "Ranqueada {$i}"))->count();
+
+    // Twenty cards, and the ranked ones are served first — they are what the
+    // column exists to be pulled from.
+    expect($rendered)->toBe(20)
+        ->and($html)->toContain('Ranqueada 5');
+});
+
+test('rendering Pronto reads the column once, not once per half', function () {
+    $epic = pendingEpic();
+
+    collect(range(1, 3))->each(function (int $i) use ($epic): void {
+        Activity::factory()->issue()->todo()->create(['parent_id' => $epic->id, 'title' => "Bloqueada {$i}"]);
+    });
+    collect(range(1, 3))->each(fn (int $i) => Activity::factory()->issue()->todo()->create(['title' => "Ranqueada {$i}"]));
+
+    $reads = 0;
+    DB::listen(function ($query) use (&$reads): void {
+        // The Pronto universe: the only query that hydrates activities with
+        // their commit count *and* filters to `todo`.
+        if (str_contains($query->sql, 'commits_count')
+            && in_array(ActivityStatus::Todo->value, $query->bindings, true)) {
+            $reads++;
+        }
+    });
+
+    Livewire::test('pages::kanban');
+
+    // The queue and the spec-pending tail are two slices of one snapshot.
+    // Asking each for its own would hydrate every card in Pronto twice.
+    expect($reads)->toBe(1);
 });

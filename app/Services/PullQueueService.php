@@ -86,22 +86,7 @@ class PullQueueService
      */
     public function queue(?Closure $constrain = null): Collection
     {
-        $activities = $this->universe($constrain)
-            ->reject(fn (Activity $activity): bool => $activity->isBlockedBySpecApproval());
-
-        if ($activities->isEmpty()) {
-            return collect();
-        }
-
-        $history = $this->historyMap($activities);
-
-        return $activities
-            ->map(fn (Activity $activity): PullQueueEntry => $this->entryFor(
-                $activity,
-                $history[$activity->id] ?? [],
-            ))
-            ->sort(fn (PullQueueEntry $a, PullQueueEntry $b): int => $a->sortKey() <=> $b->sortKey())
-            ->values();
+        return $this->partition($constrain)['queue'];
     }
 
     /**
@@ -119,8 +104,54 @@ class PullQueueService
      */
     public function blockedBySpec(?Closure $constrain = null): Collection
     {
-        return $this->universe($constrain)
-            ->filter(fn (Activity $activity): bool => $activity->isBlockedBySpecApproval())
+        return $this->partition($constrain)['blocked'];
+    }
+
+    /**
+     * Both halves of Pronto from **one** read of the column.
+     *
+     * The board renders the ranked queue and the spec-pending tail side by
+     * side, and the two are complementary slices of the same universe.
+     * Asking for them separately hydrates every card in Pronto twice (plus
+     * its project, client, parent history and time entries) to throw one
+     * copy away. This is the call a surface showing both should make;
+     * {@see queue()} and {@see blockedBySpec()} remain for the readers that
+     * genuinely want only one — the MCP tool wants only the queue.
+     *
+     * @param  Closure(Builder): void|null  $constrain  Extra scoping applied to the universe.
+     * @return array{queue: Collection<int, PullQueueEntry>, blocked: Collection<int, Activity>}
+     */
+    public function partition(?Closure $constrain = null): array
+    {
+        [$blocked, $queueable] = $this->universe($constrain)
+            ->partition(fn (Activity $activity): bool => $activity->isBlockedBySpecApproval());
+
+        return [
+            'queue' => $this->rank($queueable),
+            'blocked' => $blocked->values(),
+        ];
+    }
+
+    /**
+     * Turn a set of Pronto items into the ordered queue.
+     *
+     * @param  EloquentCollection<int, Activity>  $activities
+     * @return Collection<int, PullQueueEntry>
+     */
+    private function rank(EloquentCollection $activities): Collection
+    {
+        if ($activities->isEmpty()) {
+            return collect();
+        }
+
+        $history = $this->historyMap($activities);
+
+        return $activities
+            ->map(fn (Activity $activity): PullQueueEntry => $this->entryFor(
+                $activity,
+                $history[$activity->id] ?? [],
+            ))
+            ->sort(fn (PullQueueEntry $a, PullQueueEntry $b): int => $a->sortKey() <=> $b->sortKey())
             ->values();
     }
 

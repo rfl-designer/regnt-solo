@@ -93,7 +93,7 @@ new class extends Component
     #[Computed]
     public function pullQueue(): \Illuminate\Support\Collection
     {
-        return app(PullQueueService::class)->queue(fn ($query) => $this->applyFilters($query));
+        return $this->pronto['queue'];
     }
 
     /**
@@ -109,7 +109,23 @@ new class extends Component
     #[Computed]
     public function specPending(): \Illuminate\Support\Collection
     {
-        return app(PullQueueService::class)->blockedBySpec(fn ($query) => $this->applyFilters($query));
+        return $this->pronto['blocked'];
+    }
+
+    /**
+     * Both halves of Pronto, from one read of the column.
+     *
+     * The two computeds above are views onto this one, rather than two
+     * independent calls: each call hydrates every card in Pronto with its
+     * project, client, parent history and time entries, and the board needs
+     * both halves on every single render.
+     *
+     * @return array{queue: \Illuminate\Support\Collection<int, \App\Services\PullQueueEntry>, blocked: \Illuminate\Support\Collection<int, \App\Models\Activity>}
+     */
+    #[Computed]
+    public function pronto(): array
+    {
+        return app(PullQueueService::class)->partition(fn ($query) => $this->applyFilters($query));
     }
 
     /**
@@ -269,11 +285,19 @@ new class extends Component
             : ActivityStatus::Doing->color();
     }
 
+    /**
+     * `feature-updated` is in the list because moving an Épico *is* the
+     * Spec lifecycle event (issue #146): approving one from the feature
+     * modal changes which cards the pull queue ranks, without touching a
+     * single card. Listening only to `task-*` left the board showing "spec
+     * em aprovação" on items that had just been approved.
+     */
     #[On('task-updated')]
     #[On('task-created')]
+    #[On('feature-updated')]
     public function refreshBoard(): void
     {
-        unset($this->projects, $this->pullQueue, $this->specPending, $this->flow);
+        unset($this->projects, $this->pronto, $this->pullQueue, $this->specPending, $this->flow);
     }
 
     /**
@@ -462,10 +486,17 @@ new class extends Component
                 // queue itself, which is the same universe.
                 $tasks = $isTodo ? collect() : $this->getColumnTasks($status, withProject: true);
                 $unassignedTasks = $isTodo ? collect() : $this->getColumnTasks($status, withProject: false);
+                // Pronto's lazy-loading budget is one budget for the whole
+                // column, not one per section: the ranked queue is served
+                // first (it is what the user is meant to pull from) and the
+                // spec-pending tail gets whatever is left, so a hundred
+                // unapproved cards can't blow past the limit that every
+                // other column respects.
                 $queueEntries = $isTodo ? $this->pullQueue->take($limit) : collect();
-                // Out of the queue but still in the column (issue #146).
-                $specPending = $isTodo ? $this->specPending : collect();
-                $total = $isTodo ? $this->pullQueue->count() + $specPending->count() : $this->getColumnTotal($status);
+                $specPending = $isTodo
+                    ? $this->specPending->take(max(0, $limit - $queueEntries->count()))
+                    : collect();
+                $total = $isTodo ? $this->pullQueue->count() + $this->specPending->count() : $this->getColumnTotal($status);
 
                 $estimate = $this->getColumnEstimate($status);
                 $estimateFormatted = $this->formatDuration($estimate);

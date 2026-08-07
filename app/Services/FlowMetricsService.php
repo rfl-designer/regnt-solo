@@ -6,6 +6,7 @@ use App\Enums\ActivityStatus;
 use App\Models\Activity;
 use App\Models\ActivityStatusChange;
 use App\Models\BaselineCut;
+use App\Models\Client;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
@@ -445,6 +446,276 @@ class FlowMetricsService
         return collect(range(1, $max))
             ->map(fn (int $day): array => ['days' => $day, 'count' => $buckets[$day] ?? 0])
             ->all();
+    }
+
+    /**
+     * The flow efficiency of one Épico's Spec: how much of the time between
+     * the approval and the validation was actually spent touching the work
+     * (issue #146).
+     *
+     * ## The window
+     *
+     * `spec_aprovada` -> `spec_validada`, and it runs to *now* while the
+     * Spec has not been validated yet, so an Épico rotting in Aguardando
+     * validação watches its own efficiency fall instead of staying
+     * flattering until the day it closes.
+     *
+     * Aprovação is outside the window on purpose — same reason Aguardando
+     * aprovação is outside the cycle-time clock: nothing had been committed
+     * to yet. Every wait *after* the approval is inside it. That asymmetry
+     * is the whole measurement: the number is low because of the waiting,
+     * and hiding the waiting would make it meaningless.
+     *
+     * ## The touch
+     *
+     * The union of the intervals in which some child sat in Fazendo — or
+     * the Épico itself, when it is atomic and therefore its own only card.
+     * Union, not sum: with a WIP of 2 two children are routinely in Fazendo
+     * at the same time, and adding their hours would produce efficiencies
+     * over 100%, which is not a thing. Overlaps are merged, so the touch is
+     * "how much calendar time had *something* moving", and it can never
+     * exceed the window it is measured inside.
+     *
+     * Returns null when the Spec has never been approved: there is no
+     * window to measure, and a zero would read as "nothing was done".
+     *
+     * @return array{window_start: CarbonInterface, window_end: CarbonInterface, open: bool, window_minutes: float, touch_minutes: float, ratio: float, percent: int}|null
+     */
+    public function specEfficiency(Activity $epic): ?array
+    {
+        $start = $epic->spec_aprovada;
+
+        if ($start === null) {
+            return null;
+        }
+
+        $end = $epic->spec_validada;
+        $open = $end === null || $end->lessThan($start);
+
+        if ($open) {
+            $end = now();
+        }
+
+        $windowMinutes = max(0.0, $start->floatDiffInMinutes($end));
+
+        // The atomic Épico is its own card: nobody else can be in Fazendo
+        // on its behalf, so its own history is the touch.
+        $childIds = $epic->children()->pluck('id')->all();
+        $touchedIds = $childIds === [] ? [$epic->id] : $childIds;
+
+        $doing = $this->statusIntervals($touchedIds, [ActivityStatus::Doing]);
+
+        $intervals = $this->mergeIntervals($this->clipIntervals(
+            array_merge(...array_values($doing)),
+            $start,
+            $end,
+        ));
+
+        $touchMinutes = 0.0;
+
+        foreach ($intervals as [$from, $to]) {
+            $touchMinutes += $from->floatDiffInMinutes($to);
+        }
+
+        $ratio = $windowMinutes > 0 ? min(1.0, $touchMinutes / $windowMinutes) : 0.0;
+
+        return [
+            'window_start' => $start,
+            'window_end' => $end,
+            'open' => $open,
+            'window_minutes' => $windowMinutes,
+            'touch_minutes' => $touchMinutes,
+            'ratio' => $ratio,
+            'percent' => (int) round($ratio * 100),
+        ];
+    }
+
+    /**
+     * How long each client kept the board waiting, over the last $days
+     * (issue #146).
+     *
+     * Only the two client-side waits count — Aguardando aprovação and
+     * Aguardando validação. **Esperando is deliberately out**: it is an
+     * internal wait, and putting it on a client's tab would turn the
+     * ranking from "quem me faz esperar" into "onde eu esperei", which is a
+     * different (and much less useful) question.
+     *
+     * Any Activity counts, Épico or card, because both kinds sit in front
+     * of a client. Waits still open count up to now, so a client sitting on
+     * an approval right now climbs the ranking while they sit on it rather
+     * than only once they answer. Intervals are clipped to the window, so
+     * a wait that started before it contributes only its share.
+     *
+     * Activities with no effective client are left out: they are real
+     * waits, but not attributable to anyone, and inventing a bucket for
+     * them would misread as a client.
+     *
+     * @return Collection<int, array{client: Client, minutes: float, items: int}>
+     */
+    public function clientWaitRanking(int $days = 30): Collection
+    {
+        $windowStart = now()->copy()->subDays($days);
+        $windowEnd = now();
+
+        $statuses = array_values(array_filter(
+            ActivityStatus::cases(),
+            fn (ActivityStatus $status): bool => $status->isClientWaiting(),
+        ));
+
+        $candidateIds = ActivityStatusChange::query()
+            ->whereIn('to_status', array_map(fn (ActivityStatus $s): string => $s->value, $statuses))
+            ->distinct()
+            ->pluck('activity_id')
+            ->all();
+
+        if ($candidateIds === []) {
+            return collect();
+        }
+
+        $intervals = $this->statusIntervals($candidateIds, $statuses);
+
+        $activities = Activity::query()
+            ->whereIn('id', array_keys($intervals))
+            ->with(['project.client', 'client'])
+            ->get();
+
+        $rows = [];
+
+        foreach ($activities as $activity) {
+            $client = $activity->effective_client;
+
+            if ($client === null) {
+                continue;
+            }
+
+            $minutes = 0.0;
+
+            foreach ($this->clipIntervals($intervals[$activity->id], $windowStart, $windowEnd) as [$from, $to]) {
+                $minutes += $from->floatDiffInMinutes($to);
+            }
+
+            if ($minutes <= 0.0) {
+                continue;
+            }
+
+            $row = $rows[$client->id] ?? ['client' => $client, 'minutes' => 0.0, 'items' => 0];
+            $row['minutes'] += $minutes;
+            $row['items']++;
+            $rows[$client->id] = $row;
+        }
+
+        return collect($rows)
+            ->sortByDesc('minutes')
+            ->values();
+    }
+
+    /**
+     * Every interval in which the given activities sat in one of the given
+     * statuses, read from the history in a single query.
+     *
+     * An interval closes at the next status change, or at *now* when the
+     * activity is still sitting there — an open wait is still a wait, and
+     * dropping it would make the longest ones invisible precisely while
+     * they hurt.
+     *
+     * @param  list<int>  $activityIds
+     * @param  list<ActivityStatus>  $statuses
+     * @return array<int, list<array{0: CarbonInterface, 1: CarbonInterface}>>
+     */
+    private function statusIntervals(array $activityIds, array $statuses): array
+    {
+        if ($activityIds === []) {
+            return [];
+        }
+
+        $wanted = array_map(fn (ActivityStatus $status): string => $status->value, $statuses);
+
+        return ActivityStatusChange::query()
+            ->whereIn('activity_id', $activityIds)
+            ->orderBy('changed_at')
+            ->orderBy('id')
+            ->get(['id', 'activity_id', 'to_status', 'changed_at'])
+            ->groupBy('activity_id')
+            ->map(function (Collection $changes) use ($wanted): array {
+                $ordered = $changes->values();
+                $intervals = [];
+
+                foreach ($ordered as $index => $change) {
+                    if (! in_array($change->to_status->value, $wanted, true)) {
+                        continue;
+                    }
+
+                    $end = $ordered->get($index + 1)?->changed_at ?? now();
+
+                    if ($end->greaterThan($change->changed_at)) {
+                        $intervals[] = [$change->changed_at, $end];
+                    }
+                }
+
+                return $intervals;
+            })
+            ->filter(fn (array $intervals): bool => $intervals !== [])
+            ->all();
+    }
+
+    /**
+     * Cut every interval down to the part that falls inside the window,
+     * dropping the ones that fall entirely outside it.
+     *
+     * @param  list<array{0: CarbonInterface, 1: CarbonInterface}>  $intervals
+     * @return list<array{0: CarbonInterface, 1: CarbonInterface}>
+     */
+    private function clipIntervals(array $intervals, CarbonInterface $start, CarbonInterface $end): array
+    {
+        $clipped = [];
+
+        foreach ($intervals as [$from, $to]) {
+            $from = $from->lessThan($start) ? $start : $from;
+            $to = $to->greaterThan($end) ? $end : $to;
+
+            if ($to->greaterThan($from)) {
+                $clipped[] = [$from, $to];
+            }
+        }
+
+        return $clipped;
+    }
+
+    /**
+     * Fuse overlapping (and touching) intervals into the union they cover.
+     *
+     * This is what keeps "toque" honest when two children are in Fazendo at
+     * once: the same hour of the calendar is counted once, so the ratio can
+     * never exceed 1 no matter how many things are in progress.
+     *
+     * @param  list<array{0: CarbonInterface, 1: CarbonInterface}>  $intervals
+     * @return list<array{0: CarbonInterface, 1: CarbonInterface}>
+     */
+    private function mergeIntervals(array $intervals): array
+    {
+        if ($intervals === []) {
+            return [];
+        }
+
+        usort($intervals, fn (array $a, array $b): int => $a[0]->getTimestamp() <=> $b[0]->getTimestamp());
+
+        $merged = [array_shift($intervals)];
+
+        foreach ($intervals as [$from, $to]) {
+            $last = count($merged) - 1;
+
+            if ($from->lessThanOrEqualTo($merged[$last][1])) {
+                if ($to->greaterThan($merged[$last][1])) {
+                    $merged[$last][1] = $to;
+                }
+
+                continue;
+            }
+
+            $merged[] = [$from, $to];
+        }
+
+        return $merged;
     }
 
     /**

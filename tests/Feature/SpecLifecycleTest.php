@@ -2,7 +2,6 @@
 
 use App\Enums\ActivityStatus;
 use App\Models\Activity;
-use App\Models\ActivityStatusChange;
 use Carbon\Carbon;
 
 /**
@@ -10,33 +9,6 @@ use Carbon\Carbon;
  * #146). Every fixture writes the history by hand, because that history is
  * the only thing the accessors read — no column records any of these dates.
  */
-
-/**
- * Give an activity a hand-written status history, wiping whatever the
- * observer recorded so the fixture states one sequence only.
- *
- * @param  list<array{0: ActivityStatus, 1: string}>  $steps  [status, moment] pairs, in order.
- */
-function withSpecHistory(Activity $activity, array $steps): Activity
-{
-    ActivityStatusChange::query()->where('activity_id', $activity->id)->delete();
-
-    $previous = null;
-
-    foreach ($steps as [$status, $at]) {
-        ActivityStatusChange::factory()->create([
-            'activity_id' => $activity->id,
-            'from_status' => $previous,
-            'to_status' => $status,
-            'changed_at' => Carbon::parse($at),
-        ]);
-
-        $previous = $status;
-    }
-
-    return $activity->fresh();
-}
-
 beforeEach(function () {
     Carbon::setTestNow('2026-08-07 12:00');
 });

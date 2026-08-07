@@ -46,4 +46,34 @@ return [
     |
     */
     'fixed_date_risk_days' => (int) env('SOLOBOARD_FIXED_DATE_RISK_DAYS', 7),
+
+    /*
+    |--------------------------------------------------------------------------
+    | SLE — Service Level Expectation (issue #145)
+    |--------------------------------------------------------------------------
+    |
+    | The board's promise, measured rather than declared: "N% of the items
+    | finish in Y days or less". Y is not configured — it is the percentile
+    | of the cycle times observed since the last baseline cut. What *is*
+    | configured is the method behind it:
+    |
+    | - `sle_percentile`: which percentile answers the promise. 85 is the
+    |   usual starting point — high enough to be a commitment, low enough
+    |   not to be dominated by the one item that sat forgotten for a month.
+    | - `sle_minimum_sample`: how many measured items the percentile needs
+    |   before anyone is allowed to quote it. Below this the surfaces say
+    |   "amostra pequena (n=X)" and the pull queue keeps using the N-day
+    |   window — a percentile over 6 items is a number, not a promise.
+    | - `sle_attention_percent`: how far into the SLE an item gets before
+    |   the board flags it. At 80% the card turns amber; at 100% it turns
+    |   red, which is the SLE being broken, not approached.
+    |
+    | Config-only, like the WIP limit and the risk window: these are the
+    | method's dials, and moving them should be a reviewed act rather than
+    | a click. There is deliberately no UI to edit them.
+    |
+    */
+    'sle_percentile' => (int) env('SOLOBOARD_SLE_PERCENTILE', 85),
+    'sle_minimum_sample' => (int) env('SOLOBOARD_SLE_MINIMUM_SAMPLE', 30),
+    'sle_attention_percent' => (int) env('SOLOBOARD_SLE_ATTENTION_PERCENT', 80),
 ];

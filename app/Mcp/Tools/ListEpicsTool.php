@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -23,11 +24,11 @@ class ListEpicsTool extends Tool
     {
         $validated = $request->validate([
             'project_id' => 'nullable|integer|exists:projects,id',
-            'status' => 'nullable|string|in:inbox,backlog,todo,doing,done',
+            'status' => 'nullable|string|in:inbox,backlog,awaiting_approval,todo,doing,waiting,awaiting_validation,done',
             'limit' => 'nullable|integer|min:1|max:100',
         ], [
             'project_id.exists' => 'Project not found. Use list-projects to find available project ids.',
-            'status.in' => 'Invalid status. Valid values: inbox, backlog, todo, doing, done.',
+            'status.in' => 'Invalid status. Valid values: inbox, backlog, awaiting_approval, todo, doing, waiting, awaiting_validation, done.',
         ]);
 
         $query = Activity::query()->epics()->with(['project', 'children', 'timeEntries']);
@@ -55,6 +56,8 @@ class ListEpicsTool extends Tool
             'completed_issues' => $epic->completedTasksCount(),
             'total_time_minutes' => round($epic->total_time, 0),
             'project' => $epic->project?->name,
+            'waiting_for' => $epic->waiting_for,
+            'waiting_since' => $epic->waiting_since?->toDateTimeString(),
             'due_date' => $epic->due_date?->toDateString(),
             'is_running' => $epic->isRunning(),
             'github_issue_number' => $epic->github_issue_number,
@@ -67,13 +70,13 @@ class ListEpicsTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\JsonSchema\Types\Type>
+     * @return array<string, Type>
      */
     public function schema(JsonSchema $schema): array
     {
         return [
             'project_id' => $schema->integer()->description('Filter epics by project id. Optional. Use list-projects to find ids.'),
-            'status' => $schema->string()->enum(['inbox', 'backlog', 'todo', 'doing', 'done'])->description('Filter epics by status. Optional.'),
+            'status' => $schema->string()->enum(['inbox', 'backlog', 'awaiting_approval', 'todo', 'doing', 'waiting', 'awaiting_validation', 'done'])->description('Filter epics by status. Optional.'),
             'limit' => $schema->integer()->description('Maximum number of epics to return. Default: 20, max: 100.'),
         ];
     }

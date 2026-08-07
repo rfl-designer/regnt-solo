@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Enums\ActivityStatus;
 use Carbon\Carbon;
+use Database\Factories\DailyPlanFactory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class DailyPlan extends Model
 {
-    /** @use HasFactory<\Database\Factories\DailyPlanFactory> */
+    /** @use HasFactory<DailyPlanFactory> */
     use HasFactory;
 
     /**
@@ -85,8 +87,12 @@ class DailyPlan extends Model
     }
 
     /**
-     * Get the incomplete tasks for this daily plan.
-     * Excludes tasks that have status Done (even if not marked complete in the plan).
+     * Get the incomplete tasks for this daily plan, for carry-over into a
+     * later day. Excludes tasks that have status Done (even if not marked
+     * complete in the plan) and tasks currently in a waiting status (issue
+     * #142) — an item waiting on someone isn't something to carry over and
+     * re-suggest; it stays visible in its own day's plan with its waiting
+     * badge instead.
      *
      * @return Collection<int, Activity>
      */
@@ -94,7 +100,8 @@ class DailyPlan extends Model
     {
         return $this->tasks()
             ->wherePivotNull('completed_at')
-            ->where('status', '!=', \App\Enums\ActivityStatus::Done)
+            ->where('status', '!=', ActivityStatus::Done)
+            ->notWaiting()
             ->get();
     }
 }

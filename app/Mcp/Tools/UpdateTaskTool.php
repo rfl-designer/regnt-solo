@@ -17,11 +17,11 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[IsIdempotent]
-class UpdateIssueTool extends Tool
+class UpdateTaskTool extends Tool
 {
-    protected string $name = 'update-issue';
+    protected string $name = 'update-task';
 
-    protected string $description = 'Updates an existing roadmap issue (type=Issue). Accepts status, project_id and parent_id (the parent_id link is the second pass of the sync, where the tree is wired up). When status is changed to "done", the issue is marked done (stops running timers and sets completed_at). Classifying as fixed_date requires due_date — the request is refused otherwise. Setting status to awaiting_approval, waiting or awaiting_validation requires waiting_for — client-side waits auto-fill it from the effective client when omitted, waiting (internal) has no default and is refused without one. Provide only the fields you want to change.';
+    protected string $description = 'Updates an existing personal task (type=Task). Accepts title, description, project_id, parent_id, client_id, status, service_class, waiting_for, due_date and estimated_minutes. When status is changed to "done", the task is marked done (stops running timers and sets completed_at). Classifying as fixed_date requires due_date — the request is refused otherwise. Setting status to awaiting_approval, waiting or awaiting_validation requires waiting_for — client-side waits (awaiting_approval/awaiting_validation) auto-fill it from the effective client when omitted, waiting (internal) has no default and is refused without one, exactly like the UI. Provide only the fields you want to change.';
 
     /**
      * Handle the tool request.
@@ -29,26 +29,26 @@ class UpdateIssueTool extends Tool
     public function handle(Request $request): Response
     {
         $validated = $request->validate([
-            'issue_id' => 'required|integer|exists:activities,id',
+            'task_id' => 'required|integer|exists:activities,id',
             'title' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'project_id' => 'nullable|integer|exists:projects,id',
             'parent_id' => 'nullable|integer|exists:activities,id',
+            'client_id' => 'nullable|integer|exists:clients,id',
             'status' => ['nullable', 'string', Rule::enum(ActivityStatus::class)],
             'service_class' => ['nullable', 'string', Rule::enum(ServiceClass::class)],
             'waiting_for' => 'nullable|string|max:255',
             'due_date' => 'nullable|date',
             'estimated_minutes' => 'nullable|integer|min:1',
-            'github_issue_number' => 'nullable|integer',
-            'github_synced_hash' => 'nullable|string',
         ], [
-            'issue_id.required' => 'You must provide an issue_id. Use list-issues to find available issue ids.',
-            'issue_id.exists' => 'Issue not found. Use list-issues to find available issue ids.',
+            'task_id.required' => 'You must provide a task_id. Use list-tasks to find available task ids.',
+            'task_id.exists' => 'Task not found. Use list-tasks to find available task ids.',
             'project_id.exists' => 'Project not found. Use list-projects to find available project ids.',
             'parent_id.exists' => 'Parent not found. Use list-epics or list-issues to find available ids.',
+            'client_id.exists' => 'Client not found. Use list-clients to find available client ids.',
         ]);
 
-        $issue = Activity::query()->issues()->findOrFail($validated['issue_id']);
+        $task = Activity::query()->tasks()->findOrFail($validated['task_id']);
 
         $updates = [];
 
@@ -66,6 +66,10 @@ class UpdateIssueTool extends Tool
 
         if (array_key_exists('parent_id', $validated)) {
             $updates['parent_id'] = $validated['parent_id'];
+        }
+
+        if (array_key_exists('client_id', $validated)) {
+            $updates['client_id'] = $validated['client_id'];
         }
 
         if (isset($validated['status']) && $validated['status'] !== ActivityStatus::Done->value) {
@@ -88,52 +92,43 @@ class UpdateIssueTool extends Tool
             $updates['estimated_minutes'] = $validated['estimated_minutes'];
         }
 
-        if (isset($validated['github_issue_number'])) {
-            $updates['github_issue_number'] = $validated['github_issue_number'];
-        }
-
-        if (array_key_exists('github_synced_hash', $validated)) {
-            $updates['github_synced_hash'] = $validated['github_synced_hash'];
-        }
-
         // Applied inside one transaction: a request combining status=done
-        // with an invalid service_class/due_date pairing must not leave
-        // markAsDone's side effects (status, completed_at, stopped timers)
-        // committed when the rest of the update is refused.
+        // with an invalid service_class/due_date/waiting_for pairing must
+        // not leave markAsDone's side effects (status, completed_at,
+        // stopped timers) committed when the rest of the update is refused.
         try {
-            DB::transaction(function () use ($issue, $validated, $updates): void {
-                if (isset($validated['status']) && $validated['status'] === ActivityStatus::Done->value && $issue->status !== ActivityStatus::Done) {
-                    $issue->markAsDone();
-                    $issue->refresh();
+            DB::transaction(function () use ($task, $validated, $updates): void {
+                if (isset($validated['status']) && $validated['status'] === ActivityStatus::Done->value && $task->status !== ActivityStatus::Done) {
+                    $task->markAsDone();
+                    $task->refresh();
                 }
 
                 if (! empty($updates)) {
-                    $issue->update($updates);
+                    $task->update($updates);
                 }
             });
         } catch (FixedDateRequiresDueDateException|WaitingRequiresWaitingForException $e) {
             return Response::error($e->getMessage());
         }
 
-        $issue->refresh()->load('project');
+        $task->refresh()->load('project', 'client');
 
         $data = [
-            'id' => $issue->id,
-            'title' => $issue->title,
-            'status' => $issue->status->value,
-            'service_class' => $issue->service_class->value,
-            'project' => $issue->project?->name,
-            'parent_id' => $issue->parent_id,
-            'waiting_for' => $issue->waiting_for,
-            'waiting_since' => $issue->waiting_since?->toDateTimeString(),
-            'due_date' => $issue->due_date?->toDateString(),
-            'estimated_minutes' => $issue->estimated_minutes,
-            'completed_at' => $issue->completed_at?->toDateTimeString(),
-            'is_overdue' => $issue->isOverdue(),
-            'is_running' => $issue->isRunning(),
-            'github_issue_number' => $issue->github_issue_number,
-            'github_synced_hash' => $issue->github_synced_hash,
-            'updated_at' => $issue->updated_at->toDateTimeString(),
+            'id' => $task->id,
+            'title' => $task->title,
+            'status' => $task->status->value,
+            'service_class' => $task->service_class->value,
+            'project' => $task->project?->name,
+            'parent_id' => $task->parent_id,
+            'client' => $task->effective_client?->name,
+            'waiting_for' => $task->waiting_for,
+            'waiting_since' => $task->waiting_since?->toDateTimeString(),
+            'due_date' => $task->due_date?->toDateString(),
+            'estimated_minutes' => $task->estimated_minutes,
+            'completed_at' => $task->completed_at?->toDateTimeString(),
+            'is_overdue' => $task->isOverdue(),
+            'is_running' => $task->isRunning(),
+            'updated_at' => $task->updated_at->toDateTimeString(),
         ];
 
         return Response::text(json_encode($data, JSON_PRETTY_PRINT));
@@ -147,18 +142,17 @@ class UpdateIssueTool extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'issue_id' => $schema->integer()->description('The id of the issue to update.')->required(),
-            'title' => $schema->string()->description('New title for the issue.'),
+            'task_id' => $schema->integer()->description('The id of the task to update.')->required(),
+            'title' => $schema->string()->description('New title for the task.'),
             'description' => $schema->string()->description('New description in markdown format.'),
-            'project_id' => $schema->integer()->description('Id of the project to assign the issue to.'),
-            'parent_id' => $schema->integer()->description('Id of the parent activity (an Epic -> Fatia, or another Issue -> Follow-up). Set null for a loose issue (Avulsa).'),
+            'project_id' => $schema->integer()->description('Id of the project to assign the task to.'),
+            'parent_id' => $schema->integer()->description('Id of the parent activity (an Epic or Issue) to hang the task off.'),
+            'client_id' => $schema->integer()->description('Id of the client to link the task to directly. Only meaningful when project_id is not set.'),
             'status' => $schema->string()->enum(['inbox', 'backlog', 'awaiting_approval', 'todo', 'doing', 'waiting', 'awaiting_validation', 'done'])->description('New status. The 7-column board order (excluding inbox) is: backlog, awaiting_approval, todo, doing, waiting, awaiting_validation, done. Setting to "done" will stop running timers and set completed_at.'),
             'service_class' => $schema->string()->enum(['emergency', 'fixed_date', 'standard', 'intangible'])->description('New service class (replaces priority). "fixed_date" requires due_date to also be set — the request is refused otherwise.'),
-            'waiting_for' => $schema->string()->description('Who the issue is waiting on ("esperando quem"). Required when status is awaiting_approval, waiting or awaiting_validation — client-side waits auto-fill this from the effective client when omitted; waiting (internal) has no default and is refused without an explicit value.'),
+            'waiting_for' => $schema->string()->description('Who the task is waiting on ("esperando quem"). Required when status is awaiting_approval, waiting or awaiting_validation — client-side waits auto-fill this from the effective client when omitted; waiting (internal) has no default and is refused without an explicit value.'),
             'due_date' => $schema->string()->description('New due date in YYYY-MM-DD format.'),
             'estimated_minutes' => $schema->integer()->description('New estimated time in minutes.'),
-            'github_issue_number' => $schema->integer()->description('GitHub issue number this issue mirrors (upsert key).'),
-            'github_synced_hash' => $schema->string()->description('Digest of the source GitHub issue, used to gate natural-language rewrites.'),
         ];
     }
 }

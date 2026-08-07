@@ -3,6 +3,7 @@
 use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
 use App\Models\Activity;
+use App\Models\Client;
 use App\Models\DailyPlan;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -203,4 +204,63 @@ test('classe with invalid value shows warning', function () {
 
     $task->refresh();
     expect($task->service_class)->toBe(ServiceClass::Standard);
+});
+
+// -----------------------------------------------------------------------
+// Finding 6: moving into the new waiting statuses via the palette must
+// not throw an unhandled exception, and help text must list all 8 values.
+// -----------------------------------------------------------------------
+
+test('command mover into a client-side wait succeeds and auto-fills waiting_for', function () {
+    $client = Client::factory()->create(['name' => 'Acme Corp']);
+    $project = Project::factory()->create(['client_id' => $client->id]);
+    $task = Activity::factory()->todo()->create(['project_id' => $project->id]);
+
+    Livewire::test('command-palette')
+        ->call('executeCommand', 'mover:'.$task->id.':awaiting_approval')
+        ->assertSuccessful();
+
+    $task->refresh();
+    expect($task->status)->toBe(ActivityStatus::AwaitingApproval)
+        ->and($task->waiting_for)->toBe('Acme Corp');
+});
+
+test('command mover into a client-side wait with no effective client is caught with the canonical message, not a raw exception', function () {
+    $task = Activity::factory()->todo()->create();
+
+    Livewire::test('command-palette')
+        ->call('executeCommand', 'mover:'.$task->id.':awaiting_approval')
+        ->assertSuccessful();
+
+    expect($task->fresh()->status)->toBe(ActivityStatus::Todo);
+});
+
+test('command mover into the internal wait defers to the blocking mini modal instead of throwing', function () {
+    $task = Activity::factory()->doing()->create();
+
+    Livewire::test('command-palette')
+        ->call('executeCommand', 'mover:'.$task->id.':waiting')
+        ->assertDispatched('open-waiting-for-modal', taskId: $task->id, status: 'waiting')
+        ->assertSuccessful();
+
+    expect($task->fresh()->status)->toBe(ActivityStatus::Doing);
+});
+
+test('mover help text lists all 8 statuses', function () {
+    Livewire::test('command-palette')
+        ->set('search', '>')
+        ->assertSee('awaiting_approval')
+        ->assertSee('waiting')
+        ->assertSee('awaiting_validation');
+});
+
+test('mover with invalid status still mentions all 8 valid values', function () {
+    $task = Activity::factory()->create();
+
+    Livewire::test('command-palette')
+        ->call('executeCommand', 'mover:'.$task->id.':invalid')
+        ->assertSuccessful();
+
+    $task->refresh();
+    expect($task->status)->toBe(ActivityStatus::Inbox);
 });

@@ -3,6 +3,7 @@
 use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
 use App\Enums\ActivityType;
+use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Activity;
 use App\Models\DailyPlan;
 use App\Models\Project;
@@ -207,21 +208,42 @@ new class extends Component
 
     /**
      * Move a task to a new status.
+     *
+     * Moving into the internal wait (Esperando) has no client to fall back
+     * on for "esperando quem", so it's deferred to the same blocking mini
+     * modal used by the Kanban drag-and-drop rather than risking the
+     * domain guard's refusal on a direct update. Moving into a client-side
+     * wait (Aguardando aprovação/validação) is applied directly — the
+     * guard auto-fills it from the effective client — but a refusal (no
+     * effective client to resolve) is still caught and surfaced with the
+     * canonical message instead of failing as a raw Livewire error.
      */
     private function moveTask(Activity $task, ?string $statusValue): void
     {
         $status = ActivityStatus::tryFrom($statusValue ?? '');
 
         if (! $status) {
-            Flux::toast(variant: 'warning', heading: 'Status inválido', text: 'Use: inbox, backlog, todo, doing, done');
+            Flux::toast(variant: 'warning', heading: 'Status inválido', text: 'Use: inbox, backlog, awaiting_approval, todo, doing, waiting, awaiting_validation, done');
 
             return;
         }
 
-        if ($status === ActivityStatus::Done) {
-            $task->markAsDone();
-        } else {
-            $task->update(['status' => $status, 'completed_at' => null]);
+        if ($status->isInternalWaiting() && $task->status !== ActivityStatus::Waiting) {
+            $this->dispatch('open-waiting-for-modal', taskId: $task->id, status: $status->value);
+
+            return;
+        }
+
+        try {
+            if ($status === ActivityStatus::Done) {
+                $task->markAsDone();
+            } else {
+                $task->update(['status' => $status, 'completed_at' => null]);
+            }
+        } catch (WaitingRequiresWaitingForException $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível mover', text: $e->getMessage());
+
+            return;
         }
 
         $this->dispatch('task-updated');
@@ -378,7 +400,7 @@ new class extends Component
                                 <div class="flex items-center gap-2">
                                     <code class="text-emerald-400">> mover "task" doing</code>
                                     <span class="text-zinc-600">•</span>
-                                    <span class="text-zinc-500">inbox, backlog, todo, doing, done</span>
+                                    <span class="text-zinc-500">inbox, backlog, awaiting_approval, todo, doing, waiting, awaiting_validation, done</span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <code class="text-emerald-400">> classe "task" emergency</code>

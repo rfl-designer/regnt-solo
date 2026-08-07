@@ -16,7 +16,7 @@ class ListTasksTool extends Tool
 {
     protected string $name = 'list-tasks';
 
-    protected string $description = 'Lists personal tasks (type=Task) with optional filtering by project id, status, and limit. Personal tasks are local operational/personal to-dos ("email the designer", "chase the brand manual"); they have no GitHub mirror and never appear on the stakeholder board. Returns task id, title, status, service_class, project, parent_id, client (resolved from the project, or the task\'s direct link) and due_date.';
+    protected string $description = 'Lists personal tasks (type=Task) with optional filtering by project id, status, and limit. Personal tasks are local operational/personal to-dos ("email the designer", "chase the brand manual"); they have no GitHub mirror and never appear on the stakeholder board. Returns task id, title, status, service_class, project, parent_id, client (resolved from the project, or the task\'s direct link), waiting_for/waiting_since (set when status is one of the three waiting statuses) and due_date.';
 
     /**
      * Handle the tool request.
@@ -25,11 +25,11 @@ class ListTasksTool extends Tool
     {
         $validated = $request->validate([
             'project_id' => 'nullable|integer|exists:projects,id',
-            'status' => 'nullable|string|in:inbox,backlog,todo,doing,done',
+            'status' => 'nullable|string|in:inbox,backlog,awaiting_approval,todo,doing,waiting,awaiting_validation,done',
             'limit' => 'nullable|integer|min:1|max:100',
         ], [
             'project_id.exists' => 'Project not found. Use list-projects to find available project ids.',
-            'status.in' => 'Invalid status. Valid values: inbox, backlog, todo, doing, done.',
+            'status.in' => 'Invalid status. Valid values: inbox, backlog, awaiting_approval, todo, doing, waiting, awaiting_validation, done.',
         ]);
 
         $query = Activity::query()->tasks()->with(['project.client', 'client']);
@@ -54,6 +54,8 @@ class ListTasksTool extends Tool
             'project' => $task->project?->name,
             'parent_id' => $task->parent_id,
             'client' => $task->effective_client?->name,
+            'waiting_for' => $task->waiting_for,
+            'waiting_since' => $task->waiting_since?->toDateTimeString(),
             'due_date' => $task->due_date?->toDateString(),
             'is_overdue' => $task->isOverdue(),
             'is_running' => $task->isRunning(),
@@ -71,7 +73,7 @@ class ListTasksTool extends Tool
     {
         return [
             'project_id' => $schema->integer()->description('Filter tasks by project id. Optional. Use list-projects to find ids.'),
-            'status' => $schema->string()->enum(['inbox', 'backlog', 'todo', 'doing', 'done'])->description('Filter tasks by status. Optional.'),
+            'status' => $schema->string()->enum(['inbox', 'backlog', 'awaiting_approval', 'todo', 'doing', 'waiting', 'awaiting_validation', 'done'])->description('Filter tasks by status. Optional.'),
             'limit' => $schema->integer()->description('Maximum number of tasks to return. Default: 20, max: 100.'),
         ];
     }

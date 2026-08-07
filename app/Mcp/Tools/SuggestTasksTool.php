@@ -34,6 +34,7 @@ class SuggestTasksTool extends Tool
         $overdue = Activity::query()
             ->with('project')
             ->overdue()
+            ->notWaiting()
             ->whereNotIn('id', $existingTaskIds)
             ->orderByServiceClass()
             ->get();

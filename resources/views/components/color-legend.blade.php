@@ -21,11 +21,20 @@
                                 @case(\App\Enums\ActivityStatus::Backlog)
                                     Para depois
                                     @break
+                                @case(\App\Enums\ActivityStatus::AwaitingApproval)
+                                    Esperando aprovação do cliente
+                                    @break
                                 @case(\App\Enums\ActivityStatus::Todo)
                                     Pronta para fazer
                                     @break
                                 @case(\App\Enums\ActivityStatus::Doing)
                                     Em progresso
+                                    @break
+                                @case(\App\Enums\ActivityStatus::Waiting)
+                                    Esperando alguém internamente
+                                    @break
+                                @case(\App\Enums\ActivityStatus::AwaitingValidation)
+                                    Esperando validação do cliente
                                     @break
                                 @case(\App\Enums\ActivityStatus::Done)
                                     Concluída

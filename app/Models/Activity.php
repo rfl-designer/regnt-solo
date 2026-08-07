@@ -43,6 +43,12 @@ class Activity extends Model
         'status',
         'priority',
         'service_class',
+        // `waiting_since` is deliberately NOT fillable: it must only ever
+        // be stamped by ActivityObserver::handleWaitingState() with now(),
+        // never accepted from caller input (Kanban, Task Modal, MCP tools),
+        // so nothing can forge the "desde quando" timestamp on entry into
+        // a waiting status.
+        'waiting_for',
         'due_date',
         'estimated_minutes',
         'completed_at',
@@ -68,6 +74,7 @@ class Activity extends Model
             'status' => ActivityStatus::class,
             'priority' => ActivityPriority::class,
             'service_class' => ServiceClass::class,
+            'waiting_since' => 'datetime',
             'due_date' => 'date',
             'completed_at' => 'datetime',
         ];
@@ -398,6 +405,24 @@ class Activity extends Model
     }
 
     /**
+     * Scope to exclude activities currently in a waiting status (Aguardando
+     * aprovação, Esperando, Aguardando validação). Used by daily planning
+     * surfaces (suggestions, carry-over, available tasks) so items waiting
+     * on someone don't get suggested for today's plan — items already in a
+     * plan stay visible regardless, only entry into new suggestions is
+     * gated here.
+     */
+    public function scopeNotWaiting(Builder $query): void
+    {
+        $waitingValues = array_map(
+            fn (ActivityStatus $status): string => $status->value,
+            array_filter(ActivityStatus::cases(), fn (ActivityStatus $status): bool => $status->isWaiting())
+        );
+
+        $query->whereNotIn('status', $waitingValues);
+    }
+
+    /**
      * Scope to only overdue activities.
      */
     public function scopeOverdue(Builder $query): void
@@ -492,6 +517,28 @@ class Activity extends Model
         return $this->due_date !== null
             && $this->due_date->isBefore(Carbon::today())
             && $this->status !== ActivityStatus::Done;
+    }
+
+    /**
+     * Check if the activity is currently in a waiting status.
+     */
+    public function isWaiting(): bool
+    {
+        return $this->status !== null && $this->status->isWaiting();
+    }
+
+    /**
+     * Get the number of whole days the activity has been waiting, for the
+     * "⏳ {quem} · há X dias" badge. Returns 0 when not waiting or when
+     * waiting_since hasn't been stamped yet.
+     */
+    public function waitingDays(): int
+    {
+        if (! $this->isWaiting() || $this->waiting_since === null) {
+            return 0;
+        }
+
+        return (int) $this->waiting_since->diffInDays(now());
     }
 
     /**

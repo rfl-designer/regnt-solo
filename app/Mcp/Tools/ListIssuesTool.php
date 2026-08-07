@@ -25,11 +25,11 @@ class ListIssuesTool extends Tool
     {
         $validated = $request->validate([
             'project_id' => 'nullable|integer|exists:projects,id',
-            'status' => 'nullable|string|in:inbox,backlog,todo,doing,done',
+            'status' => 'nullable|string|in:inbox,backlog,awaiting_approval,todo,doing,waiting,awaiting_validation,done',
             'limit' => 'nullable|integer|min:1|max:100',
         ], [
             'project_id.exists' => 'Project not found. Use list-projects to find available project ids.',
-            'status.in' => 'Invalid status. Valid values: inbox, backlog, todo, doing, done.',
+            'status.in' => 'Invalid status. Valid values: inbox, backlog, awaiting_approval, todo, doing, waiting, awaiting_validation, done.',
         ]);
 
         $query = Activity::query()->issues()->with('project');
@@ -53,6 +53,8 @@ class ListIssuesTool extends Tool
             'service_class' => $issue->service_class->value,
             'project' => $issue->project?->name,
             'parent_id' => $issue->parent_id,
+            'waiting_for' => $issue->waiting_for,
+            'waiting_since' => $issue->waiting_since?->toDateTimeString(),
             'due_date' => $issue->due_date?->toDateString(),
             'is_overdue' => $issue->isOverdue(),
             'is_running' => $issue->isRunning(),
@@ -72,7 +74,7 @@ class ListIssuesTool extends Tool
     {
         return [
             'project_id' => $schema->integer()->description('Filter issues by project id. Optional. Use list-projects to find ids.'),
-            'status' => $schema->string()->enum(['inbox', 'backlog', 'todo', 'doing', 'done'])->description('Filter issues by status. Optional.'),
+            'status' => $schema->string()->enum(['inbox', 'backlog', 'awaiting_approval', 'todo', 'doing', 'waiting', 'awaiting_validation', 'done'])->description('Filter issues by status. Optional.'),
             'limit' => $schema->integer()->description('Maximum number of issues to return. Default: 20, max: 100.'),
         ];
     }

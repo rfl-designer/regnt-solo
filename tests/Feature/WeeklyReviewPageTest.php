@@ -226,9 +226,11 @@ test('weekly review shows task status badge in stale tasks', function () {
         'title' => 'Task em todo',
     ]));
 
+    // "A Fazer" -> "Pronto" is a label-only rename from issue #142 (the
+    // persisted todo value doesn't change).
     Livewire::test('pages::weekly-review')
         ->assertSee('Task em todo')
-        ->assertSee('A Fazer');
+        ->assertSee('Pronto');
 });
 
 test('weekly review shows tracked time on completed tasks', function () {

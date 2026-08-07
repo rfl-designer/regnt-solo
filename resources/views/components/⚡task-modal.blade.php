@@ -31,6 +31,28 @@ new class extends Component
 
     public string $status = 'inbox';
 
+    /**
+     * The status the task had when the modal was opened (the true
+     * Eloquent "original" this edit will be diffed against on save). Used
+     * to tell a genuine entry into a wait (or a move between two wait
+     * categories) apart from re-selecting the status the task already had
+     * — mirrors ActivityObserver::handleWaitingState()'s isDirty check.
+     */
+    public ?string $originalStatus = null;
+
+    public string $waitingFor = '';
+
+    /**
+     * Whether the user has explicitly edited "esperando quem" during this
+     * modal session. While false, changing project/client re-resolves it
+     * from the new effective client instead of keeping a stale name.
+     */
+    public bool $waitingForTouched = false;
+
+    public int $waitingDays = 0;
+
+    public bool $showWaitingForPrompt = false;
+
     public ?string $dueDate = null;
 
     public ?int $estimatedMinutes = null;
@@ -78,13 +100,108 @@ new class extends Component
     }
 
     /**
-     * The direct client select is only meaningful when the task has no project.
+     * The direct client select is only meaningful when the task has no
+     * project. Reassigning the project while sitting in a client-side wait
+     * re-resolves "esperando quem" from the new effective client, unless
+     * the user has explicitly edited the field this session.
      */
     public function updatedProjectId(): void
     {
         if ($this->projectId) {
             $this->clientId = null;
         }
+
+        $this->resyncWaitingForFromEffectiveClient();
+    }
+
+    /**
+     * Reassigning the direct client while sitting in a client-side wait
+     * re-resolves "esperando quem" the same way updatedProjectId() does.
+     */
+    public function updatedClientId(): void
+    {
+        $this->resyncWaitingForFromEffectiveClient();
+    }
+
+    /**
+     * Marks "esperando quem" as explicitly touched so a subsequent
+     * project/client change doesn't silently overwrite what the user just
+     * typed.
+     */
+    public function updatedWaitingFor(): void
+    {
+        $this->waitingForTouched = true;
+    }
+
+    /**
+     * Mirror the domain guard's auto-fill/prompt behavior in the UI as the
+     * user picks a status, so the "esperando quem" requirement is visible
+     * before they hit save rather than only surfacing as a refusal.
+     *
+     * A move between two *different* waiting categories — e.g.
+     * `awaiting_approval` -> `waiting`, or `waiting` -> `awaiting_validation`
+     * — is treated as a fresh entry: any value inherited from the previous
+     * wait is discarded rather than silently reused, mirroring
+     * ActivityObserver::handleWaitingState(). Re-selecting the status the
+     * task already had (comparing against $originalStatus, the true
+     * Eloquent original) is not a new entry and leaves the field alone.
+     */
+    public function updatedStatus(string $value): void
+    {
+        $newStatus = ActivityStatus::tryFrom($value);
+
+        if ($newStatus === null || ! $newStatus->isWaiting()) {
+            $this->showWaitingForPrompt = false;
+
+            return;
+        }
+
+        $originalStatus = ActivityStatus::tryFrom((string) $this->originalStatus);
+        $enteringWaitThisEdit = $originalStatus === null || $originalStatus !== $newStatus;
+
+        if ($enteringWaitThisEdit) {
+            $this->waitingForTouched = false;
+
+            if ($newStatus->isClientWaiting()) {
+                $this->waitingFor = $this->resolveEffectiveClientName() ?? '';
+            } else {
+                // Internal wait: never inherit a value from a previous wait category.
+                $this->waitingFor = '';
+            }
+        }
+
+        // The internal wait (Esperando) has no client to fall back on, so a
+        // blank "esperando quem" here means the mini modal must block save.
+        $this->showWaitingForPrompt = $newStatus->isInternalWaiting() && trim($this->waitingFor) === '';
+    }
+
+    /**
+     * Re-resolve "esperando quem" from the currently selected project/
+     * client, but only while the task is sitting in a client-side wait and
+     * the user hasn't explicitly typed their own value this session.
+     */
+    private function resyncWaitingForFromEffectiveClient(): void
+    {
+        $status = ActivityStatus::tryFrom($this->status);
+
+        if ($status === null || ! $status->isClientWaiting() || $this->waitingForTouched) {
+            return;
+        }
+
+        $this->waitingFor = $this->resolveEffectiveClientName() ?? '';
+    }
+
+    /**
+     * Resolve the name of the effective client for the currently selected
+     * project (or direct client when there is no project).
+     */
+    private function resolveEffectiveClientName(): ?string
+    {
+        $client = $this->projectId
+            ? Project::find((int) $this->projectId)?->client
+            : ($this->clientId ? Client::find((int) $this->clientId) : null);
+
+        return $client?->name;
     }
 
     #[Computed]
@@ -114,6 +231,11 @@ new class extends Component
         $this->clientId = $task->client_id ? (string) $task->client_id : null;
         $this->serviceClass = $task->service_class->value;
         $this->status = $task->status->value;
+        $this->originalStatus = $task->status->value;
+        $this->waitingFor = $task->waiting_for ?? '';
+        $this->waitingForTouched = false;
+        $this->waitingDays = $task->waitingDays();
+        $this->showWaitingForPrompt = false;
         $this->dueDate = $task->due_date?->format('Y-m-d');
         $this->estimatedMinutes = $task->estimated_minutes;
 
@@ -257,6 +379,17 @@ new class extends Component
 
         $newStatus = ActivityStatus::from($this->status);
 
+        // The internal wait (Esperando) has no client to fall back on: block
+        // the save and surface the mini modal instead of hitting the domain
+        // guard's refusal.
+        if ($newStatus->isInternalWaiting() && trim($this->waitingFor) === '') {
+            $this->showWaitingForPrompt = true;
+
+            return;
+        }
+
+        $this->showWaitingForPrompt = false;
+
         try {
             if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
                 $task->update([
@@ -264,6 +397,7 @@ new class extends Component
                     'project_id' => $this->projectId ? (int) $this->projectId : null,
                     'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
                     'service_class' => $this->serviceClass,
+                    'waiting_for' => $this->waitingFor ?: null,
                     'due_date' => $this->dueDate ?: null,
                     'estimated_minutes' => $this->estimatedMinutes,
                     'pr_url' => $this->prUrl ?: null,
@@ -272,6 +406,10 @@ new class extends Component
                 ]);
                 $task->markAsDone();
                 $this->status = ActivityStatus::Done->value;
+                $this->originalStatus = ActivityStatus::Done->value;
+                $this->waitingFor = '';
+                $this->waitingForTouched = false;
+                $this->waitingDays = 0;
             } else {
                 $task->update([
                     'title' => $this->title,
@@ -279,6 +417,7 @@ new class extends Component
                     'client_id' => $this->projectId ? null : ($this->clientId ? (int) $this->clientId : null),
                     'status' => $this->status,
                     'service_class' => $this->serviceClass,
+                    'waiting_for' => $this->waitingFor ?: null,
                     'due_date' => $this->dueDate ?: null,
                     'estimated_minutes' => $this->estimatedMinutes,
                     'completed_at' => $newStatus === ActivityStatus::Done ? $task->completed_at : null,
@@ -286,7 +425,17 @@ new class extends Component
                     'session_prompt' => $this->sessionPrompt ?: null,
                     'session_result' => $this->sessionResult ?: null,
                 ]);
+
+                $task->refresh();
+                $this->originalStatus = $task->status->value;
+                $this->waitingFor = $task->waiting_for ?? '';
+                $this->waitingForTouched = false;
+                $this->waitingDays = $task->waitingDays();
             }
+        } catch (\App\Exceptions\WaitingRequiresWaitingForException $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível salvar', text: $e->getMessage());
+
+            return;
         } catch (\App\Exceptions\FixedDateRequiresDueDateException $e) {
             Flux::toast(variant: 'danger', heading: 'Não foi possível salvar', text: $e->getMessage());
 
@@ -346,7 +495,7 @@ new class extends Component
 
         $this->showDeleteConfirm = false;
         $this->showModal = false;
-        $this->reset('taskId', 'title', 'projectId', 'clientId', 'serviceClass', 'status', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'editingPrUrl', 'activeTab', 'commits', 'sessionPrompt', 'sessionResult', 'projectDocuments');
+        $this->reset('taskId', 'title', 'projectId', 'clientId', 'serviceClass', 'status', 'originalStatus', 'waitingFor', 'waitingForTouched', 'waitingDays', 'showWaitingForPrompt', 'dueDate', 'estimatedMinutes', 'timeEntries', 'prUrl', 'editingPrUrl', 'activeTab', 'commits', 'sessionPrompt', 'sessionResult', 'projectDocuments');
 
         $this->dispatch('task-updated');
 
@@ -478,7 +627,7 @@ new class extends Component
                         @endif
 
                         {{-- Status --}}
-                        <flux:select wire:model="status" label="Status">
+                        <flux:select wire:model.live="status" label="Status">
                             @foreach (ActivityStatus::cases() as $s)
                                 <flux:select.option :value="$s->value">
                                     {{ $s->label() }}
@@ -488,6 +637,23 @@ new class extends Component
 
                         {{-- Due Date --}}
                         <flux:date-picker wire:model="dueDate" label="Prazo" clearable />
+
+                        {{-- Waiting For (visible while in any waiting status) --}}
+                        @php $selectedStatus = ActivityStatus::tryFrom($status); @endphp
+                        @if ($selectedStatus?->isWaiting())
+                            <div class="sm:col-span-2">
+                                <flux:input
+                                    wire:model.live="waitingFor"
+                                    label="Esperando quem"
+                                    placeholder="Ex: Cliente, Designer, DevOps..."
+                                />
+                                @if ($waitingDays > 0)
+                                    <flux:badge size="sm" color="{{ $selectedStatus->color() }}" icon="{{ $selectedStatus->icon() }}" class="mt-2">
+                                        ⏳ {{ $waitingFor }} · há {{ $waitingDays }} {{ $waitingDays === 1 ? 'dia' : 'dias' }}
+                                    </flux:badge>
+                                @endif
+                            </div>
+                        @endif
                     </div>
 
                     {{-- Estimated Minutes --}}
@@ -856,6 +1022,34 @@ new class extends Component
                 </flux:button>
                 <flux:button wire:click="deleteTask" variant="danger">
                     Sim, excluir
+                </flux:button>
+            </div>
+        </div>
+    </flux:modal>
+
+    {{-- Waiting For Prompt (blocking mini modal for the internal wait) --}}
+    <flux:modal wire:model.self="showWaitingForPrompt" class="md:w-96">
+        <div class="space-y-6">
+            <div>
+                <flux:heading size="lg">Quem está sendo aguardado?</flux:heading>
+                <flux:text class="mt-2">
+                    Mover para "Esperando" exige informar quem está sendo aguardado.
+                </flux:text>
+            </div>
+
+            <flux:input
+                wire:model.live="waitingFor"
+                label="Esperando quem"
+                placeholder="Ex: Designer, DevOps, Suporte..."
+                autofocus
+            />
+
+            <div class="flex justify-end gap-2">
+                <flux:button wire:click="$set('showWaitingForPrompt', false)" variant="ghost">
+                    Cancelar
+                </flux:button>
+                <flux:button wire:click="saveTask" variant="primary">
+                    Confirmar e salvar
                 </flux:button>
             </div>
         </div>

@@ -369,6 +369,35 @@ class ActivityObserver
                 'changed_at' => now(),
             ]);
         }
+
+        $this->clearArchiveOnReopen($activity);
+    }
+
+    /**
+     * Leaving Feito un-archives the activity (issue #147).
+     *
+     * "Já revisei isto no ritual" is a statement about a conclusion, and
+     * reopening the item retracts the conclusion it was about. Without
+     * this, an item archived and then reopened comes back to Feito already
+     * archived — invisible in the column *and* in the ritual's first step,
+     * so its new conclusion would never be reviewed by anyone.
+     *
+     * Only the timestamp is touched: the status history is the record of
+     * what happened, and archiving was never part of it.
+     */
+    private function clearArchiveOnReopen(Activity $activity): void
+    {
+        if (! $activity->isDirty('status')) {
+            return;
+        }
+
+        if ($activity->getOriginal('status') !== ActivityStatus::Done) {
+            return;
+        }
+
+        if ($activity->status !== ActivityStatus::Done && $activity->archived_at !== null) {
+            $activity->archived_at = null;
+        }
     }
 
     /**

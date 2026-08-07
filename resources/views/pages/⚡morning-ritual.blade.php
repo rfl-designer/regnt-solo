@@ -51,6 +51,18 @@ new class extends Component
     public string $notes = '';
 
     /**
+     * The business day this component was rendered for.
+     *
+     * A ritual page left open past midnight is not a rare accident — the
+     * wizard is meant to be walked slowly, and a laptop lid closed at
+     * 23:50 opens on the next day. Without this the notes typed yesterday
+     * would be written onto today's fresh record on the next click, and the
+     * "já concluído às HH:MM" badge would keep claiming yesterday's
+     * conclusion.
+     */
+    public string $day = '';
+
+    /**
      * The last screen: not a step, the record of the ritual.
      */
     public const int FINAL_STEP = 6;
@@ -58,10 +70,43 @@ new class extends Component
     public function mount(): void
     {
         $this->step = max(1, min(self::FINAL_STEP, $this->step));
+        $this->day = MorningRitual::businessToday()->toDateString();
         $this->notes = $this->ritual?->notes ?? '';
     }
 
     // ── O registro do dia ────────────────────────────────────────────────
+
+    /**
+     * Catch up with the calendar before anything is written.
+     *
+     * Called at the top of every action: if the business day has turned
+     * since the page was rendered, the component is holding yesterday's
+     * answers, so it starts the new day's ritual from the first screen with
+     * that day's notes instead of carrying stale text across the boundary.
+     * Returns true when the day rolled over, so the caller can abandon the
+     * click that triggered it.
+     */
+    private function rolledOverToNewDay(): bool
+    {
+        $today = MorningRitual::businessToday()->toDateString();
+
+        if ($this->day === $today) {
+            return false;
+        }
+
+        $this->day = $today;
+        $this->step = 1;
+        unset($this->ritual, $this->alreadyCompleted, $this->completedAtLabel);
+        $this->notes = $this->ritual?->notes ?? '';
+
+        Flux::toast(
+            variant: 'warning',
+            heading: 'Novo dia',
+            text: 'O dia virou enquanto esta página estava aberta — o ritual recomeçou do primeiro passo.',
+        );
+
+        return true;
+    }
 
     /**
      * Today's record, or null while the day hasn't produced one. The row is
@@ -103,9 +148,33 @@ new class extends Component
             ->get();
     }
 
+    /**
+     * Archive one item.
+     *
+     * The id is looked up **through the same scope the step renders**, not
+     * with a bare `findOrFail()`. A Livewire action is a public endpoint:
+     * the list on screen is a courtesy, and nothing stops a crafted call
+     * naming an item in Pronto, a draft or an Épico container. Re-scoping
+     * here means the action can only ever do what the step claims to do,
+     * and {@see Activity::archive()} refuses the same thing again at the
+     * model, for the callers that never pass through here.
+     */
     public function archive(int $activityId): void
     {
-        $activity = Activity::query()->findOrFail($activityId);
+        if ($this->rolledOverToNewDay()) {
+            return;
+        }
+
+        $activity = Activity::query()
+            ->leaf()
+            ->where('status', ActivityStatus::Done)
+            ->notArchived()
+            ->find($activityId);
+
+        if ($activity === null) {
+            return;
+        }
+
         $activity->archive();
 
         unset($this->doneToArchive);
@@ -116,6 +185,10 @@ new class extends Component
 
     public function archiveAll(): void
     {
+        if ($this->rolledOverToNewDay()) {
+            return;
+        }
+
         $count = 0;
 
         foreach ($this->doneToArchive as $activity) {
@@ -164,9 +237,15 @@ new class extends Component
      */
     public function resolveWait(int $activityId): void
     {
-        $activity = Activity::query()->findOrFail($activityId);
+        if ($this->rolledOverToNewDay()) {
+            return;
+        }
 
-        if ($activity->status === null || ! $activity->status->isWaiting()) {
+        // Mesmo motivo do passo 1: a action é um endpoint público, então o
+        // recorte que a tela mostra é reaplicado na consulta.
+        $activity = Activity::query()->leaf()->find($activityId);
+
+        if ($activity?->status === null || ! $activity->status->isWaiting()) {
             return;
         }
 
@@ -214,9 +293,13 @@ new class extends Component
      */
     public function sendBackToReady(int $activityId): void
     {
-        $activity = Activity::query()->findOrFail($activityId);
+        if ($this->rolledOverToNewDay()) {
+            return;
+        }
 
-        if ($activity->status !== ActivityStatus::Doing) {
+        $activity = Activity::query()->leaf()->find($activityId);
+
+        if ($activity?->status !== ActivityStatus::Doing) {
             return;
         }
 
@@ -353,9 +436,13 @@ new class extends Component
      */
     public function pullItem(int $activityId): void
     {
-        $activity = Activity::query()->findOrFail($activityId);
+        if ($this->rolledOverToNewDay()) {
+            return;
+        }
 
-        if ($activity->status !== ActivityStatus::Todo) {
+        $activity = Activity::query()->leaf()->find($activityId);
+
+        if ($activity?->status !== ActivityStatus::Todo) {
             return;
         }
 
@@ -395,7 +482,14 @@ new class extends Component
      */
     public function completeRitual(): void
     {
-        $ritual = MorningRitual::getOrCreateForDate(today());
+        // A virada do dia invalida o que está na tela: as notas digitadas
+        // pertencem ao ritual de ontem, e gravá-las no registro de hoje
+        // inventaria um ritual que ninguém fez.
+        if ($this->rolledOverToNewDay()) {
+            return;
+        }
+
+        $ritual = MorningRitual::getOrCreateForDate(MorningRitual::businessToday());
         $ritual->complete($this->notes);
 
         unset($this->ritual, $this->alreadyCompleted, $this->completedAtLabel);

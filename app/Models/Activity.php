@@ -6,6 +6,7 @@ use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
 use App\Enums\ServiceClass;
+use App\Exceptions\ArchiveRequiresConcludedItemException;
 use App\Observers\ActivityObserver;
 use App\Observers\ActivityRealtimeObserver;
 use Carbon\Carbon;
@@ -701,6 +702,32 @@ class Activity extends Model
     }
 
     /**
+     * Whether this activity may be filed away at all.
+     *
+     * Two conditions, and both are about not hiding live work:
+     *
+     * - **It has to be concluded.** Archiving says "já revisei isto"; said
+     *   of anything else it would take a card off the board with no status
+     *   change to account for it.
+     * - **It has to be something that gets concluded on its own** — an
+     *   Issue, a personal task, or an atomic Épico. A container Épico is
+     *   finished by its children and a Draft was never on a board, so
+     *   neither has a conclusion of its own to file.
+     */
+    public function isArchivable(): bool
+    {
+        if ($this->status !== ActivityStatus::Done) {
+            return false;
+        }
+
+        return match ($this->type) {
+            ActivityType::Issue, ActivityType::Task => true,
+            ActivityType::Epic => ! $this->children()->exists(),
+            default => false,
+        };
+    }
+
+    /**
      * File the activity away.
      *
      * Archiving is *only* this timestamp. The status is deliberately left
@@ -711,9 +738,22 @@ class Activity extends Model
      *
      * Already-archived items are left alone, so "Arquivar tudo" run twice
      * doesn't rewrite the first pass's timestamps.
+     *
+     * Only concluded items may be archived ({@see isArchivable()}), and the
+     * refusal lives here rather than only in the ritual's action: archiving
+     * is invisible in the history (no status moves), so an item archived out
+     * of Pronto or Fazendo would simply disappear with nothing to explain
+     * where it went. The UI re-scopes its own queries too, but this is the
+     * invariant.
+     *
+     * @throws ArchiveRequiresConcludedItemException
      */
     public function archive(): void
     {
+        if (! $this->isArchivable()) {
+            throw new ArchiveRequiresConcludedItemException;
+        }
+
         if ($this->archived_at !== null) {
             return;
         }

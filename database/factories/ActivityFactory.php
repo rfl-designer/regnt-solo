@@ -78,6 +78,21 @@ class ActivityFactory extends Factory
     }
 
     /**
+     * Indicate that the draft has been shaped enough to be promoted
+     * (issue #148): Dor, Apetite and Esboço — the three required sections.
+     * The project is left to the caller, since it is the fourth requirement
+     * and most tests are about exactly that.
+     */
+    public function shaped(int $appetiteDays = 7): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'description' => 'Perco tempo toda semana refazendo isso à mão.',
+            'appetite_days' => $appetiteDays,
+            'spec' => $this->generateSpec($attributes['title'] ?? fake()->sentence(3)),
+        ]);
+    }
+
+    /**
      * Indicate that the activity has a spec.
      */
     public function withSpec(): static

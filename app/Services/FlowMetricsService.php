@@ -421,6 +421,41 @@ class FlowMetricsService
     }
 
     /**
+     * How long each validated Spec was a live bet, in days — the population
+     * the apetite aside compares a budget against (issue #148).
+     *
+     * This is *not* {@see sample()}. The cycle-time baseline measures cards
+     * from Pronto to Feito; a bet is measured over the window it was actually
+     * a commitment in, aprovada -> validada, which is the same window the
+     * apetite is a budget for. Comparing a 7-day apetite against the cycle
+     * time of individual cards would compare a bet with its parts.
+     *
+     * Only Specs that are validated *and have stayed that way* count: an
+     * Épico reopened after validation is a live bet again, and its window is
+     * still open. Everything is read against the last baseline cut, so a cut
+     * resets this history exactly as it resets the SLE.
+     *
+     * @return list<float> Ascending.
+     */
+    public function validatedSpecSample(): array
+    {
+        $cutAt = $this->lastCut()?->cut_at;
+
+        return Activity::query()
+            ->epics()
+            ->where('status', ActivityStatus::Done)
+            ->with('statusChanges')
+            ->get()
+            ->filter(fn (Activity $epic): bool => $epic->isSpecValidated() && $epic->spec_aprovada !== null)
+            ->filter(fn (Activity $epic): bool => $cutAt === null || $epic->spec_validada->greaterThanOrEqualTo($cutAt))
+            ->map(fn (Activity $epic): float => $epic->spec_aprovada->floatDiffInDays($epic->spec_validada))
+            ->filter(fn (float $days): bool => $days >= 0)
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
      * The baseline's cycle times bucketed by whole day, ready for the
      * distribution chart. Empty days in the middle are kept so the shape
      * of the distribution — and its tail — is read honestly instead of

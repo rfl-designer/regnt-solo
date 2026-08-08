@@ -6,6 +6,7 @@ use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
 use App\Enums\ServiceClass;
+use App\Exceptions\ArchiveRequiresConcludedItemException;
 use App\Observers\ActivityObserver;
 use App\Observers\ActivityRealtimeObserver;
 use Carbon\Carbon;
@@ -17,7 +18,6 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -85,6 +85,7 @@ class Activity extends Model
             'emergency_since' => 'datetime',
             'due_date' => 'date',
             'completed_at' => 'datetime',
+            'archived_at' => 'datetime',
         ];
     }
 
@@ -188,16 +189,6 @@ class Activity extends Model
     public function statusChanges(): HasMany
     {
         return $this->hasMany(ActivityStatusChange::class)->orderBy('changed_at');
-    }
-
-    /**
-     * Get the daily plans this activity belongs to.
-     */
-    public function dailyPlans(): BelongsToMany
-    {
-        return $this->belongsToMany(DailyPlan::class, 'daily_plan_activity', 'activity_id', 'daily_plan_id')
-            ->withPivot('sort_order', 'completed_at')
-            ->withTimestamps();
     }
 
     /**
@@ -683,6 +674,105 @@ class Activity extends Model
     public function scopeForProject(Builder $query, int $projectId): void
     {
         $query->where('project_id', $projectId);
+    }
+
+    /**
+     * Scope to activities the user has already filed away (issue #147).
+     */
+    public function scopeArchived(Builder $query): void
+    {
+        $query->whereNotNull('archived_at');
+    }
+
+    /**
+     * Scope to activities still awaiting the ritual's first step — what the
+     * Feito column shows, in place of the old "só a semana corrente".
+     */
+    public function scopeNotArchived(Builder $query): void
+    {
+        $query->whereNull('archived_at');
+    }
+
+    /**
+     * Whether this activity has been archived.
+     */
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
+    /**
+     * Whether this activity may be filed away at all.
+     *
+     * Two conditions, and both are about not hiding live work:
+     *
+     * - **It has to be concluded.** Archiving says "já revisei isto"; said
+     *   of anything else it would take a card off the board with no status
+     *   change to account for it.
+     * - **It has to be something that gets concluded on its own** — an
+     *   Issue, a personal task, or an atomic Épico. A container Épico is
+     *   finished by its children and a Draft was never on a board, so
+     *   neither has a conclusion of its own to file.
+     */
+    public function isArchivable(): bool
+    {
+        if ($this->status !== ActivityStatus::Done) {
+            return false;
+        }
+
+        return match ($this->type) {
+            ActivityType::Issue, ActivityType::Task => true,
+            ActivityType::Epic => ! $this->children()->exists(),
+            default => false,
+        };
+    }
+
+    /**
+     * File the activity away.
+     *
+     * Archiving is *only* this timestamp. The status is deliberately left
+     * exactly where it is — the flow metrics (cycle time, SLE, aging) are
+     * derived from {@see ActivityStatusChange}, so moving an archived item
+     * out of Feito would reopen its clock and silently change the board's
+     * promise. Nothing here writes a status, and nothing here may.
+     *
+     * Already-archived items are left alone, so "Arquivar tudo" run twice
+     * doesn't rewrite the first pass's timestamps.
+     *
+     * Only concluded items may be archived ({@see isArchivable()}), and the
+     * refusal lives here rather than only in the ritual's action: archiving
+     * is invisible in the history (no status moves), so an item archived out
+     * of Pronto or Fazendo would simply disappear with nothing to explain
+     * where it went. The UI re-scopes its own queries too, but this is the
+     * invariant.
+     *
+     * @throws ArchiveRequiresConcludedItemException
+     */
+    public function archive(): void
+    {
+        if (! $this->isArchivable()) {
+            throw new ArchiveRequiresConcludedItemException;
+        }
+
+        if ($this->archived_at !== null) {
+            return;
+        }
+
+        $this->archived_at = now();
+        $this->save();
+    }
+
+    /**
+     * Bring an archived activity back into view.
+     */
+    public function unarchive(): void
+    {
+        if ($this->archived_at === null) {
+            return;
+        }
+
+        $this->archived_at = null;
+        $this->save();
     }
 
     /**

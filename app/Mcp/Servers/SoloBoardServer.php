@@ -2,13 +2,11 @@
 
 namespace App\Mcp\Servers;
 
-use App\Mcp\Prompts\DailyPlanningPrompt;
 use App\Mcp\Prompts\DevelopmentWorkflowPrompt;
 use App\Mcp\Prompts\FeaturePlanningPrompt;
 use App\Mcp\Prompts\SessionPlanningPrompt;
 use App\Mcp\Prompts\StakeholderIssuePlanningPrompt;
 use App\Mcp\Resources\ProjectOverviewResource;
-use App\Mcp\Tools\AddToPlanTool;
 use App\Mcp\Tools\ApplyTemplateTool;
 use App\Mcp\Tools\CreateDocumentTool;
 use App\Mcp\Tools\CreateDraftTool;
@@ -22,6 +20,7 @@ use App\Mcp\Tools\GetAnalyticsTool;
 use App\Mcp\Tools\GetDocumentTool;
 use App\Mcp\Tools\GetProjectContextTool;
 use App\Mcp\Tools\GetPullQueueTool;
+use App\Mcp\Tools\GetRitualStatusTool;
 use App\Mcp\Tools\ListClientsTool;
 use App\Mcp\Tools\ListDocumentsTool;
 use App\Mcp\Tools\ListDraftsTool;
@@ -38,9 +37,7 @@ use App\Mcp\Tools\PromoteStakeholderIssueToFeatureTool;
 use App\Mcp\Tools\RalphExportTool;
 use App\Mcp\Tools\StartTimerTool;
 use App\Mcp\Tools\StopTimerTool;
-use App\Mcp\Tools\SuggestTasksTool;
 use App\Mcp\Tools\TimerStatusTool;
-use App\Mcp\Tools\TodayPlanTool;
 use App\Mcp\Tools\ToggleRecurringTaskTool;
 use App\Mcp\Tools\UpdateDocumentTool;
 use App\Mcp\Tools\UpdateEpicTool;
@@ -70,7 +67,7 @@ class SoloBoardServer extends Server
     /**
      * The MCP server's instructions for the LLM.
      */
-    protected string $instructions = 'SoloBoard is a personal productivity app for solo developers. It manages a roadmap mirrored one-way from GitHub plus a personal layer, projects, stakeholder issues, time tracking, and daily planning. The roadmap has two types: Epics (top-level, mirror GitHub type:prd issues) and Issues (mirror other GitHub issues; their client-facing label Fatia/Follow-up/Avulsa is derived from the parent). Use list-epics, create-epic, update-epic to manage epics; the epic status is manual (create-epic never sets it). Use list-issues, create-issue, update-issue, delete-issue to manage issues; create/update accept project_id, parent_id and status, and setting status to done marks the issue done. Both epics and issues upsert by github_issue_number for idempotent syncs; delete-issue cascades time entries and is used for reconciliation. Use list-drafts, create-draft to manage drafts (type=Draft) — immature ideas of just a title and a note that live outside any status board and have no GitHub mirror; promote one with promote-draft, which hands off its content to /to-prd or /to-issues (the issue is born on GitHub, not by a local mutation) and removes the local draft. Statuses are inbox, backlog, awaiting_approval, todo, doing, waiting, awaiting_validation, done (the 7-column board, in flow order, excludes inbox); priorities are urgent, high, medium, low. awaiting_approval, waiting and awaiting_validation are the three waiting statuses (issue #142): moving into one requires waiting_for ("esperando quem") — client-side waits (awaiting_approval/awaiting_validation) auto-fill it from the activity\'s effective client when omitted, the internal wait (waiting) has no default and is refused without an explicit value. waiting_since is stamped automatically and cleared automatically on leaving a wait. Stakeholder issues track external feedback. Projects have slugs and ids for identification. Use get-pull-queue to answer \'what do I pull next?\': it returns the Pronto (todo) column in pull order — Emergência, then Data fixa at risk by due date, then FIFO by last entry into Pronto — with the motivo of each position and the Fazendo WIP/Emergência context; it never recommends, the decision stays with the user. Timers are time entries linked to an activity — only one timer can run at a time. Documents are markdown pages (PRDs, specs, decisions, notes) that belong to projects. Use list-stakeholder-issues and promote-stakeholder-issue for feedback triage. Use get-project-context for full project overview.';
+    protected string $instructions = 'SoloBoard is a personal productivity app for solo developers. It manages a roadmap mirrored one-way from GitHub plus a personal layer, projects, stakeholder issues, time tracking, and the morning ritual. The roadmap has two types: Epics (top-level, mirror GitHub type:prd issues) and Issues (mirror other GitHub issues; their client-facing label Fatia/Follow-up/Avulsa is derived from the parent). Use list-epics, create-epic, update-epic to manage epics; the epic status is manual (create-epic never sets it). Use list-issues, create-issue, update-issue, delete-issue to manage issues; create/update accept project_id, parent_id and status, and setting status to done marks the issue done. Both epics and issues upsert by github_issue_number for idempotent syncs; delete-issue cascades time entries and is used for reconciliation. Use list-drafts, create-draft to manage drafts (type=Draft) — immature ideas of just a title and a note that live outside any status board and have no GitHub mirror; promote one with promote-draft, which hands off its content to /to-prd or /to-issues (the issue is born on GitHub, not by a local mutation) and removes the local draft. Statuses are inbox, backlog, awaiting_approval, todo, doing, waiting, awaiting_validation, done (the 7-column board, in flow order, excludes inbox); priorities are urgent, high, medium, low. awaiting_approval, waiting and awaiting_validation are the three waiting statuses (issue #142): moving into one requires waiting_for ("esperando quem") — client-side waits (awaiting_approval/awaiting_validation) auto-fill it from the activity\'s effective client when omitted, the internal wait (waiting) has no default and is refused without an explicit value. waiting_since is stamped automatically and cleared automatically on leaving a wait. Stakeholder issues track external feedback. Projects have slugs and ids for identification. Use get-pull-queue to answer \'what do I pull next?\': it returns the Pronto (todo) column in pull order — Emergência, then Data fixa at risk by due date, then FIFO by last entry into Pronto — with the motivo of each position and the Fazendo WIP/Emergência context; it never recommends, the decision stays with the user. Timers are time entries linked to an activity — only one timer can run at a time. Documents are markdown pages (PRDs, specs, decisions, notes) that belong to projects. Use list-stakeholder-issues and promote-stakeholder-issue for feedback triage. Use get-ritual-status to read whether today\'s morning ritual has been done and the snapshot of the board it walks (archive backlog, the three waiting columns, Fazendo vs the WIP limit, aging, the pull queue) — it is read-only; there is no daily plan to read, add to or be suggested for, the board is the list. Use get-project-context for full project overview.';
 
     /**
      * The tools registered with this MCP server.
@@ -81,10 +78,8 @@ class SoloBoardServer extends Server
         StartTimerTool::class,
         StopTimerTool::class,
         TimerStatusTool::class,
-        TodayPlanTool::class,
-        SuggestTasksTool::class,
         GetPullQueueTool::class,
-        AddToPlanTool::class,
+        GetRitualStatusTool::class,
         ListProjectsTool::class,
         ListClientsTool::class,
         LogCommitsTool::class,
@@ -133,7 +128,6 @@ class SoloBoardServer extends Server
      * @var array<int, class-string<Prompt>>
      */
     protected array $prompts = [
-        DailyPlanningPrompt::class,
         SessionPlanningPrompt::class,
         DevelopmentWorkflowPrompt::class,
         FeaturePlanningPrompt::class,

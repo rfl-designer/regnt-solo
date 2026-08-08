@@ -152,7 +152,7 @@ test('main task surfaces load without javascript errors after the service class 
         'service_class' => ServiceClass::Standard,
     ]);
 
-    visit(['/kanban', '/inbox', '/daily', '/tasks'])
+    visit(['/kanban', '/inbox', '/ritual', '/tasks'])
         ->assertNoJavaScriptErrors()
         ->assertNoBrokenImages();
 });

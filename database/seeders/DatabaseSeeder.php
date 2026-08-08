@@ -10,8 +10,8 @@ use App\Enums\ProjectStatus;
 use App\Models\Activity;
 use App\Models\ActivityCommit;
 use App\Models\ActivityStatusChange;
-use App\Models\DailyPlan;
 use App\Models\Document;
+use App\Models\MorningRitual;
 use App\Models\Project;
 use App\Models\Stakeholder;
 use App\Models\TimeEntry;
@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Models\WeeklyReview;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
@@ -40,7 +41,7 @@ class DatabaseSeeder extends Seeder
             $tasks = $this->createTasks($projects);
             $this->createStatusChangeHistory($tasks);
             $this->createTimeEntries($tasks);
-            $this->createDailyPlan($tasks);
+            $this->createMorningRitual();
             $this->createRunningTimer($tasks);
             $this->createTaskCommits($tasks);
             $this->createDocuments($projects);
@@ -130,9 +131,9 @@ class DatabaseSeeder extends Seeder
      * since we generate a realistic retroactive history separately.
      *
      * @param  array<string, Project>  $projects
-     * @return \Illuminate\Support\Collection<int, Activity>
+     * @return Collection<int, Activity>
      */
-    private function createTasks(array $projects): \Illuminate\Support\Collection
+    private function createTasks(array $projects): Collection
     {
         /** @var array<int, array{title: string, project: string|null, status: ActivityStatus, priority: ActivityPriority, estimated_minutes: int|null, due_date: string|null, completed_at: Carbon|null}> $taskDefinitions */
         $taskDefinitions = [
@@ -223,9 +224,9 @@ class DatabaseSeeder extends Seeder
      *
      * Generates a realistic timeline of status transitions based on each task's current status.
      *
-     * @param  \Illuminate\Support\Collection<int, Activity>  $tasks
+     * @param  Collection<int, Activity>  $tasks
      */
-    private function createStatusChangeHistory(\Illuminate\Support\Collection $tasks): void
+    private function createStatusChangeHistory(Collection $tasks): void
     {
         /** @var array<string, list<ActivityStatus>> $statusPaths */
         $statusPaths = [
@@ -272,9 +273,9 @@ class DatabaseSeeder extends Seeder
      *
      * Distributes 1-5 hours per day with ~40% of days having focus sessions.
      *
-     * @param  \Illuminate\Support\Collection<int, Activity>  $tasks
+     * @param  Collection<int, Activity>  $tasks
      */
-    private function createTimeEntries(\Illuminate\Support\Collection $tasks): void
+    private function createTimeEntries(Collection $tasks): void
     {
         $workTasks = $tasks->filter(fn (Activity $t) => $t->status !== ActivityStatus::Inbox);
 
@@ -323,35 +324,23 @@ class DatabaseSeeder extends Seeder
     }
 
     /**
-     * Create a daily plan for today with 5 tasks.
-     *
-     * @param  \Illuminate\Support\Collection<int, Activity>  $tasks
+     * Record an unfinished morning ritual for today: notes already written,
+     * conclusion still pending, so the sidebar badge shows in a fresh seed.
      */
-    private function createDailyPlan(\Illuminate\Support\Collection $tasks): void
+    private function createMorningRitual(): void
     {
-        $plan = DailyPlan::create([
+        MorningRitual::create([
             'date' => Carbon::today()->toDateString(),
             'notes' => 'Foco: finalizar circuit breaker e hero section da landing.',
         ]);
-
-        $planTasks = $tasks
-            ->filter(fn (Activity $t) => in_array($t->status, [ActivityStatus::Doing, ActivityStatus::Todo], true))
-            ->take(5);
-
-        foreach ($planTasks->values() as $index => $task) {
-            $plan->tasks()->attach($task->id, [
-                'sort_order' => $index,
-                'completed_at' => null,
-            ]);
-        }
     }
 
     /**
      * Create a running timer on a "doing" task.
      *
-     * @param  \Illuminate\Support\Collection<int, Activity>  $tasks
+     * @param  Collection<int, Activity>  $tasks
      */
-    private function createRunningTimer(\Illuminate\Support\Collection $tasks): void
+    private function createRunningTimer(Collection $tasks): void
     {
         $doingTask = $tasks->first(fn (Activity $t) => $t->status === ActivityStatus::Doing);
 
@@ -367,9 +356,9 @@ class DatabaseSeeder extends Seeder
     /**
      * Create task commits for done tasks.
      *
-     * @param  \Illuminate\Support\Collection<int, Activity>  $tasks
+     * @param  Collection<int, Activity>  $tasks
      */
-    private function createTaskCommits(\Illuminate\Support\Collection $tasks): void
+    private function createTaskCommits(Collection $tasks): void
     {
         $doneTasks = $tasks->filter(fn (Activity $t) => $t->status === ActivityStatus::Done);
 

@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Activity;
-use App\Models\DailyPlan;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -307,12 +306,7 @@ test('weekly data is correctly built from database', function () {
     ]);
 
     // Create a daily plan with completion
-    $plan = DailyPlan::factory()->today()->create();
-    $doneTask = Activity::factory()->done()->create();
-    $plan->tasks()->attach($doneTask->id, [
-        'sort_order' => 0,
-        'completed_at' => now(),
-    ]);
+    Activity::factory()->done()->create(['completed_at' => now()]);
 
     Http::fake([
         'api.anthropic.com/*' => Http::response([
@@ -335,7 +329,7 @@ test('weekly data is correctly built from database', function () {
         return str_contains($body, 'tasks_by_status')
             && str_contains($body, 'hours_per_day')
             && str_contains($body, 'stale_backlog_count')
-            && str_contains($body, 'completion_rates');
+            && str_contains($body, 'items_completed_per_day');
     });
 });
 

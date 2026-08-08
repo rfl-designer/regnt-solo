@@ -1,7 +1,10 @@
 <?php
 
+use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
+use App\Exceptions\DomainRefusal;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Models\Activity;
-use App\Models\DailyPlan;
 use App\Models\Project;
 use Carbon\Carbon;
 use Flux\Flux;
@@ -11,6 +14,30 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
+/**
+ * A semana por **prazo de entrega** (issue #147).
+ *
+ * This page used to read the daily plan's pivot: an item was "on Tuesday"
+ * because a row said so, in a second place, next to the board that already
+ * knew when it was due. With the plan gone, the week *is* the due dates —
+ * one source of truth instead of two that could disagree.
+ *
+ * The consequence is deliberate and must stay visible in the interface:
+ * dragging a card here **edits a real commitment**, not a private plan. A
+ * due date is what makes an item overdue, and what promotes a Data fixa in
+ * the pull queue when it comes within the risk window. So every label,
+ * heading and toast on this page talks about *prazo* — "definir prazo",
+ * "sem prazo", "prazo removido" — and never about planning or scheduling:
+ * the old wording would invite the user to shuffle dates as if it were
+ * still a scratch pad, and quietly reorder the board's queue.
+ *
+ * Two rules follow from that, both enforced below:
+ *
+ * - **Data fixa não fica sem prazo.** Clearing the due date of an item
+ *   classified as Data fixa is refused (the domain guard would throw), with
+ *   an explanation instead of a Livewire error.
+ * - **Dias passados não são editáveis**, same as before.
+ */
 new class extends Component
 {
     #[Url(as: 'week')]
@@ -58,9 +85,9 @@ new class extends Component
     }
 
     /**
-     * Get the days to display based on showWeekends setting.
+     * The days on screen, each with the items due on it.
      *
-     * @return Collection<int, array{date: Carbon, plan: DailyPlan, isPast: bool, isToday: bool}>
+     * @return Collection<int, array{date: Carbon, tasks: \Illuminate\Support\Collection<int, Activity>, isPast: bool, isToday: bool}>
      */
     #[Computed]
     public function days(): Collection
@@ -72,40 +99,43 @@ new class extends Component
         $daysCount = $this->showWeekends ? 7 : 5;
         $today = Carbon::today();
 
-        return collect(range(0, $daysCount - 1))->map(function (int $offset) use ($start, $today): array {
+        $scheduled = Activity::query()
+            ->schedulable()
+            ->whereNotNull('due_date')
+            ->whereBetween('due_date', [
+                $start->copy()->startOfDay(),
+                $start->copy()->addDays($daysCount - 1)->endOfDay(),
+            ])
+            ->with('project')
+            ->ordered()
+            ->get()
+            ->groupBy(fn (Activity $task): string => $task->due_date->toDateString());
+
+        return collect(range(0, $daysCount - 1))->map(function (int $offset) use ($start, $today, $scheduled): array {
             $date = $start->copy()->addDays($offset);
-            $isPast = $date->isBefore($today);
-
-            $plan = $isPast
-                ? DailyPlan::whereDate('date', $date)->first()
-                : DailyPlan::getOrCreateForDate($date);
-
-            $plan?->load(['tasks' => fn ($q) => $q->with('project')->orderByPivot('sort_order')]);
 
             return [
                 'date' => $date,
-                'plan' => $plan,
-                'isPast' => $isPast,
+                'tasks' => $scheduled->get($date->toDateString(), collect()),
+                'isPast' => $date->isBefore($today),
                 'isToday' => $date->isToday(),
             ];
         });
     }
 
     /**
-     * Get tasks not planned for any day in the current week.
+     * Items with no date yet — the pool a day is filled from.
      *
      * @return \Illuminate\Database\Eloquent\Collection<int, Activity>
      */
     #[Computed]
     public function availableTasks(): \Illuminate\Database\Eloquent\Collection
     {
-        $plannedTaskIds = $this->days->flatMap(fn (array $day): array => $day['plan']?->tasks->pluck('id')->toArray() ?? [])->unique()->toArray();
-
         return Activity::active()
             ->schedulable()
-            ->whereNotIn('id', $plannedTaskIds)
+            ->whereNull('due_date')
             ->with('project')
-            ->orderBy('sort_order')
+            ->ordered()
             ->limit(30)
             ->get();
     }
@@ -124,10 +154,12 @@ new class extends Component
 
     /**
      * Calculate total estimated minutes for a day.
+     *
+     * @param  \Illuminate\Support\Collection<int, Activity>  $tasks
      */
-    public function getDayLoad(?DailyPlan $plan): int
+    public function getDayLoad(Collection $tasks): int
     {
-        return $plan?->tasks->sum('estimated_minutes') ?? 0;
+        return (int) $tasks->sum('estimated_minutes');
     }
 
     /**
@@ -173,112 +205,99 @@ new class extends Component
     }
 
     /**
-     * Handle drag between days.
+     * Handle drag between days: the drop *is* the due date.
      */
     public function handleSort(int|string $id, int $position, string $groupId): void
     {
         $taskId = (int) $id;
 
-        // If dropped back to pool, remove from all plans in the week
         if ($groupId === 'pool') {
-            $task = Activity::findOrFail($taskId);
-
-            foreach ($this->days as $day) {
-                if ($day['plan']?->tasks->contains('id', $taskId)) {
-                    $day['plan']->tasks()->detach($taskId);
-                }
-            }
-
-            $this->resetComputedProperties();
-
-            Flux::toast(variant: 'success', heading: 'Task removida do plano', text: $task->title);
+            $this->clearDueDate($taskId);
 
             return;
         }
 
-        $targetDate = Carbon::parse($groupId);
-
-        // Don't allow changes to past dates
-        if ($targetDate->isBefore(Carbon::today())) {
-            Flux::toast(variant: 'warning', heading: 'Ação bloqueada', text: 'Não é possível modificar dias passados.');
-
-            return;
-        }
-
-        $task = Activity::findOrFail($taskId);
-        $targetPlan = DailyPlan::getOrCreateForDate($targetDate);
-
-        // Find which plan currently has this task
-        $currentPlan = null;
-        foreach ($this->days as $day) {
-            if ($day['plan']?->tasks->contains('id', $taskId)) {
-                $currentPlan = $day['plan'];
-                break;
-            }
-        }
-
-        // Remove from current plan if exists and different from target
-        if ($currentPlan && $currentPlan->id !== $targetPlan->id) {
-            $currentPlan->tasks()->detach($taskId);
-        }
-
-        // Add or update in target plan
-        if ($targetPlan->tasks()->where('activity_id', $taskId)->exists()) {
-            $targetPlan->tasks()->updateExistingPivot($taskId, ['sort_order' => $position]);
-        } else {
-            $targetPlan->tasks()->attach($taskId, ['sort_order' => $position]);
-        }
-
-        $this->resetComputedProperties();
-
-        Flux::toast(variant: 'success', heading: 'Task movida', text: $task->title);
+        $this->setDueDate($taskId, $groupId);
     }
 
     /**
-     * Add task to a specific day.
+     * Set an item's due date to the given day.
      */
-    public function addToPlan(int $taskId, string $dateString): void
+    public function setDueDate(int $taskId, string $dateString): void
     {
         $date = Carbon::parse($dateString);
 
         if ($date->isBefore(Carbon::today())) {
+            Flux::toast(variant: 'warning', heading: 'Ação bloqueada', text: 'Não é possível alterar prazos em dias passados.');
+
             return;
         }
 
-        $task = Activity::active()->findOrFail($taskId);
-        $plan = DailyPlan::getOrCreateForDate($date);
-        $maxOrder = $plan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
+        $task = Activity::query()->schedulable()->find($taskId);
 
-        $plan->tasks()->syncWithoutDetaching([
-            $taskId => ['sort_order' => $maxOrder + 1],
-        ]);
+        if ($task === null) {
+            return;
+        }
+
+        try {
+            $task->update(['due_date' => $date->toDateString()]);
+        } catch (DomainRefusal $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível alterar o prazo', text: $e->getMessage());
+
+            return;
+        }
 
         $this->resetComputedProperties();
+        $this->dispatch('task-updated');
 
-        Flux::toast(variant: 'success', heading: 'Task adicionada', text: $task->title);
+        Flux::toast(variant: 'success', heading: 'Prazo definido', text: $task->title.' → '.$date->translatedFormat('d/m'));
     }
 
     /**
-     * Remove task from a specific day.
+     * Clear an item's due date, taking it off the week.
+     *
+     * Refused for a Data fixa: the classification *is* the promise of a
+     * date, so the domain guard would throw
+     * {@see \App\Exceptions\FixedDateRequiresDueDateException} and the user
+     * would get a Livewire error out of a drag. Saying why — and pointing
+     * at the real fix, reclassifying the item — is the honest answer.
      */
-    public function removeFromPlan(int $taskId, string $dateString): void
+    public function clearDueDate(int $taskId): void
     {
-        $date = Carbon::parse($dateString);
+        $task = Activity::query()->schedulable()->find($taskId);
 
-        if ($date->isBefore(Carbon::today())) {
+        if ($task === null) {
             return;
         }
 
-        $task = Activity::findOrFail($taskId);
-        $plan = DailyPlan::query()->whereDate('date', $date->toDateString())->first();
+        if ($task->due_date !== null && $task->due_date->isBefore(Carbon::today())) {
+            Flux::toast(variant: 'warning', heading: 'Ação bloqueada', text: 'Não é possível alterar prazos em dias passados.');
 
-        if ($plan) {
-            $plan->tasks()->detach($taskId);
+            return;
+        }
+
+        if ($task->service_class === ServiceClass::FixedDate) {
+            Flux::toast(
+                variant: 'warning',
+                heading: 'Data fixa exige prazo',
+                text: FixedDateRequiresDueDateException::MESSAGE.' Mude a classe de serviço antes de tirar o prazo.',
+            );
+
+            return;
+        }
+
+        try {
+            $task->update(['due_date' => null]);
+        } catch (DomainRefusal $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível remover o prazo', text: $e->getMessage());
+
+            return;
         }
 
         $this->resetComputedProperties();
+        $this->dispatch('task-updated');
 
-        Flux::toast(variant: 'success', heading: 'Task removida', text: $task->title);
+        Flux::toast(variant: 'success', heading: 'Prazo removido', text: $task->title);
     }
 
     #[On('task-updated')]
@@ -299,8 +318,8 @@ new class extends Component
 <div class="flex h-full w-full flex-1 flex-col gap-4 p-6">
     {{-- Breadcrumb --}}
     <flux:breadcrumbs>
-        <flux:breadcrumbs.item href="{{ route('daily') }}" wire:navigate icon="calendar-days">
-            Daily
+        <flux:breadcrumbs.item href="{{ route('ritual') }}" wire:navigate icon="sun">
+            Ritual
         </flux:breadcrumbs.item>
         <flux:breadcrumbs.item>
             Semana
@@ -310,7 +329,7 @@ new class extends Component
     {{-- Header --}}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center gap-4">
-            <flux:heading size="xl">Calendário Semanal</flux:heading>
+            <flux:heading size="xl">Prazos da Semana</flux:heading>
             <flux:badge color="zinc" icon="calendar-days">
                 {{ $this->weekStartDate->translatedFormat('d M') }} - {{ $this->weekStartDate->copy()->addDays($showWeekends ? 6 : 4)->translatedFormat('d M Y') }}
             </flux:badge>
@@ -355,7 +374,7 @@ new class extends Component
             {{-- Mobile tasks pool button --}}
             <flux:modal.trigger name="mobile-tasks-pool" class="lg:hidden">
                 <flux:button size="sm" variant="subtle" icon="clipboard-document-list">
-                    <span class="hidden sm:inline">Disponíveis</span>
+                    <span class="hidden sm:inline">Sem prazo</span>
                     <flux:badge size="sm" color="zinc" class="ml-1">{{ $this->availableTasks->count() }}</flux:badge>
                 </flux:button>
             </flux:modal.trigger>
@@ -446,7 +465,7 @@ new class extends Component
             <div class="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
                 <div class="flex items-center gap-2">
                     <flux:icon name="clipboard-document-list" class="size-5 text-zinc-400" />
-                    <flux:heading size="sm">Disponíveis</flux:heading>
+                    <flux:heading size="sm">Sem prazo</flux:heading>
                 </div>
                 <flux:badge size="sm" color="zinc">{{ $this->availableTasks->count() }}</flux:badge>
             </div>
@@ -494,7 +513,7 @@ new class extends Component
                         </li>
                     @empty
                         <li class="py-8 text-center text-xs text-zinc-600">
-                            Todas as tasks estão planejadas
+                            Todas as tasks já têm data
                         </li>
                     @endforelse
                 </ul>
@@ -548,10 +567,10 @@ new class extends Component
         @foreach ($this->days as $day)
             @php
                 $date = $day['date'];
-                $plan = $day['plan'];
+                $dayTasks = $day['tasks'];
                 $isPast = $day['isPast'];
                 $isToday = $day['isToday'];
-                $dayLoad = $this->getDayLoad($plan);
+                $dayLoad = $this->getDayLoad($dayTasks);
                 $loadColor = $this->getLoadColor($dayLoad);
             @endphp
 
@@ -581,7 +600,7 @@ new class extends Component
                     {{-- Day Load Indicator --}}
                     <div class="flex items-center gap-2">
                         <flux:badge size="sm" color="{{ $loadColor }}">
-                            {{ $plan?->tasks->count() ?? 0 }} tasks
+                            {{ $dayTasks->count() }} tasks
                         </flux:badge>
                         @if ($dayLoad > 0)
                             <span class="text-[10px] text-zinc-500">
@@ -599,12 +618,12 @@ new class extends Component
                         wire:sort:group-id="{{ $date->toDateString() }}"
                         class="flex min-h-[4rem] flex-col gap-2"
                     >
-                        @forelse ($plan?->tasks ?? collect() as $task)
+                        @forelse ($dayTasks as $task)
                             @php
-                                $isCompleted = $task->pivot->completed_at !== null;
+                                $isCompleted = $task->status === ActivityStatus::Done;
                             @endphp
 
-                            <li wire:key="task-{{ $plan->id }}-{{ $task->id }}" wire:sort:item="{{ $task->id }}">
+                            <li wire:key="task-{{ $date->toDateString() }}-{{ $task->id }}" wire:sort:item="{{ $task->id }}">
                                 <div
                                     class="group rounded-lg border {{ $isCompleted ? 'border-zinc-800 bg-zinc-800/50' : 'border-zinc-700 bg-zinc-800' }} p-2 transition hover:border-zinc-500"
                                     wire:click="$dispatch('open-task-modal', { taskId: {{ $task->id }} })"
@@ -644,7 +663,8 @@ new class extends Component
 
                                         @unless ($isPast)
                                             <button
-                                                wire:click.stop="removeFromPlan({{ $task->id }}, '{{ $date->toDateString() }}')"
+                                                wire:click.stop="clearDueDate({{ $task->id }})"
+                                                title="Remover o prazo"
                                                 class="shrink-0 text-zinc-600 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
                                             >
                                                 <flux:icon name="x-mark" class="size-3" />
@@ -655,7 +675,7 @@ new class extends Component
                             </li>
                         @empty
                             <li class="py-4 text-center text-xs text-zinc-600">
-                                {{ $isPast ? 'Sem tasks' : 'Arraste tasks aqui' }}
+                                {{ $isPast ? 'Sem tasks' : 'Arraste para dar este prazo' }}
                             </li>
                         @endforelse
                     </ul>
@@ -668,7 +688,7 @@ new class extends Component
     {{-- Mobile Tasks Pool Modal --}}
     <flux:modal name="mobile-tasks-pool" class="w-full max-w-lg space-y-4">
         <div class="flex items-center justify-between">
-            <flux:heading size="lg">Tasks Disponíveis</flux:heading>
+            <flux:heading size="lg">Sem prazo</flux:heading>
             <flux:badge color="zinc">{{ $this->availableTasks->count() }}</flux:badge>
         </div>
 
@@ -700,7 +720,7 @@ new class extends Component
                             @foreach ($this->days as $day)
                                 @if (!$day['isPast'])
                                     <flux:menu.item
-                                        wire:click="addToPlan({{ $task->id }}, '{{ $day['date']->toDateString() }}')"
+                                        wire:click="setDueDate({{ $task->id }}, '{{ $day['date']->toDateString() }}')"
                                         icon="{{ $day['isToday'] ? 'star' : 'calendar' }}"
                                     >
                                         {{ $day['date']->translatedFormat('D d') }}
@@ -715,7 +735,7 @@ new class extends Component
                 </div>
             @empty
                 <div class="py-8 text-center text-sm text-zinc-500">
-                    Todas as tasks estão planejadas 🎉
+                    Todas as tasks já têm data 🎉
                 </div>
             @endforelse
         </div>

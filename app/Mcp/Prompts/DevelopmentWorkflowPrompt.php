@@ -4,8 +4,8 @@ namespace App\Mcp\Prompts;
 
 use App\Enums\ActivityStatus;
 use App\Models\Activity;
-use App\Models\DailyPlan;
 use App\Models\Document;
+use App\Models\MorningRitual;
 use App\Models\TimeEntry;
 use Carbon\Carbon;
 use Laravel\Mcp\Request;
@@ -100,7 +100,8 @@ Your role is to guide the implementation of the task through a structured workfl
 ### 📋 2. PLANEJAMENTO
 - Explorar código existente: Models, Policies, Migrations, Componentes
 - Definir arquitetura e abordagem
-- Adicionar ao plano do dia com `add-to-plan`
+- Confirmar o contexto do dia com `get-ritual-status` (ritual feito? o que está esperando?)
+- Conferir a ordem da fila com `get-pull-queue` antes de puxar mais trabalho
 - Criar branch feature/nome-descritivo
 
 ### ⚡ 3. IMPLEMENTAÇÃO (com ativação de skills)
@@ -286,7 +287,7 @@ SYSTEM;
 
     private function buildTodayContext(): string
     {
-        $todayPlan = DailyPlan::query()->whereDate('date', Carbon::today())->first();
+        $ritual = MorningRitual::today();
         $runningEntry = TimeEntry::query()->whereNull('stopped_at')->with('activity')->first();
 
         $context = "\n## ⏰ Contexto de Hoje\n";
@@ -300,11 +301,9 @@ SYSTEM;
             $context .= "- **Timer ativo**: Nenhum\n";
         }
 
-        if ($todayPlan) {
-            $totalTasks = $todayPlan->tasks()->count();
-            $completedTasks = $todayPlan->tasks()->wherePivot('completed_at', '!=', null)->count();
-            $context .= "- **Plano do dia**: {$completedTasks}/{$totalTasks} tasks completadas\n";
-        }
+        $context .= '- **Ritual matinal**: '.($ritual?->isCompleted()
+            ? 'concluído às '.$ritual->completedAtLabel()
+            : 'ainda não concluído')."\n";
 
         $minutesToday = TimeEntry::query()
             ->forDate(Carbon::today())

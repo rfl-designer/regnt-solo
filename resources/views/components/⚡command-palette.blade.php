@@ -4,10 +4,8 @@ use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
 use App\Enums\ActivityType;
 use App\Models\Activity;
-use App\Models\DailyPlan;
 use App\Models\Project;
 use App\Models\TimeEntry;
-use Carbon\Carbon;
 use Flux\Flux;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
@@ -89,7 +87,6 @@ new class extends Component
             'deletar' => $this->deleteTask($task),
             'projeto' => $this->assignProject($task, $param),
             'classe' => $this->changeServiceClass($task, $param),
-            'planejar' => $this->planTask($task),
             default => Flux::toast(variant: 'warning', heading: 'Comando desconhecido', text: "Comando '{$command}' não reconhecido."),
         };
 
@@ -201,7 +198,6 @@ new class extends Component
             ['label' => 'deletar', 'description' => 'Excluir task (com confirmação)', 'icon' => 'trash', 'action' => ''],
             ['label' => 'projeto', 'description' => 'Atribuir task a um projeto', 'icon' => 'folder', 'action' => ''],
             ['label' => 'classe', 'description' => 'Alterar classe de serviço da task', 'icon' => 'flag', 'action' => ''],
-            ['label' => 'planejar', 'description' => 'Adicionar task ao plano de hoje', 'icon' => 'calendar-days', 'action' => ''],
         ];
     }
 
@@ -342,26 +338,6 @@ new class extends Component
     }
 
     /**
-     * Add a task to today's daily plan.
-     */
-    private function planTask(Activity $task): void
-    {
-        $plan = DailyPlan::getOrCreateForDate(Carbon::today());
-
-        if ($plan->tasks()->where('activity_id', $task->id)->exists()) {
-            Flux::toast(variant: 'warning', heading: 'Já planejada', text: "{$task->title} já está no plano de hoje.");
-
-            return;
-        }
-
-        $maxOrder = $plan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
-        $plan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
-
-        $this->dispatch('task-updated');
-        Flux::toast(variant: 'success', heading: 'Task planejada', text: "{$task->title} adicionada ao plano de hoje.");
-    }
-
-    /**
      * Reset the search input.
      */
     private function resetSearch(): void
@@ -393,7 +369,7 @@ new class extends Component
                             <flux:badge size="sm" color="zinc">N</flux:badge> <span class="text-xs">Nova task</span>
                             <flux:badge size="sm" color="zinc">B</flux:badge> <span class="text-xs">Kanban</span>
                             <flux:badge size="sm" color="zinc">F</flux:badge> <span class="text-xs">Work</span>
-                            <flux:badge size="sm" color="zinc">D</flux:badge> <span class="text-xs">Daily</span>
+                            <flux:badge size="sm" color="zinc">D</flux:badge> <span class="text-xs">Ritual</span>
                             <flux:badge size="sm" color="zinc">I</flux:badge> <span class="text-xs">Inbox</span>
                             <flux:badge size="sm" color="zinc">T</flux:badge> <span class="text-xs">Timer</span>
                         </div>
@@ -434,7 +410,7 @@ new class extends Component
                         <div class="px-4 py-6 text-center text-sm text-zinc-500">
                             Nenhum comando encontrado.
                             <div class="mt-2 text-xs">
-                                Comandos: <code>mover</code>, <code>timer</code>, <code>deletar</code>, <code>projeto</code>, <code>classe</code>, <code>planejar</code>
+                                Comandos: <code>mover</code>, <code>timer</code>, <code>deletar</code>, <code>projeto</code>, <code>classe</code>
                             </div>
                         </div>
                     @else

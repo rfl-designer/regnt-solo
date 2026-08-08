@@ -5,11 +5,9 @@ use App\Enums\ActivityType;
 use App\Enums\ProjectStatus;
 use App\Enums\StakeholderIssueStatus;
 use App\Models\Activity;
-use App\Models\DailyPlan;
 use App\Models\Document;
 use App\Models\Project;
 use App\Models\StakeholderIssue;
-use Carbon\Carbon;
 use Flux\Flux;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
@@ -415,10 +413,7 @@ new class extends Component
             ->filter(fn (Activity $t): bool => $t->type === ActivityType::Issue && $t->status === $status);
 
         if ($status === ActivityStatus::Done) {
-            $tasks = $tasks->filter(fn (Activity $t): bool => $t->completed_at?->between(
-                Carbon::now()->startOfWeek(),
-                Carbon::now()->endOfWeek(),
-            ));
+            $tasks = $tasks->filter(fn (Activity $t): bool => ! $t->isArchived());
         }
 
         return $tasks
@@ -442,10 +437,7 @@ new class extends Component
             ->filter(fn (Activity $t): bool => $t->type === ActivityType::Issue && $t->status === $status);
 
         if ($status === ActivityStatus::Done) {
-            $tasks = $tasks->filter(fn (Activity $t): bool => $t->completed_at?->between(
-                Carbon::now()->startOfWeek(),
-                Carbon::now()->endOfWeek(),
-            ));
+            $tasks = $tasks->filter(fn (Activity $t): bool => ! $t->isArchived());
         }
 
         return $tasks->count();
@@ -467,13 +459,6 @@ new class extends Component
 
         DB::transaction(function () use ($task, $newStatus, $position): void {
             if ($newStatus === ActivityStatus::Done && $task->status !== ActivityStatus::Done) {
-                $dailyPlan = DailyPlan::getOrCreateForDate(Carbon::today());
-
-                if (! $dailyPlan->tasks()->where('activity_id', $task->id)->exists()) {
-                    $maxOrder = $dailyPlan->tasks()->max('daily_plan_activity.sort_order') ?? -1;
-                    $dailyPlan->tasks()->attach($task->id, ['sort_order' => $maxOrder + 1]);
-                }
-
                 $task->markAsDone();
 
                 Flux::toast(variant: 'success', heading: 'Task concluída', text: $task->title);
@@ -507,10 +492,7 @@ new class extends Component
             ->where('id', '!=', $movedId);
 
         if ($status === ActivityStatus::Done) {
-            $query->whereBetween('completed_at', [
-                Carbon::now()->startOfWeek(),
-                Carbon::now()->endOfWeek(),
-            ]);
+            $query->notArchived();
         }
 
         $ids = $query->orderBy('sort_order')->orderBy('id')->pluck('id')->all();

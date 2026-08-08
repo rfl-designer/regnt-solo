@@ -39,7 +39,7 @@
 
 ## Models & Enums
 
-- Models: `App\Models\` — Project, Task, TimeEntry, DailyPlan, TaskStatusChange, WeeklyReview, RecurringTask, TaskTemplate
+- Models: `App\Models\` — Project, Task, TimeEntry, MorningRitual, TaskStatusChange, WeeklyReview, RecurringTask, TaskTemplate
 - Enums: `App\Enums\` (PHP native enums) — cada enum implementa `label()` (PT-BR), `color()`, `icon()`
 - `Task.completed_at`: preenchido ao marcar done
 - `Task.sort_order`: por coluna (por status)
@@ -50,13 +50,13 @@
 ## Decisões de Design
 
 - **Dark mode only** (sem toggle, sem light mode)
-- **Kanban**: 4 colunas (Backlog → Todo → Doing → Done). Done mostra só semana corrente
+- **Kanban**: 7 colunas em ordem de fluxo (Backlog → Aguardando aprovação → Pronto → Fazendo → Esperando → Aguardando validação → Feito). Feito mostra só as não-arquivadas
 - **Kanban**: lazy loading 20 por coluna, seção "Sem projeto" separada
-- **Daily Planner**: checkbox muda status GLOBAL para done, carry-over banner para tasks de ontem
+- **Ritual matinal** (substitui o Daily Planner): wizard de 5 passos de um clique + tela de registro (`/ritual`). Arquivar é timestamp (`archived_at`), nunca status — métricas de fluxo não mudam
 - **Timer**: apenas 1 ativo por vez, mini modal de notas ao parar (bloqueia)
 - **Task Modal**: NÃO fecha ao salvar (reativa), TimeEntries editáveis inline, barra de tempo por status
 - **Quick-Add**: modal overlay (hotkey `Ctrl+N`), sempre cria inbox, autocomplete `#projeto` `!prioridade` `@data`
-- **Command Palette** (`Ctrl+K`): busca + 6 comandos com prefixo `>`
+- **Command Palette** (`Ctrl+K`): busca + 5 comandos com prefixo `>` (`mover`, `timer`, `deletar`, `projeto`, `classe`)
 - **Dashboard cards**: clicáveis, navegam para páginas filtradas + métricas de tempo médio por status
 - **Empty states**: ícone + texto + CTA + dica de atalho
 
@@ -105,7 +105,7 @@ Rastreamento automático de quanto tempo cada task passa em cada status (Inbox �
 - **Observer**: `TaskObserver` registrado via `#[ObservedBy]` no Task model
   - `created`: registra status inicial da task
   - `updating`: detecta mudança de `status` e registra novo `TaskStatusChange`
-  - Captura mudanças de qualquer origem (Kanban, Task Modal, Command Palette, Daily Planner, MCP)
+  - Captura mudanças de qualquer origem (Kanban, Task Modal, Command Palette, Ritual matinal, MCP)
 - **Model**: `TaskStatusChange` — `task_id`, `status` (cast TaskStatus), `changed_at`, `from_status`, `to_status`
 - **Accessors no Task**:
   - `time_in_status`: array associativo `[status => minutos]` — tempo acumulado em cada status
@@ -218,18 +218,9 @@ SOLOBOARD_AI_MODEL=claude-sonnet-4-20250514  # modelo utilizado
 - **System prompt**: "You are a productivity coach for a solo developer..."
 - **Métodos**:
   - `isEnabled(): bool` — verifica feature flag + API key configurada
-  - `suggestDailyPlan(Collection $tasks, array $history): array` — sugere tasks para o plano do dia com razão e score (1-100)
   - `analyzeBacklog(Collection $tasks): array` — analisa inbox/backlog e sugere ações (arquivar, priorizar, estimar)
   - `detectPatterns(array $weeklyData): array` — detecta padrões de produtividade (projetos abandonados, over-commitment, falta de deep work)
 - **Graceful degradation**: todos os métodos retornam `[]` se desabilitado, sem tasks, ou em caso de erro da API
-
-### AI no Daily Planner
-
-- Botão "✨ Sugerir plano" (só aparece se `ai_enabled=true`)
-- Chama `suggestDailyPlan()` via Livewire com loading state
-- Modal com lista de sugestões: task + razão + score de prioridade
-- Ações: "Adicionar ao plano" individual ou "Adicionar todas"
-- Rate limiting: 1 chamada por minuto
 
 ### AI no Inbox
 
@@ -258,7 +249,7 @@ SOLOBOARD_AI_MODEL=claude-sonnet-4-20250514  # modelo utilizado
 ### Testes
 
 - `tests/Feature/AiAssistantTest.php` — testes do serviço (mock da API Anthropic)
-- `tests/Feature/AiIntegrationTest.php` — testes de integração no Daily Planner e Inbox
+- `tests/Feature/AiIntegrationTest.php` — testes de integração no Inbox
 - `tests/Feature/AiInsightsTest.php` — testes dos insights no Dashboard
 
 ## Recurring Tasks & Templates (Epic 17)
@@ -325,7 +316,7 @@ Tasks recorrentes e templates para automatizar atividades repetitivas e manter c
 | -------- | --------------------------- |
 | `Ctrl+N` | Nova task (quick-add modal) |
 | `Ctrl+B` | Ir para Kanban (Board)      |
-| `Ctrl+D` | Ir para Daily Planner       |
+| `Ctrl+D` | Ir para o Ritual matinal    |
 | `Ctrl+I` | Ir para Inbox               |
 | `Ctrl+T` | Start/stop timer            |
 | `Esc`    | Fechar modal                |
@@ -362,13 +353,11 @@ O SoloBoard expõe um MCP Server para integração com AI clients (Claude Code, 
   - `start-timer` — Inicia timer para task ou feature (para outros automaticamente)
   - `stop-timer` — Para timer com notas opcionais
   - `timer-status` — Mostra timer ativo (task ou feature)
-  - `today-plan` — Plano do dia (auto-cria)
-  - `suggest-tasks` — Sugere tasks prioritárias
-  - `add-to-plan` — Adiciona task ao plano do dia
+  - `get-pull-queue` — Fila de puxar (Pronto em ordem, com o motivo de cada posição)
+  - `get-ritual-status` — Estado do ritual matinal de hoje + snapshot do quadro (leitura)
   - `list-projects` — Lista projetos por status
 - **Resource**: `soloboard://overview` — Resumo geral do estado (inclui active_features)
 - **Prompts**:
-  - `daily-planning` — Ajuda a planejar o dia
   - `session-planning` — Lê prompt de uma task e gera contexto para planejar sessão de AI coding
   - `feature-planning` — Lê spec de uma feature e gera contexto para planejar implementação
 

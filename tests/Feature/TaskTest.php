@@ -3,7 +3,6 @@
 use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Models\Activity;
-use App\Models\DailyPlan;
 use App\Models\Project;
 use App\Models\TimeEntry;
 
@@ -39,12 +38,10 @@ test('task has many time entries', function () {
     expect($task->timeEntries)->toHaveCount(2);
 });
 
-test('task belongs to many daily plans', function () {
+test('a task no longer belongs to any daily plan', function () {
     $task = Activity::factory()->create();
-    $plan = DailyPlan::factory()->create();
-    $plan->tasks()->attach($task, ['sort_order' => 1]);
 
-    expect($task->dailyPlans)->toHaveCount(1);
+    expect(method_exists($task, 'dailyPlans'))->toBeFalse();
 });
 
 test('inbox scope returns only inbox tasks', function () {

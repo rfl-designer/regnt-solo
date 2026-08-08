@@ -100,7 +100,8 @@ Your role is to guide the implementation of the task through a structured workfl
 ### 📋 2. PLANEJAMENTO
 - Explorar código existente: Models, Policies, Migrations, Componentes
 - Definir arquitetura e abordagem
-- Adicionar ao plano do dia com `add-to-plan`
+- Confirmar o contexto do dia com `get-ritual-status` (ritual feito? o que está esperando?)
+- Conferir a ordem da fila com `get-pull-queue` antes de puxar mais trabalho
 - Criar branch feature/nome-descritivo
 
 ### ⚡ 3. IMPLEMENTAÇÃO (com ativação de skills)

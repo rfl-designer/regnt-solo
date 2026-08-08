@@ -34,19 +34,30 @@ new class extends Component
     public ?string $deletingTaskTitle = null;
 
     /**
-     * Personal tasks (type=Task) grouped by status, honoring the active filters.
+     * The rows on screen, grouped by status and honoring the active filters.
+     *
+     * The universe depends on the archive filter, and that asymmetry is the
+     * point (issue #147). Normally this page is the personal layer:
+     * `type=Task`, the recados. But the morning ritual archives *any* board
+     * leaf — Issues and atomic Épicos included — and archiving hides them
+     * from the Feito column. If the archived view stayed restricted to
+     * personal tasks, an archived Issue would exist in no surface at all,
+     * which is exactly the "arquivadas acessíveis por filtro" the issue
+     * requires. So the archived view spans everything archivable
+     * ({@see Activity::scopeSchedulable()}: Issues, Tasks and atomic
+     * Épicos), and only the live view stays personal.
      *
      * @return array<string, \Illuminate\Support\Collection<int, Activity>>
      */
     #[Computed]
     public function tasksByStatus(): array
     {
-        $query = Activity::query()->tasks()->with(['project', 'parent']);
+        $query = Activity::query()->with(['project', 'parent']);
 
         if ($this->showArchived) {
-            $query->archived();
+            $query->schedulable()->archived();
         } else {
-            $query->notArchived();
+            $query->tasks()->notArchived();
         }
 
         if ($this->search !== '') {
@@ -166,7 +177,11 @@ new class extends Component
     </div>
 
     <flux:text class="-mt-4 text-sm text-zinc-400">
-        Recados operacionais e pessoais. Podem existir sem projeto ou ligados a um.
+        @if ($showArchived)
+            Tudo o que o ritual matinal já arquivou — recados, fatias e épicos atômicos. Continuam concluídos; só saíram da coluna Feito.
+        @else
+            Recados operacionais e pessoais. Podem existir sem projeto ou ligados a um.
+        @endif
     </flux:text>
 
     {{-- Filters --}}

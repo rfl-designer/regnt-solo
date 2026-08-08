@@ -89,7 +89,8 @@ Ações:
 Ações:
 - Explorar código existente (Models, Policies, Migrations, Componentes)
 - Definir arquitetura e abordagem
-- Adicionar ao plano do dia com `add-to-plan`
+- Confirmar o contexto do dia com `get-ritual-status` (ritual feito? o que está esperando?)
+- Conferir a ordem da fila com `get-pull-queue` antes de puxar mais trabalho
 - Criar branch feature/nome-descritivo
 
 ### ⚡ 3. IMPLEMENTAÇÃO
@@ -213,7 +214,8 @@ Como desenvolvedor, quero filtrar tasks por data no Kanban...
 |------|------|-----|
 | `start-timer` | Intake | Iniciar cronômetro |
 | `update-task` | Intake/Entrega | Mudar status para doing/done |
-| `add-to-plan` | Planejamento | Adicionar ao plano do dia |
+| `get-ritual-status` | Planejamento | Estado do ritual matinal e do quadro |
+| `get-pull-queue` | Planejamento | Ordem da fila de puxar (Pronto) |
 | `get-document` | Planejamento | Ler PRDs/Specs |
 | `log-commits` | Entrega | Registrar commits e PR |
 | `stop-timer` | Entrega | Parar timer com notas |

@@ -1,6 +1,9 @@
 <?php
 
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
+use App\Exceptions\DomainRefusal;
+use App\Exceptions\FixedDateRequiresDueDateException;
 use App\Models\Activity;
 use App\Models\Project;
 use Carbon\Carbon;
@@ -12,14 +15,28 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
- * The week, scheduled by due date (issue #147).
+ * A semana por **prazo de entrega** (issue #147).
  *
  * This page used to read the daily plan's pivot: an item was "on Tuesday"
  * because a row said so, in a second place, next to the board that already
- * knew when it was due. With the plan gone, the schedule is the due date
- * itself — dragging a card onto a day *is* setting its due date, which is
- * the fact the pull queue and the Data fixa risk window already read. One
- * source of truth instead of two that could disagree.
+ * knew when it was due. With the plan gone, the week *is* the due dates —
+ * one source of truth instead of two that could disagree.
+ *
+ * The consequence is deliberate and must stay visible in the interface:
+ * dragging a card here **edits a real commitment**, not a private plan. A
+ * due date is what makes an item overdue, and what promotes a Data fixa in
+ * the pull queue when it comes within the risk window. So every label,
+ * heading and toast on this page talks about *prazo* — "definir prazo",
+ * "sem prazo", "prazo removido" — and never about planning or scheduling:
+ * the old wording would invite the user to shuffle dates as if it were
+ * still a scratch pad, and quietly reorder the board's queue.
+ *
+ * Two rules follow from that, both enforced below:
+ *
+ * - **Data fixa não fica sem prazo.** Clearing the due date of an item
+ *   classified as Data fixa is refused (the domain guard would throw), with
+ *   an explanation instead of a Livewire error.
+ * - **Dias passados não são editáveis**, same as before.
  */
 new class extends Component
 {
@@ -193,58 +210,94 @@ new class extends Component
     public function handleSort(int|string $id, int $position, string $groupId): void
     {
         $taskId = (int) $id;
-        $task = Activity::findOrFail($taskId);
 
         if ($groupId === 'pool') {
-            $this->unschedule($taskId);
+            $this->clearDueDate($taskId);
 
             return;
         }
 
-        $this->schedule($taskId, $groupId);
+        $this->setDueDate($taskId, $groupId);
     }
 
     /**
-     * Give an item a due date, i.e. put it on a day.
+     * Set an item's due date to the given day.
      */
-    public function schedule(int $taskId, string $dateString): void
+    public function setDueDate(int $taskId, string $dateString): void
     {
         $date = Carbon::parse($dateString);
 
         if ($date->isBefore(Carbon::today())) {
-            Flux::toast(variant: 'warning', heading: 'Ação bloqueada', text: 'Não é possível modificar dias passados.');
+            Flux::toast(variant: 'warning', heading: 'Ação bloqueada', text: 'Não é possível alterar prazos em dias passados.');
 
             return;
         }
 
-        $task = Activity::findOrFail($taskId);
-        $task->update(['due_date' => $date->toDateString()]);
+        $task = Activity::query()->schedulable()->find($taskId);
+
+        if ($task === null) {
+            return;
+        }
+
+        try {
+            $task->update(['due_date' => $date->toDateString()]);
+        } catch (DomainRefusal $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível alterar o prazo', text: $e->getMessage());
+
+            return;
+        }
 
         $this->resetComputedProperties();
         $this->dispatch('task-updated');
 
-        Flux::toast(variant: 'success', heading: 'Task agendada', text: $task->title);
+        Flux::toast(variant: 'success', heading: 'Prazo definido', text: $task->title.' → '.$date->translatedFormat('d/m'));
     }
 
     /**
-     * Take an item off the week by clearing its due date.
+     * Clear an item's due date, taking it off the week.
+     *
+     * Refused for a Data fixa: the classification *is* the promise of a
+     * date, so the domain guard would throw
+     * {@see \App\Exceptions\FixedDateRequiresDueDateException} and the user
+     * would get a Livewire error out of a drag. Saying why — and pointing
+     * at the real fix, reclassifying the item — is the honest answer.
      */
-    public function unschedule(int $taskId): void
+    public function clearDueDate(int $taskId): void
     {
-        $task = Activity::findOrFail($taskId);
+        $task = Activity::query()->schedulable()->find($taskId);
+
+        if ($task === null) {
+            return;
+        }
 
         if ($task->due_date !== null && $task->due_date->isBefore(Carbon::today())) {
-            Flux::toast(variant: 'warning', heading: 'Ação bloqueada', text: 'Não é possível modificar dias passados.');
+            Flux::toast(variant: 'warning', heading: 'Ação bloqueada', text: 'Não é possível alterar prazos em dias passados.');
 
             return;
         }
 
-        $task->update(['due_date' => null]);
+        if ($task->service_class === ServiceClass::FixedDate) {
+            Flux::toast(
+                variant: 'warning',
+                heading: 'Data fixa exige prazo',
+                text: FixedDateRequiresDueDateException::MESSAGE.' Mude a classe de serviço antes de tirar o prazo.',
+            );
+
+            return;
+        }
+
+        try {
+            $task->update(['due_date' => null]);
+        } catch (DomainRefusal $e) {
+            Flux::toast(variant: 'danger', heading: 'Não foi possível remover o prazo', text: $e->getMessage());
+
+            return;
+        }
 
         $this->resetComputedProperties();
         $this->dispatch('task-updated');
 
-        Flux::toast(variant: 'success', heading: 'Task removida da semana', text: $task->title);
+        Flux::toast(variant: 'success', heading: 'Prazo removido', text: $task->title);
     }
 
     #[On('task-updated')]
@@ -276,7 +329,7 @@ new class extends Component
     {{-- Header --}}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center gap-4">
-            <flux:heading size="xl">Calendário Semanal</flux:heading>
+            <flux:heading size="xl">Prazos da Semana</flux:heading>
             <flux:badge color="zinc" icon="calendar-days">
                 {{ $this->weekStartDate->translatedFormat('d M') }} - {{ $this->weekStartDate->copy()->addDays($showWeekends ? 6 : 4)->translatedFormat('d M Y') }}
             </flux:badge>
@@ -321,7 +374,7 @@ new class extends Component
             {{-- Mobile tasks pool button --}}
             <flux:modal.trigger name="mobile-tasks-pool" class="lg:hidden">
                 <flux:button size="sm" variant="subtle" icon="clipboard-document-list">
-                    <span class="hidden sm:inline">Disponíveis</span>
+                    <span class="hidden sm:inline">Sem prazo</span>
                     <flux:badge size="sm" color="zinc" class="ml-1">{{ $this->availableTasks->count() }}</flux:badge>
                 </flux:button>
             </flux:modal.trigger>
@@ -412,7 +465,7 @@ new class extends Component
             <div class="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
                 <div class="flex items-center gap-2">
                     <flux:icon name="clipboard-document-list" class="size-5 text-zinc-400" />
-                    <flux:heading size="sm">Disponíveis</flux:heading>
+                    <flux:heading size="sm">Sem prazo</flux:heading>
                 </div>
                 <flux:badge size="sm" color="zinc">{{ $this->availableTasks->count() }}</flux:badge>
             </div>
@@ -610,7 +663,8 @@ new class extends Component
 
                                         @unless ($isPast)
                                             <button
-                                                wire:click.stop="unschedule({{ $task->id }})"
+                                                wire:click.stop="clearDueDate({{ $task->id }})"
+                                                title="Remover o prazo"
                                                 class="shrink-0 text-zinc-600 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
                                             >
                                                 <flux:icon name="x-mark" class="size-3" />
@@ -621,7 +675,7 @@ new class extends Component
                             </li>
                         @empty
                             <li class="py-4 text-center text-xs text-zinc-600">
-                                {{ $isPast ? 'Sem tasks' : 'Arraste tasks aqui' }}
+                                {{ $isPast ? 'Sem tasks' : 'Arraste para dar este prazo' }}
                             </li>
                         @endforelse
                     </ul>
@@ -634,7 +688,7 @@ new class extends Component
     {{-- Mobile Tasks Pool Modal --}}
     <flux:modal name="mobile-tasks-pool" class="w-full max-w-lg space-y-4">
         <div class="flex items-center justify-between">
-            <flux:heading size="lg">Tasks Disponíveis</flux:heading>
+            <flux:heading size="lg">Sem prazo</flux:heading>
             <flux:badge color="zinc">{{ $this->availableTasks->count() }}</flux:badge>
         </div>
 
@@ -666,7 +720,7 @@ new class extends Component
                             @foreach ($this->days as $day)
                                 @if (!$day['isPast'])
                                     <flux:menu.item
-                                        wire:click="schedule({{ $task->id }}, '{{ $day['date']->toDateString() }}')"
+                                        wire:click="setDueDate({{ $task->id }}, '{{ $day['date']->toDateString() }}')"
                                         icon="{{ $day['isToday'] ? 'star' : 'calendar' }}"
                                     >
                                         {{ $day['date']->translatedFormat('D d') }}

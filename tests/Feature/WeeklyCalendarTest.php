@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Models\Project;
 use App\Models\User;
@@ -25,7 +26,7 @@ test('weekly calendar page renders correctly for authenticated users', function 
 test('weekly calendar component renders successfully', function () {
     Livewire::test('pages::weekly-calendar')
         ->assertSuccessful()
-        ->assertSee('Calendário Semanal');
+        ->assertSee('Prazos da Semana');
 });
 
 test('weekly calendar defaults to current week starting on monday', function () {
@@ -111,7 +112,7 @@ test('weekly calendar can schedule a task on a specific day', function () {
     $tomorrow = Carbon::tomorrow()->toDateString();
 
     Livewire::test('pages::weekly-calendar')
-        ->call('schedule', $task->id, $tomorrow);
+        ->call('setDueDate', $task->id, $tomorrow);
 
     expect($task->fresh()->due_date->toDateString())->toBe($tomorrow);
 });
@@ -122,7 +123,7 @@ test('weekly calendar can take a task off the week', function () {
         'due_date' => Carbon::tomorrow()->toDateString(),
     ]);
 
-    Livewire::test('pages::weekly-calendar')->call('unschedule', $task->id);
+    Livewire::test('pages::weekly-calendar')->call('clearDueDate', $task->id);
 
     expect($task->fresh()->due_date)->toBeNull();
 });
@@ -132,7 +133,7 @@ test('weekly calendar prevents scheduling on past days', function () {
     $yesterday = Carbon::yesterday()->toDateString();
 
     Livewire::test('pages::weekly-calendar')
-        ->call('schedule', $task->id, $yesterday);
+        ->call('setDueDate', $task->id, $yesterday);
 
     expect($task->fresh()->due_date)->toBeNull();
 });
@@ -142,7 +143,7 @@ test('weekly calendar prevents unscheduling a past day', function () {
         'due_date' => Carbon::yesterday()->toDateString(),
     ]);
 
-    Livewire::test('pages::weekly-calendar')->call('unschedule', $task->id);
+    Livewire::test('pages::weekly-calendar')->call('clearDueDate', $task->id);
 
     expect($task->fresh()->due_date)->not->toBeNull();
 });
@@ -333,4 +334,61 @@ test('weekly calendar toggle shows full week label when weekends enabled', funct
     Livewire::test('pages::weekly-calendar')
         ->set('showWeekends', true)
         ->assertSee('Dom-Sáb');
+});
+
+// ── Prazo, não plano (issue #147, review) ────────────────────────────────
+
+test('the week speaks of prazo, never of plano', function () {
+    Activity::factory()->todo()->create(['title' => 'Sem prazo ainda', 'due_date' => null]);
+
+    Livewire::test('pages::weekly-calendar')
+        ->assertSee('Prazos da Semana')
+        ->assertSee('Sem prazo')
+        ->assertDontSee('plano do dia')
+        ->assertDontSee('Task agendada');
+});
+
+test('setting a due date says so in the toast and moves the real date', function () {
+    $task = Activity::factory()->todo()->create(['due_date' => null]);
+    $tomorrow = Carbon::tomorrow();
+
+    Livewire::test('pages::weekly-calendar')
+        ->call('setDueDate', $task->id, $tomorrow->toDateString());
+
+    expect($task->fresh()->due_date->toDateString())->toBe($tomorrow->toDateString())
+        ->and($task->fresh()->isOverdue())->toBeFalse();
+});
+
+test('clearing the due date of a Data fixa is refused instead of erroring', function () {
+    $fixed = Activity::factory()->issue()->todo()
+        ->fixedDate(Carbon::tomorrow()->toDateString())
+        ->create(['title' => 'Entrega contratual']);
+
+    Livewire::test('pages::weekly-calendar')
+        ->call('clearDueDate', $fixed->id)
+        ->assertSuccessful();
+
+    expect($fixed->fresh()->due_date)->not->toBeNull()
+        ->and($fixed->fresh()->service_class)->toBe(ServiceClass::FixedDate);
+});
+
+test('dragging a Data fixa to the pool is refused the same way', function () {
+    $fixed = Activity::factory()->issue()->todo()
+        ->fixedDate(Carbon::tomorrow()->toDateString())
+        ->create();
+
+    Livewire::test('pages::weekly-calendar')
+        ->call('handleSort', $fixed->id, 0, 'pool')
+        ->assertSuccessful();
+
+    expect($fixed->fresh()->due_date)->not->toBeNull();
+});
+
+test('the week never touches items that are not schedulable', function () {
+    $draft = Activity::factory()->draft()->create(['due_date' => null]);
+
+    Livewire::test('pages::weekly-calendar')
+        ->call('setDueDate', $draft->id, Carbon::tomorrow()->toDateString());
+
+    expect($draft->fresh()->due_date)->toBeNull();
 });

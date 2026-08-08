@@ -120,6 +120,39 @@ test('the Feito column no longer hides items by the calendar week', function () 
     Livewire::test('pages::kanban')->assertSee('Concluída no mês passado');
 });
 
+test('the archived filter reaches every archivable type, not just personal tasks', function () {
+    // O ritual arquiva qualquer folha do quadro. Se o filtro só mostrasse
+    // type=Task, uma Issue arquivada sumiria da coluna Feito sem existir em
+    // nenhuma outra superfície (issue #147, review).
+    $issue = Activity::factory()->issue()->done()->create(['title' => 'Fatia arquivada']);
+    $atomicEpic = Activity::factory()->epic()->create([
+        'status' => ActivityStatus::Done,
+        'title' => 'Épico atômico arquivado',
+    ]);
+    $task = Activity::factory()->task()->done()->create(['title' => 'Recado arquivado']);
+
+    foreach ([$issue, $atomicEpic, $task] as $activity) {
+        $activity->archive();
+    }
+
+    Livewire::test('pages::tasks')
+        ->set('showArchived', true)
+        ->assertSee('Fatia arquivada')
+        ->assertSee('Épico atômico arquivado')
+        ->assertSee('Recado arquivado');
+});
+
+test('the live view stays personal — archived issues never leak into it', function () {
+    $issue = Activity::factory()->issue()->done()->create(['title' => 'Fatia qualquer']);
+
+    Livewire::test('pages::tasks')
+        ->assertDontSee('Fatia qualquer')
+        ->set('showArchived', true)
+        ->assertDontSee('Fatia qualquer');
+
+    expect($issue->fresh()->isArchived())->toBeFalse();
+});
+
 test('the tasks page hides archived tasks until the filter is on', function () {
     $open = Activity::factory()->task()->done()->create(['title' => 'Recado aberto']);
     $archived = Activity::factory()->task()->done()->create(['title' => 'Recado arquivado']);

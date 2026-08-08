@@ -29,7 +29,8 @@ function ritualStatusPayload(): array
 test('get-ritual-status reports a day whose ritual has not been done', function () {
     $payload = ritualStatusPayload();
 
-    expect($payload['date'])->toBe(today()->toDateString())
+    // O dia respondido é o do usuário, não o UTC (issue #147, review).
+    expect($payload['date'])->toBe(MorningRitual::businessToday()->toDateString())
         ->and($payload['completed'])->toBeFalse()
         ->and($payload['completed_at'])->toBeNull()
         ->and($payload['notes'])->toBeNull();

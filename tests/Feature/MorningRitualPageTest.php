@@ -259,8 +259,12 @@ test('the sidebar badge shows only while today\'s ritual is unfinished', functio
 });
 
 test('a ritual concluded yesterday does not silence today\'s badge', function () {
+    // Ancorado no tempo: "ontem" é ontem no fuso de negócio, e sem fixar o
+    // relógio o teste passaria ou falharia conforme a hora em que roda.
+    $this->travelTo('2026-08-07 14:00:00'); // 11:00 local
+
     MorningRitual::factory()->create([
-        'date' => today()->subDay()->toDateString(),
+        'date' => MorningRitual::businessToday()->subDay()->toDateString(),
         'completed_at' => now()->subDay(),
     ]);
 

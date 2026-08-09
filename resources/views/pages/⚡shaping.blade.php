@@ -159,6 +159,11 @@ new class extends Component
     /**
      * Autosave, one column at a time.
      *
+     * Every field binds with `wire:model.live.blur`, and the `.live` is load
+     * bearing: since Livewire 4.1 a bare `.blur` only syncs the value inside
+     * the browser, so none of these hooks ever ran for a real user — the page
+     * looked like it was saving and wrote nothing.
+     *
      * Each field writes only its own column. Writing the whole snapshot on
      * every change looked simpler, but the snapshot is the one hydrated for
      * *that* request: two overlapping blurs, or a second tab, would each
@@ -327,7 +332,7 @@ new class extends Component
                          modal de Ideias escreve com <flux:editor>, e uma nota
                          capturada lá apareceria aqui como marcação crua — e seria
                          achatada de volta a texto plano no primeiro autosave. --}}
-                    <flux:editor wire:model.blur="dor" placeholder="Quem sente essa dor, e o que ela custa hoje?" />
+                    <flux:editor wire:model.live.blur="dor" placeholder="Quem sente essa dor, e o que ela custa hoje?" />
                 </section>
 
                 {{-- 2. Apetite --}}
@@ -364,7 +369,7 @@ new class extends Component
                                 max="{{ App\Services\ShapingService::MAX_APPETITE_DAYS }}"
                                 size="sm"
                                 class="w-28"
-                                wire:model.blur="customAppetiteDays"
+                                wire:model.live.blur="customAppetiteDays"
                                 placeholder="dias"
                                 data-test="appetite-custom"
                             />
@@ -389,7 +394,7 @@ new class extends Component
                 <section id="secao-esboco" class="rounded-xl border border-zinc-700 bg-zinc-900/50 p-5">
                     <flux:heading size="sm" class="mb-1">3 · Esboço</flux:heading>
                     <flux:text class="mb-3 text-xs text-zinc-500">A forma da solução, grosseira o bastante para caber no apetite.</flux:text>
-                    <flux:editor wire:model.blur="esboco" placeholder="Como isso funciona, por cima..." />
+                    <flux:editor wire:model.live.blur="esboco" placeholder="Como isso funciona, por cima..." />
                 </section>
 
                 {{-- 4. Rabbit holes --}}
@@ -397,7 +402,7 @@ new class extends Component
                     <flux:heading size="sm" class="mb-1">4 · Rabbit holes</flux:heading>
                     <flux:text class="mb-3 text-xs text-zinc-500">Onde isso pode virar buraco sem fundo (opcional).</flux:text>
                     <flux:textarea
-                        wire:model.blur="rabbitHoles"
+                        wire:model.live.blur="rabbitHoles"
                         rows="3"
                         placeholder="O que pode explodir de escopo?"
                         data-test="field-rabbit-holes"
@@ -409,7 +414,7 @@ new class extends Component
                     <flux:heading size="sm" class="mb-1">5 · No-gos</flux:heading>
                     <flux:text class="mb-3 text-xs text-zinc-500">O que fica explicitamente de fora (opcional).</flux:text>
                     <flux:textarea
-                        wire:model.blur="noGos"
+                        wire:model.live.blur="noGos"
                         rows="3"
                         placeholder="O que esta aposta não vai fazer?"
                         data-test="field-no-gos"

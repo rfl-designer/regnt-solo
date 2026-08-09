@@ -327,6 +327,54 @@ test('the epic modal copies the very same pitch as the shaping page', function (
         ->assertSet('pitch', $pitch);
 });
 
+test('copying the pitch on the shaping page uses what is on screen, not what was saved', function () {
+    $draft = Activity::factory()->draft()->shaped()->create(['title' => 'Fila de puxar']);
+
+    // O componente carrega o estado salvo e o usuário edita sem que o blur
+    // tenha chegado ao banco: a cópia tem de trazer a edição mesmo assim.
+    $component = Livewire::test('pages::shaping', ['draft' => $draft->id]);
+    $component->set('dor', 'A dor recém-editada');
+
+    $component->call('copyPitch')
+        ->assertDispatched('copy-to-clipboard', function (string $event, array $params): bool {
+            return str_contains($params['markdown'], 'A dor recém-editada');
+        });
+});
+
+test('the shaping pitch copies the apetite chosen in this very request', function () {
+    $draft = Activity::factory()->draft()->create(['title' => 'Fila de puxar']);
+
+    Livewire::test('pages::shaping', ['draft' => $draft->id])
+        ->call('chooseAppetite', 21)
+        ->call('copyPitch')
+        ->assertDispatched('copy-to-clipboard', function (string $event, array $params): bool {
+            return str_contains($params['markdown'], '21 dias');
+        });
+});
+
+test('the epic modal copies the title and spec still sitting in the form', function () {
+    $epic = Activity::factory()->epic()->create([
+        'title' => 'Título salvo',
+        'spec' => 'Esboço salvo',
+    ]);
+
+    Livewire::test('feature-modal')
+        ->call('open', $epic->id)
+        ->set('title', 'Título ainda não salvo')
+        ->set('spec', 'Esboço ainda não salvo')
+        ->call('copyPitch')
+        ->assertDispatched('copy-to-clipboard', function (string $event, array $params): bool {
+            return str_contains($params['markdown'], 'Título ainda não salvo')
+                && str_contains($params['markdown'], 'Esboço ainda não salvo')
+                && ! str_contains($params['markdown'], 'Título salvo');
+        });
+
+    // Copiar não é salvar.
+    expect($epic->refresh())
+        ->title->toBe('Título salvo')
+        ->spec->toBe('Esboço salvo');
+});
+
 test('ideas splits the shelves into "Com forma" and "Brutas"', function () {
     Activity::factory()->draft()->create(['title' => 'Ideia bruta', 'description' => null]);
     Activity::factory()->draft()->shaped()->create(['title' => 'Ideia com forma']);

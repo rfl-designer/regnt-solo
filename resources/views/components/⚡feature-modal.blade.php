@@ -72,6 +72,34 @@ new class extends Component
     }
 
     /**
+     * Copy the pitch of what the form currently says (issue #148).
+     *
+     * Título and Esboço are deferred fields, so the persisted record can be
+     * one edit behind what the user is reading. The markdown used to be
+     * rendered into the Alpine handler when the modal opened and copied from
+     * there, which meant "Copiado!" for a document missing the change on
+     * screen. It is rendered here instead, over the form's own values — and
+     * still without saving, because copying is not saving.
+     */
+    public function copyPitch(): void
+    {
+        $feature = $this->feature;
+
+        if ($feature === null) {
+            return;
+        }
+
+        $preview = (clone $feature)->forceFill([
+            'title' => $this->title,
+            'spec' => $this->spec !== '' ? $this->spec : null,
+        ]);
+
+        $this->dispatch('copy-to-clipboard', markdown: app(ShapingService::class)->pitch($preview));
+
+        Flux::toast(variant: 'success', heading: 'Copiado!', text: 'O pitch foi para a área de transferência.');
+    }
+
+    /**
      * The Spec's lifecycle, ready to render (issue #146).
      *
      * The four dates are read straight off the Épico's accessors, which
@@ -342,7 +370,17 @@ new class extends Component
 
 ?>
 
-<flux:modal name="feature-modal" class="w-full max-w-3xl space-y-6" variant="flyout">
+<flux:modal
+    name="feature-modal"
+    class="w-full max-w-3xl space-y-6"
+    variant="flyout"
+    x-data
+    @copy-to-clipboard.window="
+        navigator.clipboard.writeText($event.detail.markdown).catch(() => {
+            $flux.toast({ variant: 'danger', heading: 'Erro', text: 'Não foi possível copiar.' })
+        })
+    "
+>
     <div>
         <div class="flex items-center gap-2">
             <flux:heading size="lg">
@@ -361,16 +399,14 @@ new class extends Component
                 </span>
 
                 {{-- O mesmo markdown da página de shaping (issue #148). --}}
-                <div
+                <flux:button
+                    variant="ghost"
+                    size="xs"
+                    icon="clipboard-document"
                     class="ml-auto"
-                    x-data="{ copied: false }"
-                    x-on:click="navigator.clipboard.writeText(@js($this->pitch)); copied = true; setTimeout(() => copied = false, 1500)"
-                >
-                    <flux:button variant="ghost" size="xs" icon="clipboard-document" data-test="copy-pitch">
-                        <span x-show="!copied">Copiar pitch</span>
-                        <span x-show="copied" x-cloak>Copiado!</span>
-                    </flux:button>
-                </div>
+                    wire:click="copyPitch"
+                    data-test="copy-pitch"
+                >Copiar pitch</flux:button>
             @endif
         </div>
         <flux:text class="mt-1">

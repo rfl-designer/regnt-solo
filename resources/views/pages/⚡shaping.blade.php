@@ -131,6 +131,32 @@ new class extends Component
     }
 
     /**
+     * Copy the pitch of what is on screen right now.
+     *
+     * The markdown used to be rendered into the Alpine handler at page render
+     * and copied from there, so a click with an editor still focused copied
+     * the document as it was *before* the edit — the user got "Copiado!" for a
+     * pitch that did not contain what they were looking at. It is built here,
+     * in the request the click makes, from the component's own state: the blur
+     * this click triggers is batched ahead of it, and even if it were not, the
+     * form is the source, not the last write that happened to land.
+     */
+    public function copyPitch(): void
+    {
+        $preview = (clone $this->draft)->forceFill([
+            'description' => $this->dor !== '' ? $this->dor : null,
+            'spec' => $this->esboco !== '' ? $this->esboco : null,
+            'rabbit_holes' => $this->rabbitHoles !== '' ? $this->rabbitHoles : null,
+            'no_gos' => $this->noGos !== '' ? $this->noGos : null,
+            'appetite_days' => $this->appetiteDays,
+        ]);
+
+        $this->dispatch('copy-to-clipboard', markdown: app(ShapingService::class)->pitch($preview));
+
+        Flux::toast(variant: 'success', heading: 'Copiado!', text: 'O pitch foi para a área de transferência.');
+    }
+
+    /**
      * Autosave, one column at a time.
      *
      * Each field writes only its own column. Writing the whole snapshot on
@@ -259,7 +285,15 @@ new class extends Component
 
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col">
+<div
+    class="flex h-full w-full flex-1 flex-col"
+    x-data
+    @copy-to-clipboard.window="
+        navigator.clipboard.writeText($event.detail.markdown).catch(() => {
+            $flux.toast({ variant: 'danger', heading: 'Erro', text: 'Não foi possível copiar.' })
+        })
+    "
+>
     <div class="flex flex-1 flex-col gap-6 overflow-y-auto p-6 pb-28">
         {{-- Header --}}
         <div class="flex items-start justify-between gap-4">
@@ -273,16 +307,14 @@ new class extends Component
                 </flux:text>
             </div>
 
-            <div
+            <flux:button
+                variant="ghost"
+                size="sm"
+                icon="clipboard-document"
                 class="shrink-0"
-                x-data="{ copied: false }"
-                x-on:click="navigator.clipboard.writeText(@js($this->pitch)); copied = true; setTimeout(() => copied = false, 1500)"
-            >
-                <flux:button variant="ghost" size="sm" icon="clipboard-document" data-test="copy-pitch">
-                    <span x-show="!copied">Copiar pitch</span>
-                    <span x-show="copied" x-cloak>Copiado!</span>
-                </flux:button>
-            </div>
+                wire:click="copyPitch"
+                data-test="copy-pitch"
+            >Copiar pitch</flux:button>
         </div>
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">

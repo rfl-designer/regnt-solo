@@ -45,6 +45,23 @@ test('promote-draft refuses a shaped idea with no project, naming the project', 
     expect($draft->refresh()->type)->toBe(ActivityType::Draft);
 });
 
+test('promote-draft refuses a project that is not active, exactly as the page does', function () {
+    $draft = Activity::factory()->draft()->shaped()->create();
+    $archived = Project::factory()->archived()->create();
+
+    $response = SoloBoardServer::tool(PromoteDraftTool::class, [
+        'draft_id' => $draft->id,
+        'project_id' => $archived->id,
+    ]);
+
+    // Existe, mas não é um projeto onde se abre uma aposta nova — e a recusa é
+    // a mesma palavra que o botão usa.
+    $response->assertHasErrors();
+    $response->assertSee('falta: Projeto.');
+
+    expect($draft->refresh()->type)->toBe(ActivityType::Draft);
+});
+
 test('promote-draft promotes in place, in the SoloBoard, without touching GitHub', function () {
     $project = Project::factory()->create();
     $draft = Activity::factory()->draft()->shaped(21)->create(['title' => 'Painel de políticas']);

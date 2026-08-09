@@ -7,6 +7,7 @@ use App\Models\Project;
 use App\Services\ShapingService;
 use Flux\Flux;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
@@ -25,6 +26,15 @@ use Livewire\Component;
  */
 new class extends Component
 {
+    /**
+     * Locked: this is the target of every write on the page. Without the
+     * attribute it is just a public property, and a forged payload could swap
+     * it for the id of a Task, an Issue or an Épico between requests — the
+     * next autosave would then overwrite that record's description, spec and
+     * appetite. The route's auth says who may be here, not which row may be
+     * written.
+     */
+    #[Locked]
     public int $draftId;
 
     public string $dor = '';
@@ -64,16 +74,26 @@ new class extends Component
         }
     }
 
+    /**
+     * The target, re-read as an Ideia on every request. `#[Locked]` already
+     * stops the id from moving; the `drafts()` filter is the second lock, so
+     * even a bug that let the id through could not aim a write at another kind
+     * of Activity.
+     */
     #[Computed]
     public function draft(): Activity
     {
-        return Activity::query()->findOrFail($this->draftId);
+        return Activity::query()->drafts()->findOrFail($this->draftId);
     }
 
+    /**
+     * Only projects actually being worked, the same list the Épico modal
+     * offers — a new bet does not belong inside something already finished.
+     */
     #[Computed]
     public function projects(): \Illuminate\Database\Eloquent\Collection
     {
-        return Project::query()->orderBy('name')->get();
+        return Project::active()->orderBy('name')->get();
     }
 
     #[Computed]
@@ -124,8 +144,18 @@ new class extends Component
         $this->persist();
     }
 
+    /**
+     * A chip is one of the four values on the page and nothing else — this is
+     * a public action, so "the chip the user clicked" is whatever arrives in
+     * the payload. A free budget goes through "Outro", which is bounded by
+     * {@see ShapingService::normalizeAppetite()}.
+     */
     public function chooseAppetite(int $days): void
     {
+        if (! in_array($days, ShapingService::APPETITE_CHIPS, true)) {
+            return;
+        }
+
         $this->customAppetite = false;
         $this->customAppetiteDays = null;
         $this->appetiteDays = $days;
@@ -142,8 +172,23 @@ new class extends Component
         $this->persist();
     }
 
+    /**
+     * The project as it may be stored: an id the selector could actually have
+     * offered, or none. `project_id` is a foreign key and the selector is a
+     * public field, so an id that does not exist — or names a project that is
+     * not active — would otherwise reach the database and blow up an autosave
+     * nobody asked for.
+     */
+    private function eligibleProjectId(): ?int
+    {
+        return app(ShapingService::class)->eligibleProjectId($this->projectId);
+    }
+
     private function persist(): void
     {
+        $this->appetiteDays = app(ShapingService::class)->normalizeAppetite($this->appetiteDays);
+        $this->projectId = $this->eligibleProjectId();
+
         $this->draft->update([
             'description' => $this->dor !== '' ? $this->dor : null,
             'spec' => $this->esboco !== '' ? $this->esboco : null,

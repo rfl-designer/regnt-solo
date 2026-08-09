@@ -6,6 +6,7 @@ use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
 use App\Exceptions\ShapingIncompleteException;
 use App\Models\Activity;
+use App\Models\Project;
 use Illuminate\Support\Str;
 
 /**
@@ -99,6 +100,11 @@ class ShapingService
     {
         $appetite = $activity->appetite_days;
 
+        // Um apetite fora de faixa não é um apetite: zero, negativo ou acima
+        // da coluna conta como não escolhido, ou o gate de promoção poderia
+        // ser contornado com um `chooseAppetite(0)` forjado.
+        $appetite = $this->normalizeAppetite($appetite);
+
         $rows = [
             ['key' => 'dor', 'label' => 'Dor', 'value' => $this->normalize($activity->description), 'required' => true],
             ['key' => 'apetite', 'label' => 'Apetite', 'value' => $appetite === null ? null : $this->appetiteLabel($appetite), 'required' => true],
@@ -151,11 +157,32 @@ class ShapingService
             }
         }
 
-        if (($projectId ?? $activity->project_id) === null) {
+        if ($this->eligibleProjectId($projectId ?? $activity->project_id) === null) {
             $missing[] = 'Projeto';
         }
 
         return $missing;
+    }
+
+    /**
+     * The project a bet may be placed in, or null when there is none.
+     *
+     * A bet is only worth making inside a project that is actually being
+     * worked — the same rule the Épico modal's selector already applies with
+     * {@see Project::scopeActive()}. Anything else (a project that never
+     * started, was paused, finished or archived, or an id that does not exist
+     * at all) is *no* project as far as promoting is concerned, so both the
+     * button and the MCP tool refuse with the same "falta: Projeto" instead of
+     * quietly opening a new bet inside something already closed — or dying on
+     * a foreign key when the id was forged.
+     */
+    public function eligibleProjectId(?int $projectId): ?int
+    {
+        if ($projectId === null) {
+            return null;
+        }
+
+        return Project::query()->active()->whereKey($projectId)->value('id');
     }
 
     /**
@@ -187,7 +214,7 @@ class ShapingService
         $draft->forceFill([
             'type' => ActivityType::Epic,
             'status' => ActivityStatus::Backlog,
-            'project_id' => $projectId,
+            'project_id' => $this->eligibleProjectId($projectId),
             'slug' => $draft->slug ?: Str::slug($draft->title),
         ])->save();
 

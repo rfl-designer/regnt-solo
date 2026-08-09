@@ -2,11 +2,13 @@
 
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
+use App\Exceptions\ShapingIncompleteException;
 use App\Models\Activity;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\ShapingService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 
 /**
@@ -118,6 +120,86 @@ test('a note captured in the Ideias editor arrives as Dor without being flattene
     expect(app(ShapingService::class)->pitch($draft->refresh()))
         ->toContain('Refaço isso à mão toda semana.')
         ->not->toContain('<strong>');
+});
+
+test('the write target cannot be moved onto another kind of activity', function () {
+    $draft = Activity::factory()->draft()->create();
+    $epic = Activity::factory()->epic()->create([
+        'description' => 'A dor do Épico',
+        'spec' => 'O esboço do Épico',
+    ]);
+
+    // O id é #[Locked]: o payload adulterado é recusado pelo próprio Livewire.
+    expect(fn () => Livewire::test('pages::shaping', ['draft' => $draft->id])
+        ->set('draftId', $epic->id)
+    )->toThrow(CannotUpdateLockedPropertyException::class);
+
+    expect($epic->refresh())
+        ->description->toBe('A dor do Épico')
+        ->spec->toBe('O esboço do Épico')
+        ->type->toBe(ActivityType::Epic);
+});
+
+test('a forged chip value is refused instead of becoming an apetite', function () {
+    $draft = Activity::factory()->draft()->create();
+
+    Livewire::test('pages::shaping', ['draft' => $draft->id])
+        ->call('chooseAppetite', 0)
+        ->assertSet('appetiteDays', null)
+        ->call('chooseAppetite', -5)
+        ->assertSet('appetiteDays', null)
+        ->call('chooseAppetite', 999)
+        ->assertSet('appetiteDays', null);
+
+    expect($draft->refresh()->appetite_days)->toBeNull();
+});
+
+test('a zero apetite does not count as a filled section', function () {
+    $draft = Activity::factory()->draft()->shaped()->create();
+    $draft->forceFill(['appetite_days' => 0])->save();
+
+    // Sem isto, um apetite forjado passaria pelo portão de promoção.
+    expect(app(ShapingService::class)->missingForPromotion($draft))
+        ->toContain('Apetite');
+});
+
+test('a project that is not active is no project at all', function () {
+    $draft = Activity::factory()->draft()->shaped()->create();
+
+    foreach (['archived', 'done', 'paused'] as $state) {
+        $project = Project::factory()->{$state}()->create();
+
+        expect(app(ShapingService::class)->missingForPromotion($draft, $project->id))
+            ->toContain('Projeto');
+
+        expect(fn () => app(ShapingService::class)->promote($draft, $project->id))
+            ->toThrow(ShapingIncompleteException::class);
+    }
+
+    expect($draft->refresh()->type)->toBe(ActivityType::Draft);
+});
+
+test('the selector only offers projects a bet can be placed in', function () {
+    $draft = Activity::factory()->draft()->create();
+    Project::factory()->create(['name' => 'Projeto Vivo']);
+    Project::factory()->archived()->create(['name' => 'Projeto Arquivado']);
+
+    Livewire::test('pages::shaping', ['draft' => $draft->id])
+        ->assertSee('Projeto Vivo')
+        ->assertDontSee('Projeto Arquivado');
+});
+
+test('a forged project id never reaches the database', function () {
+    $draft = Activity::factory()->draft()->create();
+    $archived = Project::factory()->archived()->create();
+
+    Livewire::test('pages::shaping', ['draft' => $draft->id])
+        ->set('projectId', 999999)
+        ->assertSet('projectId', null)
+        ->set('projectId', $archived->id)
+        ->assertSet('projectId', null);
+
+    expect($draft->refresh()->project_id)->toBeNull();
 });
 
 test('the history aside shows "ainda sem histórico" with fewer than three validated specs', function () {

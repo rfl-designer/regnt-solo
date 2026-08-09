@@ -42,6 +42,14 @@ class Activity extends Model
         'slug',
         'description',
         'spec',
+        // The shaping fields (issue #148). Dor and Esboço are deliberately
+        // absent from this list because they already exist above as
+        // `description` and `spec` — shaping promotes the row in place, so
+        // giving them columns of their own would split the Épico's problem
+        // statement across two fields.
+        'appetite_days',
+        'rabbit_holes',
+        'no_gos',
         'status',
         'priority',
         'service_class',
@@ -81,6 +89,7 @@ class Activity extends Model
             'status' => ActivityStatus::class,
             'priority' => ActivityPriority::class,
             'service_class' => ServiceClass::class,
+            'appetite_days' => 'integer',
             'waiting_since' => 'datetime',
             'emergency_since' => 'datetime',
             'due_date' => 'date',

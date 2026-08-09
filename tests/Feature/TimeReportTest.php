@@ -6,7 +6,24 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use Livewire\Livewire;
 
+/**
+ * O relatório de tempo, com o relógio fixado.
+ *
+ * Quase todo teste aqui cria um TimeEntry relativo a `now()` e espera vê-lo
+ * dentro do período padrão, "Esta semana". Esse período é resolvido em UTC
+ * (`DateRange::thisWeek()`), e a semana do Flux vira no domingo — então a
+ * suíte falhava inteira quando rodava entre a meia-noite UTC de domingo e o
+ * fim da noite de sábado no fuso de negócio: as entradas nasciam no sábado,
+ * a semana já era a seguinte, e o relatório não mostrava nada.
+ *
+ * A âncora é uma quarta ao meio-dia, longe das duas bordas: a maior distância
+ * que qualquer teste toma para trás é `subDay()->subHour()`, e a semana só
+ * vira três dias depois. Nenhuma asserção muda — elas só param de depender da
+ * hora em que a suíte roda.
+ */
 beforeEach(function () {
+    $this->travelTo('2026-08-05 12:00:00'); // quarta, 09:00 em Recife
+
     $this->actingAs(User::factory()->create());
 });
 

@@ -179,7 +179,8 @@ new class extends Component
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div class="sm:col-span-2">
                 <flux:input
-                    wire:model.blur="title"
+                    wire:model.live.blur="title"
+                    data-test="document-title"
                     label="Titulo"
                     placeholder="Titulo do documento"
                 />

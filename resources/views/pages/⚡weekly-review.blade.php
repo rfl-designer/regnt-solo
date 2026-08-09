@@ -581,7 +581,8 @@ new class extends Component
             </div>
 
             <flux:textarea
-                wire:model.blur="reflection"
+                wire:model.live.blur="reflection"
+                data-test="weekly-reflection"
                 placeholder="O que funcionou bem esta semana? O que pode melhorar?"
                 rows="5"
             />

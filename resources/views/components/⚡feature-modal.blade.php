@@ -8,6 +8,7 @@ use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Services\FlowMetricsService;
+use App\Services\ShapingService;
 use App\Support\Markdown;
 use Flux\Flux;
 use Livewire\Attributes\Computed;
@@ -52,6 +53,50 @@ new class extends Component
         }
 
         return Activity::with(['project.client', 'client', 'children.timeEntries', 'timeEntries', 'statusChanges'])->find($this->featureId);
+    }
+
+    /**
+     * The pitch of the bet this Épico is (issue #148).
+     *
+     * Rendered by {@see ShapingService} from the same five sections the
+     * shaping page writes, so the markdown copied here and the markdown
+     * copied there are byte-for-byte the same document — the Épico *is* the
+     * Ideia, promoted in place, and there is no second source to drift from.
+     */
+    #[Computed]
+    public function pitch(): string
+    {
+        $feature = $this->feature;
+
+        return $feature === null ? '' : app(ShapingService::class)->pitch($feature);
+    }
+
+    /**
+     * Copy the pitch of what the form currently says (issue #148).
+     *
+     * Título and Esboço are deferred fields, so the persisted record can be
+     * one edit behind what the user is reading. The markdown used to be
+     * rendered into the Alpine handler when the modal opened and copied from
+     * there, which meant "Copiado!" for a document missing the change on
+     * screen. It is rendered here instead, over the form's own values — and
+     * still without saving, because copying is not saving.
+     */
+    public function copyPitch(): void
+    {
+        $feature = $this->feature;
+
+        if ($feature === null) {
+            return;
+        }
+
+        $preview = (clone $feature)->forceFill([
+            'title' => $this->title,
+            'spec' => $this->spec !== '' ? $this->spec : null,
+        ]);
+
+        $this->dispatch('copy-to-clipboard', markdown: app(ShapingService::class)->pitch($preview));
+
+        Flux::toast(variant: 'success', heading: 'Copiado!', text: 'O pitch foi para a área de transferência.');
     }
 
     /**
@@ -150,7 +195,7 @@ new class extends Component
             return;
         }
 
-        unset($this->feature, $this->specTimeline, $this->specEfficiency);
+        unset($this->feature, $this->specTimeline, $this->specEfficiency, $this->pitch);
 
         Flux::toast(variant: 'success', heading: $heading, text: $this->title);
         $this->dispatch('feature-updated');
@@ -195,7 +240,7 @@ new class extends Component
             $this->editingSpec = true;
         }
 
-        unset($this->feature);
+        unset($this->feature, $this->pitch);
         Flux::modal('feature-modal')->show();
     }
 
@@ -235,7 +280,7 @@ new class extends Component
             $this->featureId = $feature->id;
         }
 
-        unset($this->feature);
+        unset($this->feature, $this->pitch);
     }
 
     public function startTimer(): void
@@ -250,7 +295,7 @@ new class extends Component
         $this->dispatch('timer-started');
         $this->dispatch('feature-updated');
 
-        unset($this->feature);
+        unset($this->feature, $this->pitch);
     }
 
     public function stopTimer(): void
@@ -325,7 +370,17 @@ new class extends Component
 
 ?>
 
-<flux:modal name="feature-modal" class="w-full max-w-3xl space-y-6" variant="flyout">
+<flux:modal
+    name="feature-modal"
+    class="w-full max-w-3xl space-y-6"
+    variant="flyout"
+    x-data
+    @copy-to-clipboard.window="
+        navigator.clipboard.writeText($event.detail.markdown).catch(() => {
+            $flux.toast({ variant: 'danger', heading: 'Erro', text: 'Não foi possível copiar.' })
+        })
+    "
+>
     <div>
         <div class="flex items-center gap-2">
             <flux:heading size="lg">
@@ -342,6 +397,16 @@ new class extends Component
                     <span x-show="!copied">#F-{{ $featureId }}</span>
                     <span x-show="copied" x-cloak>Copiado!</span>
                 </span>
+
+                {{-- O mesmo markdown da página de shaping (issue #148). --}}
+                <flux:button
+                    variant="ghost"
+                    size="xs"
+                    icon="clipboard-document"
+                    class="ml-auto"
+                    wire:click="copyPitch"
+                    data-test="copy-pitch"
+                >Copiar pitch</flux:button>
             @endif
         </div>
         <flux:text class="mt-1">

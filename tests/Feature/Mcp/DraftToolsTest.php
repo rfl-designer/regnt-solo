@@ -9,6 +9,8 @@ use App\Mcp\Tools\ListEpicsTool;
 use App\Mcp\Tools\ListIssuesTool;
 use App\Mcp\Tools\PromoteDraftTool;
 use App\Models\Activity;
+use App\Models\Project;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 // ListDraftsTool tests
 test('list-drafts returns only drafts', function () {
@@ -79,8 +81,11 @@ test('create-draft fails without title', function () {
     $response->assertHasErrors();
 });
 
-// PromoteDraftTool tests
-test('promote-draft hands off to /to-prd and removes the draft', function () {
+// PromoteDraftTool — promotion is now in place, in the SoloBoard (issue
+// #148). The behaviour it grew is covered in Mcp/ShapingToolsTest; what is
+// asserted here is what a draft's *own* tools must keep guaranteeing: the
+// draft survives a refused promotion, and it is never handed off anywhere.
+test('promote-draft keeps the draft when it is not shaped enough to bet on', function () {
     $draft = Activity::factory()->draft()->create([
         'title' => 'Promote me',
         'description' => 'Idea worth a PRD',
@@ -88,29 +93,34 @@ test('promote-draft hands off to /to-prd and removes the draft', function () {
 
     $response = SoloBoardServer::tool(PromoteDraftTool::class, [
         'draft_id' => $draft->id,
-        'target' => 'prd',
     ]);
 
-    $response->assertOk();
-    $response->assertSee('/to-prd');
-    $response->assertSee('Promote me');
-    $response->assertSee('Idea worth a PRD');
+    $response->assertHasErrors();
 
-    $this->assertDatabaseMissing('activities', ['id' => $draft->id]);
+    $this->assertDatabaseHas('activities', [
+        'id' => $draft->id,
+        'type' => ActivityType::Draft->value,
+    ]);
 });
 
-test('promote-draft hands off to /to-issues when target is issues', function () {
-    $draft = Activity::factory()->draft()->create(['title' => 'Slice idea']);
+test('promote-draft never sends a draft to GitHub', function () {
+    $project = Project::factory()->create();
+    $draft = Activity::factory()->draft()->shaped()->create(['title' => 'Slice idea']);
 
     $response = SoloBoardServer::tool(PromoteDraftTool::class, [
         'draft_id' => $draft->id,
-        'target' => 'issues',
+        'project_id' => $project->id,
     ]);
 
     $response->assertOk();
-    $response->assertSee('/to-issues');
+    $response->assertDontSee('/to-prd');
+    $response->assertDontSee('/to-issues');
 
-    $this->assertDatabaseMissing('activities', ['id' => $draft->id]);
+    $this->assertDatabaseHas('activities', [
+        'id' => $draft->id,
+        'type' => ActivityType::Epic->value,
+        'github_issue_number' => null,
+    ]);
 });
 
 test('promote-draft refuses a non-draft activity', function () {
@@ -118,22 +128,17 @@ test('promote-draft refuses a non-draft activity', function () {
 
     expect(fn () => SoloBoardServer::tool(PromoteDraftTool::class, [
         'draft_id' => $epic->id,
-        'target' => 'prd',
-    ]))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    ]))->toThrow(ModelNotFoundException::class);
 
     $this->assertDatabaseHas('activities', ['id' => $epic->id]);
 });
 
-test('promote-draft requires a valid target', function () {
-    $draft = Activity::factory()->draft()->create();
-
+test('promote-draft requires a draft that exists', function () {
     $response = SoloBoardServer::tool(PromoteDraftTool::class, [
-        'draft_id' => $draft->id,
-        'target' => 'something-else',
+        'draft_id' => 9999,
     ]);
 
     $response->assertHasErrors();
-    $this->assertDatabaseHas('activities', ['id' => $draft->id]);
 });
 
 // Sync isolation: the roadmap tools the sync relies on never touch drafts
@@ -154,7 +159,7 @@ test('sync reconciliation (delete-issue) never deletes a draft', function () {
 
     expect(fn () => SoloBoardServer::tool(DeleteIssueTool::class, [
         'issue_id' => $draft->id,
-    ]))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    ]))->toThrow(ModelNotFoundException::class);
 
     $this->assertDatabaseHas('activities', ['id' => $draft->id]);
 });

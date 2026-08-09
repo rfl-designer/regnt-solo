@@ -24,6 +24,12 @@ Route::livewire('ideas', 'pages::ideas')
     ->middleware(['auth'])
     ->name('ideas');
 
+// Dar forma a uma Ideia (issue #148). A página é da Ideia, não uma etapa do
+// board: enquanto o shaping não vira aposta, nada disto existe num status.
+Route::livewire('ideas/{draft}/shaping', 'pages::shaping')
+    ->middleware(['auth'])
+    ->name('shaping');
+
 Route::livewire('kanban', 'pages::kanban')
     ->middleware(['auth'])
     ->name('kanban');

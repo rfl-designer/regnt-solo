@@ -9,6 +9,7 @@ use App\Models\BaselineCut;
 use App\Models\Client;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * The board's flow metrics: how long things actually take, and what the
@@ -418,6 +419,71 @@ class FlowMetricsService
             ->filter(fn (array $row): bool => $row['aging'] !== null && $row['aging']['level'] !== 'ok')
             ->sortByDesc(fn (array $row): float => $row['aging']['ratio'])
             ->values();
+    }
+
+    /**
+     * How long each validated Spec was a live bet, in days — the population
+     * the apetite aside compares a budget against (issue #148).
+     *
+     * This is *not* {@see sample()}. The cycle-time baseline measures cards
+     * from Pronto to Feito; a bet is measured over the window it was actually
+     * a commitment in, aprovada -> validada, which is the same window the
+     * apetite is a budget for. Comparing a 7-day apetite against the cycle
+     * time of individual cards would compare a bet with its parts.
+     *
+     * Only Specs that are validated *and have stayed that way* count: an
+     * Épico reopened after validation is a live bet again, and its window is
+     * still open. Everything is read against the last baseline cut, so a cut
+     * resets this history exactly as it resets the SLE.
+     *
+     * @return list<float> Ascending.
+     */
+    public function validatedSpecSample(): array
+    {
+        $cut = $this->lastCut();
+
+        // The shaping page reads this on every autosave, so the walk below —
+        // every finished Épico, with its whole history hydrated — cannot run
+        // per keystroke. The key carries the cut and the shape of the history
+        // itself, so a new status change or a new cut produces a different key
+        // rather than a stale answer: there is nothing to invalidate by hand.
+        $key = sprintf(
+            'flow.validated-spec-sample.%s.%d.%d',
+            $cut?->id ?? 'none',
+            ActivityStatusChange::query()->max('id') ?? 0,
+            ActivityStatusChange::query()->count(),
+        );
+
+        return Cache::remember($key, now()->addHour(), fn (): array => $this->computeValidatedSpecSample($cut?->cut_at));
+    }
+
+    /**
+     * The walk itself.
+     *
+     * Only Épicos that ever reached Aguardando aprovação can produce an
+     * aprovada -> validada window, so the rest are not worth hydrating, and
+     * the history is read with just the columns {@see Activity::specStage()}
+     * actually looks at.
+     *
+     * @return list<float> Ascending.
+     */
+    private function computeValidatedSpecSample(?CarbonInterface $cutAt): array
+    {
+        return Activity::query()
+            ->epics()
+            ->where('status', ActivityStatus::Done)
+            ->whereHas('statusChanges', fn ($query) => $query
+                ->where('to_status', ActivityStatus::AwaitingApproval->value))
+            ->with(['statusChanges' => fn ($query) => $query
+                ->select(['id', 'activity_id', 'from_status', 'to_status', 'changed_at'])])
+            ->get()
+            ->filter(fn (Activity $epic): bool => $epic->isSpecValidated() && $epic->spec_aprovada !== null)
+            ->filter(fn (Activity $epic): bool => $cutAt === null || $epic->spec_validada->greaterThanOrEqualTo($cutAt))
+            ->map(fn (Activity $epic): float => $epic->spec_aprovada->floatDiffInDays($epic->spec_validada))
+            ->filter(fn (float $days): bool => $days >= 0)
+            ->sort()
+            ->values()
+            ->all();
     }
 
     /**

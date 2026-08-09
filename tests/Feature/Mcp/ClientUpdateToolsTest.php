@@ -155,8 +155,10 @@ test('mark-update-sent grava a data e o próximo rascunho cobre desde aí', func
 
     expect($payload['sent'])->toBeTrue()
         ->and($payload['update_id'])->toBe($draft->id)
-        ->and($payload['sent_at'])->toBe(now()->toDateTimeString())
-        ->and($payload['next_window_starts_at'])->toBe(now()->toDateTimeString());
+        // ISO 8601 com offset: um agente que lê "2026-08-07T15:00:00+00:00"
+        // não precisa adivinhar em que fuso a data foi escrita.
+        ->and($payload['sent_at'])->toBe(now()->toIso8601String())
+        ->and($payload['next_window_starts_at'])->toBe(now()->toIso8601String());
 
     expect($client->fresh()->draftUpdate())->toBeNull()
         ->and($client->fresh()->lastSentUpdate()->id)->toBe($draft->id);

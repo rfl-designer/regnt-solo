@@ -24,7 +24,7 @@ class MarkUpdateSentTool extends Tool
 {
     protected string $name = 'mark-update-sent';
 
-    protected string $description = 'Marks an existing update draft as sent: stamps the send date, closes the window (the next draft will cover from this moment on) and resets the client\'s cadence clock, moving the draft into the client\'s history. Requires the id of a draft that exists — there is deliberately no per-client shortcut, because stamping "sent" without a draft would record something nobody wrote. Get the id from generate-client-update or get-update-queue. Refuses when the id is unknown or when the update was already sent. This tool does not send anything anywhere: delivery happens in the client\'s channel, by the user.';
+    protected string $description = 'Marks an existing update draft as sent: stamps the send date, closes the window (the next draft will cover from this moment on) and resets the client\'s cadence clock, moving the draft into the client\'s history. Requires the id of a draft that exists — there is deliberately no per-client shortcut, because stamping "sent" without a draft would record something nobody wrote. Get the id from generate-client-update or get-update-queue. Refuses when the id is unknown or when the update was already sent. This tool does not send anything anywhere: delivery happens in the client\'s channel, by the user. Timestamps are ISO 8601 strings with offset.';
 
     /**
      * Handle the tool request.
@@ -50,7 +50,7 @@ class MarkUpdateSentTool extends Tool
                 'sent' => false,
                 'reason' => 'already_sent',
                 'draft_id' => $update->id,
-                'sent_at' => $update->sent_at?->toDateTimeString(),
+                'sent_at' => $update->sent_at?->toIso8601String(),
                 'message' => $e->getMessage(),
             ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         }
@@ -62,8 +62,8 @@ class MarkUpdateSentTool extends Tool
             'update_id' => $sent->id,
             'client_id' => $client->id,
             'client' => $client->name,
-            'sent_at' => $sent->sent_at->toDateTimeString(),
-            'next_window_starts_at' => $updates->windowStart($client->refresh())->toDateTimeString(),
+            'sent_at' => $sent->sent_at->toIso8601String(),
+            'next_window_starts_at' => $updates->windowStart($client->refresh())->toIso8601String(),
             'message' => "Update de {$client->name} marcado como enviado. O próximo cobre a partir de agora.",
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }

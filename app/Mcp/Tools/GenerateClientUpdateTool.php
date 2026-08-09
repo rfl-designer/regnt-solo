@@ -27,7 +27,7 @@ class GenerateClientUpdateTool extends Tool
 {
     protected string $name = 'generate-client-update';
 
-    protected string $description = 'Generates (or regenerates) the weekly update draft for one client and persists it exactly as the Updates page does — same template, same window, same record. The draft is deterministic PT-BR markdown in up to four blocks, empty ones omitted: Entregue (specs that entered Aguardando validação or Feito inside the window, with the state they landed in), Em andamento (approved and not yet delivered, with the hill phrase when the spec has one), Esperando você (what is in the client\'s hands right now, with how long), Próximo (from the pull queue, with the SLE forecast when it is usable). The window runs from the last sent update with no cap; the very first update covers 7 days. Everything is filtered by effective client and by spec level (Épicos and standalone items — never the children of an Épico). Generating never sends: use mark-update-sent for that. Refuses to overwrite a draft that was edited by hand unless force=true.';
+    protected string $description = 'Generates (or regenerates) the weekly update draft for one client and persists it exactly as the Updates page does — same template, same window, same record. The draft is deterministic PT-BR markdown in up to four blocks, empty ones omitted: Entregue (specs that entered Aguardando validação or Feito inside the window, with the state they landed in), Em andamento (approved and not yet delivered, with the hill phrase when the spec has one), Esperando você (what is in the client\'s hands right now, with how long), Próximo (from the pull queue, with the SLE forecast when it is usable). The window runs from the last sent update with no cap; the very first update covers 7 days. Everything is filtered by effective client and by spec level (Épicos and standalone items — never the children of an Épico). Generating never sends: use mark-update-sent for that. Refuses to overwrite a draft that was edited by hand unless force=true. window_start is an ISO 8601 string with offset. There is at most one open draft per client, enforced by the database: generating twice reuses the same record instead of opening a second.';
 
     /**
      * Handle the tool request.
@@ -67,7 +67,7 @@ class GenerateClientUpdateTool extends Tool
             'draft_id' => $draft->id,
             'client_id' => $client->id,
             'client' => $client->name,
-            'window_start' => $updates->windowStart($client)->toDateTimeString(),
+            'window_start' => $updates->windowStart($client)->toIso8601String(),
             'blocks' => array_values(array_map(
                 fn (array $block): array => ['key' => $block['key'], 'title' => $block['title'], 'items' => count($block['items'])],
                 array_filter($updates->blocks($client), fn (array $block): bool => $block['items'] !== []),

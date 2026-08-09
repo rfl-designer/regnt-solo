@@ -379,6 +379,7 @@ new class extends Component
                              na fila em vez de interromper. --}}
                         @foreach ($entry->triggers as $trigger)
                             <flux:badge
+                                wire:key="queue-trigger-{{ $entry->client->id }}-{{ $trigger->value }}"
                                 size="sm"
                                 :color="$trigger->color()"
                                 :icon="$trigger->icon()"

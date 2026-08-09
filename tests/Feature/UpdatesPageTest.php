@@ -85,7 +85,11 @@ test('um gatilho por evento sobe o cliente na fila, com o chip do motivo', funct
         ->assertSeeInOrder(['Com evento SA', 'Atrasada ME'])
         ->assertSee('Evento')
         ->assertSee('Entrega aguardando validação')
-        ->assertSeeHtml('data-test="queue-trigger-delivery_awaiting_validation"');
+        ->assertSeeHtml('data-test="queue-trigger-delivery_awaiting_validation"')
+        // A chave é por cliente *e* por gatilho: sem ela, o morph do Livewire
+        // reaproveitaria por posição o chip da linha anterior quando um envio
+        // apaga o gatilho de um cliente e não o do outro.
+        ->assertSeeHtml('wire:key="queue-trigger-'.$eventful->id.'-delivery_awaiting_validation"');
 });
 
 test('a badge da sidebar conta um cliente que só está devido por evento', function () {

@@ -345,9 +345,10 @@ Um cliente também entra na fila quando o quadro produz notícia que não espera
 - **Por que a Emergência ativa também olha a janela**: "ativa agora" sozinho manteria o cliente em "evento" para sempre enquanto o fogo durasse, inclusive depois de um update que já falou dela. Datar pelo `emergency_since` mantém a promessa dos dois gatilhos — enviar apaga
 - **Furo aceito e documentado**: uma Emergência **rebaixada** antes do envio some do radar. Rebaixar apaga `service_class`, `emergency_reason` e `emergency_since`, e não sobra nada no estado que prove que ela existiu. Fechar o furo exigiria persistência nova, que é o que a feature se recusa a ter
 - **`ClientUpdateQueueEntry`**: `urgency` é a **categoria** (`Event` quando há gatilho), `cadence` é o degrau do relógio. As duas convivem: "atrasado há 3 dias" e `daysLate()` continuam saindo da cadência, e a badge/ordenação saem da categoria
+- **A fronteira é estrita**: o evento tem de ser **posterior** ao envio, não simultâneo. `sent_at`, `changed_at` e `emergency_since` têm precisão de segundo, e enviar logo depois de mexer no quadro é o gesto normal — com `>=`, um evento carimbado no mesmo segundo do envio sobreviveria a ele e quebraria a promessa
 - **Sem notificação ativa**: sem toast, sem banner. O gatilho espera na fila (chip na linha + badge da sidebar) em vez de interromper
-- **Custo**: a varredura é **uma consulta para a fila inteira** (não uma por cliente) — a badge da sidebar roda isso em toda página
-- **MCP `get-update-queue`**: publica `urgency` (com `event`), `cadence` e `triggers[]` (`key`, `label`, `reason`); `only_due` e `due_count` incluem os eventos
+- **Custo**: a varredura é **uma consulta para a fila inteira** — com ou sem candidatos, e não uma por cliente. A badge da sidebar roda isso em toda página, então nada de relação carregada: o cliente efetivo e as duas datas que decidem (`delivered_at`, `concluded_at`) vêm como colunas calculadas em subconsultas correlacionadas
+- **MCP `get-update-queue`**: publica `urgency` (com `event`), `cadence` e `triggers[]` (`key`, `label`, `reason`); `only_due` e `due_count` incluem os eventos. As **instruções do servidor MCP** também descrevem a categoria e os gatilhos — um agente lê elas antes da descrição da tool, e há teste que impede a divergência
 
 ## Keyboard Shortcuts
 

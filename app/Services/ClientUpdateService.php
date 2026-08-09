@@ -13,6 +13,7 @@ use App\Models\ActivityStatusChange;
 use App\Models\Client;
 use App\Models\ClientUpdate;
 use App\Models\MorningRitual;
+use App\Models\Project;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -117,9 +118,9 @@ class ClientUpdateService
             ->orderBy('name')
             ->get();
 
-        // Os gatilhos saem de uma varredura só para a fila inteira: perguntar
-        // por cliente faria a badge da sidebar custar duas consultas por
-        // cliente em toda página.
+        // Os gatilhos saem de uma varredura só para a fila inteira — uma
+        // consulta, com ou sem candidatos. Perguntar por cliente faria a
+        // badge da sidebar custar uma consulta por cliente em toda página.
         $triggers = $this->triggersFor($clients);
 
         return $clients
@@ -206,7 +207,12 @@ class ClientUpdateService
      *
      * Duas coisas, ambas medidas contra a **janela** do cliente — o mesmo
      * "desde o último envio" que o texto do update cobre ({@see
-     * windowStart()}):
+     * windowStart()}), e sempre **estritamente depois** dele: um evento
+     * carimbado no mesmo segundo do envio pertence ao update que acabou de
+     * sair, e cobrá-lo de novo faria "enviar apaga o gatilho" falhar na
+     * fronteira. As três datas envolvidas (`sent_at`, `changed_at`,
+     * `emergency_since`) têm precisão de segundo, então o empate é
+     * alcançável de fato.
      *
      * 1. **Entrega aguardando validação** — uma spec do cliente entrou em
      *    Aguardando validação na janela. É o evento, não o estado: uma spec
@@ -260,7 +266,7 @@ class ClientUpdateService
         $found = [];
 
         foreach ($this->triggerCandidates($earliest) as $activity) {
-            $clientId = $activity->project?->client_id ?? $activity->client_id;
+            $clientId = $activity->effective_client_id ?? $activity->client_id;
 
             if ($clientId === null || ! isset($windows[$clientId])) {
                 continue;
@@ -275,48 +281,75 @@ class ClientUpdateService
     }
 
     /**
-     * Os itens que podem ter disparado alguma coisa desde `$earliest`.
+     * Os itens que podem ter disparado alguma coisa desde `$earliest`, numa
+     * consulta só.
      *
-     * Uma consulta para as duas perguntas: separá-las custaria uma varredura
-     * a mais em `activities` por página carregada, e a partição em memória é
-     * barata porque o filtro do banco já deixou de fora tudo que é antigo.
+     * **Uma consulta é o requisito, não um detalhe**: a badge da sidebar
+     * chama isto em toda página carregada. Por isso nada de relação
+     * carregada — o cliente efetivo e as duas datas que decidem os gatilhos
+     * vêm como colunas calculadas, em subconsultas correlacionadas. Hidratar
+     * `statusChanges` e `project` custaria mais duas consultas exatamente
+     * quando há evento, que é quando a fila mais é lida.
      *
-     * O `project` vem junto (só `id` e `client_id`) porque é dele que sai o
-     * cliente efetivo — o mesmo que {@see Activity::scopeForClient()} espelha
-     * em SQL.
+     * As três colunas:
+     *
+     * - `effective_client_id` — o cliente do projeto quando há projeto; a
+     *   coluna direta do item quando não há. É o que
+     *   {@see Activity::scopeForClient()} espelha em SQL, resolvido aqui em
+     *   PHP porque a fila precisa do valor, não do filtro.
+     * - `delivered_at` — a **última** entrada em Aguardando validação. O
+     *   máximo basta: se a mais recente ficou fora da janela, nenhuma
+     *   anterior cabe nela.
+     * - `concluded_at` — idem para a entrada em Feito, que é o que data uma
+     *   Emergência encerrada.
      *
      * @return EloquentCollection<int, Activity>
      */
     private function triggerCandidates(CarbonInterface $earliest): EloquentCollection
     {
         return Activity::query()
+            ->select('activities.*')
+            ->addSelect([
+                'effective_client_id' => Project::query()
+                    ->select('client_id')
+                    ->whereColumn('projects.id', 'activities.project_id'),
+                'delivered_at' => $this->lastChangeInto(ActivityStatus::AwaitingValidation),
+                'concluded_at' => $this->lastChangeInto(ActivityStatus::Done),
+            ])
+            ->withCasts(['delivered_at' => 'datetime', 'concluded_at' => 'datetime'])
             ->where(function (Builder $query) use ($earliest): void {
                 $query
                     ->where(fn (Builder $delivered) => $delivered
                         ->specLevel()
                         ->whereHas('statusChanges', fn (Builder $change) => $change
                             ->where('to_status', ActivityStatus::AwaitingValidation)
-                            ->where('changed_at', '>=', $earliest)))
+                            ->where('changed_at', '>', $earliest)))
                     ->orWhere(fn (Builder $emergency) => $emergency
                         ->where('service_class', ServiceClass::Emergency)
                         ->where(fn (Builder $slot) => $slot
                             ->where(fn (Builder $open) => $open
                                 ->activeEmergency()
-                                ->where('emergency_since', '>=', $earliest))
+                                ->where('emergency_since', '>', $earliest))
                             ->orWhere(fn (Builder $closed) => $closed
                                 ->where('status', ActivityStatus::Done)
                                 ->whereNotNull('emergency_reason')
                                 ->whereHas('statusChanges', fn (Builder $change) => $change
                                     ->where('to_status', ActivityStatus::Done)
-                                    ->where('changed_at', '>=', $earliest)))));
+                                    ->where('changed_at', '>', $earliest)))));
             })
-            ->with([
-                'statusChanges' => fn ($changes) => $changes
-                    ->whereIn('to_status', [ActivityStatus::AwaitingValidation, ActivityStatus::Done])
-                    ->where('changed_at', '>=', $earliest),
-                'project:id,client_id',
-            ])
             ->get();
+    }
+
+    /**
+     * A data da última entrada de um item neste status, como subconsulta
+     * correlacionada.
+     */
+    private function lastChangeInto(ActivityStatus $status): Builder
+    {
+        return ActivityStatusChange::query()
+            ->selectRaw('max(changed_at)')
+            ->whereColumn('activity_id', 'activities.id')
+            ->where('to_status', $status);
     }
 
     /**
@@ -329,12 +362,7 @@ class ClientUpdateService
     {
         $triggers = [];
 
-        $enteredValidation = $activity->isSpecLevel() && $activity->statusChanges->contains(
-            fn (ActivityStatusChange $change): bool => $change->to_status === ActivityStatus::AwaitingValidation
-                && $change->changed_at->greaterThanOrEqualTo($windowStart)
-        );
-
-        if ($enteredValidation) {
+        if ($activity->isSpecLevel() && $this->within($activity->delivered_at, $windowStart)) {
             $triggers[] = UpdateTrigger::DeliveryAwaitingValidation;
         }
 
@@ -356,18 +384,25 @@ class ClientUpdateService
         }
 
         if ($activity->isActiveEmergency()) {
-            return $activity->emergency_since !== null
-                && $activity->emergency_since->greaterThanOrEqualTo($windowStart);
+            return $this->within($activity->emergency_since, $windowStart);
         }
 
         // O motivo é o que faz uma Emergência concluída ser contável: sem
         // ele não há o que dizer ao cliente além de "houve um incêndio".
         return $activity->status === ActivityStatus::Done
             && $activity->emergency_reason !== null
-            && $activity->statusChanges->contains(
-                fn (ActivityStatusChange $change): bool => $change->to_status === ActivityStatus::Done
-                    && $change->changed_at->greaterThanOrEqualTo($windowStart)
-            );
+            && $this->within($activity->concluded_at, $windowStart);
+    }
+
+    /**
+     * Se um instante cai na janela: **estritamente depois** do envio que a
+     * abriu. Um evento carimbado no mesmo segundo do envio já saiu no texto
+     * que acabou de ir; cobrá-lo de novo deixaria o cliente em "evento" por
+     * uma notícia que ele acabou de receber.
+     */
+    private function within(?CarbonInterface $moment, CarbonInterface $windowStart): bool
+    {
+        return $moment !== null && $moment->greaterThan($windowStart);
     }
 
     /**

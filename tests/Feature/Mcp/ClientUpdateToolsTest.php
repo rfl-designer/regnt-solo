@@ -224,6 +224,18 @@ test('mark-update-sent recusa um update já enviado', function () {
         ->toContain('already_sent');
 });
 
+test('as instruções do servidor descrevem a categoria evento e os gatilhos', function () {
+    // Um agente lê as instruções do servidor antes da descrição da tool: se
+    // elas continuarem dizendo que a fila só ordena por cadência, ele explica
+    // a fila errado mesmo com o payload certo na mão (issue #150).
+    $instructions = (new ReflectionClass(SoloBoardServer::class))->getDefaultProperties()['instructions'];
+
+    expect($instructions)->toContain('event first')
+        ->toContain('triggers array is not empty')
+        ->toContain('sending is what clears them')
+        ->toContain('due_count and only_due include the clients that are due by event');
+});
+
 test('as três tools estão registradas no servidor', function () {
     $tools = (new ReflectionClass(SoloBoardServer::class))->getDefaultProperties()['tools'];
 

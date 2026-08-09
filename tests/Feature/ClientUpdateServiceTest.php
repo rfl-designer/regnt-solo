@@ -13,6 +13,7 @@ use App\Models\Client;
 use App\Models\ClientUpdate;
 use App\Models\MorningRitual;
 use App\Models\Project;
+use App\Services\ClientUpdateQueueEntry;
 use App\Services\ClientUpdateService;
 use App\Services\FlowMetricsService;
 use Illuminate\Database\QueryException;
@@ -504,23 +505,45 @@ test('gerar de novo reaproveita o rascunho aberto em vez de abrir um segundo', f
 });
 
 test('a fila não hidrata o histórico inteiro de cada cliente', function () {
-    [$client] = clientWithProject();
+    [$client, $project] = clientWithProject();
+    [$other, $otherProject] = clientWithProject();
 
-    ClientUpdate::factory()->for($client)->count(20)->sent()->create();
+    ClientUpdate::factory()->for($client)->count(20)->sent('2026-07-20 09:00:00')->create();
     updateService()->generate($client);
+
+    // Com evento de verdade nos dois clientes, um de cada tipo: é justamente
+    // quando há candidato que uma varredura com relações carregadas cobraria
+    // as consultas extras dos eager loads.
+    $spec = Activity::factory()->epic()->create([
+        'project_id' => $project->id,
+        'status' => ActivityStatus::AwaitingValidation,
+    ]);
+    withSpecHistory($spec, [[ActivityStatus::AwaitingValidation, '2026-08-06 09:00:00']]);
+
+    Activity::factory()->issue()->doing()->create([
+        'project_id' => $otherProject->id,
+        'service_class' => ServiceClass::Emergency,
+        'emergency_reason' => 'Produção parada.',
+    ]);
 
     DB::flushQueryLog();
     DB::enableQueryLog();
 
     $queue = updateService()->queue();
 
+    $mine = $queue->first(fn (ClientUpdateQueueEntry $entry): bool => $entry->client->is($client));
+    $theirs = $queue->first(fn (ClientUpdateQueueEntry $entry): bool => $entry->client->is($other));
+
     // Quatro consultas: os clientes, o último envio de cada um, o rascunho de
     // cada um e a varredura de gatilhos por evento (issue #150) — uma para a
-    // fila inteira, não uma por cliente. A badge da sidebar roda isto em toda
-    // página, então o custo não pode crescer com o histórico.
+    // fila inteira, com ou sem candidatos, e não uma por cliente. A badge da
+    // sidebar roda isto em toda página, então o custo não pode crescer nem
+    // com o histórico nem com o número de eventos no quadro.
     expect(DB::getQueryLog())->toHaveCount(4)
-        ->and($queue->first()->lastSentAt)->not->toBeNull()
-        ->and($queue->first()->hasDraft())->toBeTrue();
+        ->and($mine->lastSentAt)->not->toBeNull()
+        ->and($mine->hasDraft())->toBeTrue()
+        ->and($mine->triggers)->toBe([UpdateTrigger::DeliveryAwaitingValidation])
+        ->and($theirs->triggers)->toBe([UpdateTrigger::Emergency]);
 
     DB::disableQueryLog();
 });
@@ -900,18 +923,77 @@ test('furo aceito: uma Emergência rebaixada antes do envio some do radar', func
     expect(updateService()->entryFor($client->fresh())->triggers)->toBe([]);
 });
 
-test('o gatilho de um cliente não vaza para outro', function () {
-    [$mine, $project] = clientWithProject(['name' => 'Meu']);
-    [$theirs] = clientWithProject(['name' => 'Outro']);
+test('um evento no mesmo segundo do envio não sobrevive ao envio', function () {
+    [$client, $project] = clientWithProject();
+
+    // `sent_at`, `changed_at` e `emergency_since` têm precisão de segundo, e
+    // enviar logo depois de mexer no quadro é o gesto normal — o empate na
+    // fronteira é alcançável de fato, não teórico.
+    $sentAt = '2026-08-06 10:00:00';
+    ClientUpdate::factory()->for($client)->sent($sentAt)->create();
 
     $spec = Activity::factory()->epic()->create([
         'project_id' => $project->id,
         'status' => ActivityStatus::AwaitingValidation,
     ]);
-    withSpecHistory($spec, [[ActivityStatus::AwaitingValidation, '2026-08-05 09:00:00']]);
+    withSpecHistory($spec, [[ActivityStatus::AwaitingValidation, $sentAt]]);
 
-    expect(updateService()->entryFor($mine->fresh())->triggers)->toBe([UpdateTrigger::DeliveryAwaitingValidation])
-        ->and(updateService()->entryFor($theirs->fresh())->triggers)->toBe([]);
+    $emergency = Activity::factory()->issue()->doing()->create([
+        'project_id' => $project->id,
+        'service_class' => ServiceClass::Emergency,
+        'emergency_reason' => 'Produção parada.',
+    ]);
+    $emergency->forceFill(['emergency_since' => $sentAt])->saveQuietly();
+
+    // O que aconteceu no instante do envio saiu no texto que acabou de ir.
+    expect(updateService()->entryFor($client->fresh())->triggers)->toBe([]);
+});
+
+test('cada cliente é medido pela própria janela, numa varredura só', function () {
+    $today = MorningRitual::businessNow();
+
+    // Janela recente: recebeu update hoje de manhã, e está em dia.
+    [$recent, $recentProject] = clientWithProject([
+        'name' => 'Janela recente',
+        'update_day' => $today->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+    ClientUpdate::factory()->for($recent)->sent('2026-08-07 08:00:00')->create();
+
+    // Janela antiga: o último envio foi há cinco dias, e o relógio já cobra.
+    [$old, $oldProject] = clientWithProject([
+        'name' => 'Janela antiga',
+        'update_day' => $today->copy()->subDays(2)->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+    ClientUpdate::factory()->for($old)->sent('2026-08-02 10:00:00')->create();
+
+    // A entrega do cliente de janela recente caiu *entre* as duas fronteiras:
+    // dentro da janela do outro, fora da dele. Medir todo mundo pela janela
+    // mais antiga — o piso da varredura em lote — o poria em evento por um
+    // update que ele já recebeu.
+    $mine = Activity::factory()->epic()->create([
+        'project_id' => $recentProject->id,
+        'status' => ActivityStatus::AwaitingValidation,
+    ]);
+    withSpecHistory($mine, [[ActivityStatus::AwaitingValidation, '2026-08-04 09:00:00']]);
+
+    $theirs = Activity::factory()->epic()->create([
+        'project_id' => $oldProject->id,
+        'status' => ActivityStatus::AwaitingValidation,
+    ]);
+    withSpecHistory($theirs, [[ActivityStatus::AwaitingValidation, '2026-08-05 09:00:00']]);
+
+    // Uma leitura da fila, os dois clientes na mesma varredura.
+    $queue = updateService()->queue();
+
+    expect($queue->pluck('client.name')->all())->toBe(['Janela antiga', 'Janela recente'])
+        ->and($queue[0]->triggers)->toBe([UpdateTrigger::DeliveryAwaitingValidation])
+        ->and($queue[0]->urgency)->toBe(UpdateUrgency::Event)
+        ->and($queue[0]->cadence)->toBe(UpdateUrgency::Overdue)
+        ->and($queue[1]->triggers)->toBe([])
+        ->and($queue[1]->urgency)->toBe(UpdateUrgency::OnTrack)
+        ->and(updateService()->dueCount())->toBe(1);
 });
 
 test('os dois gatilhos convivem na mesma linha, na ordem dos chips', function () {

@@ -87,6 +87,39 @@ test('"outro" takes a free value and keeps it selected on the way back', functio
         ->assertSet('customAppetiteDays', 45);
 });
 
+test('"outro" keeps a free value inside the column instead of dying on autosave', function () {
+    $draft = Activity::factory()->draft()->create();
+
+    // O valor é livre, mas a coluna tem largura: um dígito a mais no campo
+    // não pode virar um write fora de faixa num autosave que ninguém pediu.
+    Livewire::test('pages::shaping', ['draft' => $draft->id])
+        ->call('chooseCustomAppetite')
+        ->set('customAppetiteDays', 999999)
+        ->assertSet('appetiteDays', ShapingService::MAX_APPETITE_DAYS)
+        ->set('customAppetiteDays', 0)
+        ->assertSet('appetiteDays', null);
+
+    expect($draft->refresh()->appetite_days)->toBeNull();
+});
+
+test('a note captured in the Ideias editor arrives as Dor without being flattened', function () {
+    // O modal de Ideias escreve `description` com <flux:editor>, isto é, HTML.
+    // A mesma coluna é a Dor: a página tem de carregá-la como está, e o pitch
+    // é quem a achata para markdown.
+    $draft = Activity::factory()->draft()->create([
+        'description' => '<p>Refaço isso <strong>à mão</strong> toda semana.</p>',
+    ]);
+
+    Livewire::test('pages::shaping', ['draft' => $draft->id])
+        ->assertSet('dor', '<p>Refaço isso <strong>à mão</strong> toda semana.</p>')
+        ->call('chooseAppetite', 7);
+
+    expect($draft->refresh()->description)->toBe('<p>Refaço isso <strong>à mão</strong> toda semana.</p>');
+    expect(app(ShapingService::class)->pitch($draft->refresh()))
+        ->toContain('Refaço isso à mão toda semana.')
+        ->not->toContain('<strong>');
+});
+
 test('the history aside shows "ainda sem histórico" with fewer than three validated specs', function () {
     $draft = Activity::factory()->draft()->create();
 

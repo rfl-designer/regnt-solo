@@ -117,9 +117,8 @@ new class extends Component
     public function updated(string $property): void
     {
         if ($property === 'customAppetiteDays') {
-            $this->appetiteDays = $this->customAppetiteDays !== null && $this->customAppetiteDays > 0
-                ? $this->customAppetiteDays
-                : null;
+            $this->customAppetiteDays = app(ShapingService::class)->normalizeAppetite($this->customAppetiteDays);
+            $this->appetiteDays = $this->customAppetiteDays;
         }
 
         $this->persist();
@@ -137,6 +136,7 @@ new class extends Component
     public function chooseCustomAppetite(): void
     {
         $this->customAppetite = true;
+        $this->customAppetiteDays = app(ShapingService::class)->normalizeAppetite($this->customAppetiteDays);
         $this->appetiteDays = $this->customAppetiteDays;
 
         $this->persist();
@@ -212,12 +212,11 @@ new class extends Component
                 <section id="secao-dor" class="rounded-xl border border-zinc-700 bg-zinc-900/50 p-5">
                     <flux:heading size="sm" class="mb-1">1 · Dor</flux:heading>
                     <flux:text class="mb-3 text-xs text-zinc-500">O problema real de quem sofre com isso hoje.</flux:text>
-                    <flux:textarea
-                        wire:model.blur="dor"
-                        rows="4"
-                        placeholder="Quem sente essa dor, e o que ela custa hoje?"
-                        data-test="field-dor"
-                    />
+                    {{-- Editor, não textarea: `description` é a mesma coluna que o
+                         modal de Ideias escreve com <flux:editor>, e uma nota
+                         capturada lá apareceria aqui como marcação crua — e seria
+                         achatada de volta a texto plano no primeiro autosave. --}}
+                    <flux:editor wire:model.blur="dor" placeholder="Quem sente essa dor, e o que ela custa hoje?" />
                 </section>
 
                 {{-- 2. Apetite --}}
@@ -255,6 +254,7 @@ new class extends Component
                             <flux:input
                                 type="number"
                                 min="1"
+                                max="{{ App\Services\ShapingService::MAX_APPETITE_DAYS }}"
                                 size="sm"
                                 class="w-28"
                                 wire:model.blur="customAppetiteDays"

@@ -60,6 +60,29 @@ class ShapingService
      */
     public const array APPETITE_CHIPS = [3, 7, 14, 21];
 
+    /**
+     * The ceiling on a free apetite value.
+     *
+     * "Outro" is a free value, so this is not a policy about how long a bet
+     * may be — it is the width of the `appetite_days` column. Without it a
+     * typo in the free field reaches the database as an out-of-range write and
+     * the page dies on an autosave the user did not ask for.
+     */
+    public const int MAX_APPETITE_DAYS = 65535;
+
+    /**
+     * A free apetite value as it may be stored: a whole number of days inside
+     * the column, or null when there is no apetite at all.
+     */
+    public function normalizeAppetite(?int $days): ?int
+    {
+        if ($days === null || $days < 1) {
+            return null;
+        }
+
+        return min($days, self::MAX_APPETITE_DAYS);
+    }
+
     public function __construct(private readonly FlowMetricsService $metrics) {}
 
     /**

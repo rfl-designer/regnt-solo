@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Client extends Model
 {
@@ -77,6 +78,26 @@ class Client extends Model
     public function updates(): HasMany
     {
         return $this->hasMany(ClientUpdate::class);
+    }
+
+    /**
+     * The two updates the queue actually needs: the last one sent and the
+     * draft still open.
+     *
+     * They exist as relations so the queue can eager-load exactly these two
+     * rows per client. Loading `updates` instead would hydrate every update
+     * ever written — full markdown and all — on a page the sidebar badge
+     * renders everywhere, and the cost would grow with the history forever
+     * (issue #149).
+     */
+    public function latestSentUpdate(): HasOne
+    {
+        return $this->hasOne(ClientUpdate::class)->sent()->latestOfMany('sent_at');
+    }
+
+    public function currentDraft(): HasOne
+    {
+        return $this->hasOne(ClientUpdate::class)->draft()->latestOfMany();
     }
 
     /**

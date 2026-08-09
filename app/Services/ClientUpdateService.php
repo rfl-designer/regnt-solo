@@ -14,6 +14,7 @@ use App\Models\MorningRitual;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * O update semanal por cliente: quem está devido, o que o texto diz, e o
@@ -69,9 +70,13 @@ class ClientUpdateService
     public const int NEXT_LIMIT = 3;
 
     /**
-     * A hora-alvo de quem não escolheu uma. Meio-dia é o meio do dia útil:
-     * cedo o bastante para que um update da manhã não conte como atrasado,
-     * tarde o bastante para não cobrar às 00:01.
+     * A hora-alvo de quem não escolheu uma.
+     *
+     * A hora **não decide** se o cliente está devido — isso é uma pergunta de
+     * dia (veja {@see entryFor()}). Ela é o instante que a fila mostra e que
+     * o MCP publica em `due_at`, e é o que os gatilhos por evento da issue
+     * #150 vão agendar. Meio-dia é o meio do dia útil: um horário que se lê
+     * como "hoje" sem sugerir madrugada nem fim de expediente.
      */
     private const string DEFAULT_UPDATE_TIME = '12:00';
 
@@ -89,7 +94,14 @@ class ClientUpdateService
     {
         return Client::query()
             ->active()
-            ->with(['updates' => fn ($query) => $query->orderByDesc('id')])
+            // Duas linhas por cliente, não o histórico inteiro: a badge da
+            // sidebar roda esta mesma fila em toda página.
+            ->with([
+                // As colunas vão qualificadas porque `latestOfMany()` junta a
+                // tabela com ela mesma.
+                'latestSentUpdate:client_updates.id,client_updates.client_id,client_updates.sent_at',
+                'currentDraft',
+            ])
             ->orderBy('name')
             ->get()
             ->map(fn (Client $client): ClientUpdateQueueEntry => $this->entryFor($client))
@@ -108,18 +120,32 @@ class ClientUpdateService
     /**
      * A posição de um cliente na fila, calculada da cadência contra o
      * último envio.
+     *
+     * **A urgência é uma pergunta de dia.** "Toda terça" é um compromisso com
+     * a terça, não com as 09:00 de terça: às 08:00 o cliente vence hoje, às
+     * 18:00 ele continua vencendo hoje, e só na quarta ele está atrasado — de
+     * um dia. Classificar pelo instante faria o mesmo cliente pular de "em
+     * dia" para "atrasado" no meio do expediente, e faria um cliente sem
+     * nenhum envio aparecer sete dias atrasado às 08:00 da própria terça,
+     * porque a ocorrência mais recente *já vencida* ainda seria a da semana
+     * anterior.
+     *
+     * A hora-alvo entra em dois lugares, e só neles: no instante que a fila
+     * mostra ({@see ClientUpdateQueueEntry::$dueAt}) e no desempate de um
+     * envio feito no próprio dia do compromisso — enviar terça às 08:00 cobre
+     * a terça, mesmo que a hora-alvo fosse 09:00.
      */
     public function entryFor(Client $client): ClientUpdateQueueEntry
     {
         $lastSent = $this->lastSentAt($client);
-        $scheduled = $this->lastScheduledMoment($client);
+        $charged = $this->chargedOccurrence($client);
 
-        // Se o último envio já cobriu o compromisso desta rodada, o próximo
-        // é daqui a uma semana; senão, o compromisso cobrado é o que já
-        // passou.
-        $dueAt = $lastSent !== null && $lastSent->greaterThanOrEqualTo($scheduled)
-            ? $scheduled->copy()->addWeek()
-            : $scheduled;
+        // Um envio no dia do compromisso (ou depois) cobre esse compromisso;
+        // o próximo é uma semana adiante. A comparação é por dia justamente
+        // porque o compromisso é o dia.
+        $dueAt = $lastSent !== null && $lastSent->copy()->startOfDay()->greaterThanOrEqualTo($charged->copy()->startOfDay())
+            ? $charged->copy()->addWeek()
+            : $charged;
 
         $today = $this->businessNow()->startOfDay();
         $dueDay = $dueAt->copy()->startOfDay();
@@ -147,19 +173,20 @@ class ClientUpdateService
      */
     public function draftFor(Client $client): ?ClientUpdate
     {
-        if (! $client->relationLoaded('updates')) {
-            return $client->draftUpdate();
-        }
-
-        return $client->updates
-            ->filter(fn (ClientUpdate $update): bool => $update->isDraft())
-            ->sortByDesc('id')
-            ->first();
+        return $client->relationLoaded('currentDraft')
+            ? $client->currentDraft
+            : $client->draftUpdate();
     }
 
     /**
      * O histórico: o que este cliente recebeu, do mais recente ao mais
      * antigo.
+     *
+     * O limite é uma página, não um teto — {@see sentCount()} diz quanto
+     * ficou de fora para que a tela possa oferecer o resto. Um histórico que
+     * simplesmente parasse no décimo segundo envio apagaria da vista tudo
+     * que passou de três meses, que é o horizonte em que a pergunta "o que
+     * eu te disse naquela época?" costuma aparecer.
      *
      * @return EloquentCollection<int, ClientUpdate>
      */
@@ -171,6 +198,14 @@ class ClientUpdateService
             ->orderByDesc('id')
             ->limit($limit)
             ->get();
+    }
+
+    /**
+     * Quantos updates este cliente já recebeu.
+     */
+    public function sentCount(Client $client): int
+    {
+        return $client->updates()->sent()->count();
     }
 
     /**
@@ -190,30 +225,43 @@ class ClientUpdateService
      * página e a tool `generate-client-update` chamam exatamente isto, o
      * que é o que faz os dois textos serem o mesmo texto.
      *
+     * Roda dentro de uma transação com a linha do cliente travada: sem isso,
+     * a página e um agente por MCP gerando ao mesmo tempo passariam os dois
+     * pelo "não há rascunho" e abririam um cada. O índice único de
+     * `draft_client_id` é a segunda linha de defesa, para o caso de o banco
+     * não honrar a trava.
+     *
      * @param  bool  $force  Confirma o descarte quando o rascunho foi editado à mão.
      *
      * @throws UpdateDraftHasManualEditsException quando há edição manual e $force é falso.
      */
     public function generate(Client $client, bool $force = false): ClientUpdate
     {
-        $draft = $this->draftFor($client);
+        return DB::transaction(function () use ($client, $force): ClientUpdate {
+            // A leitura tem de ser fresca e travada: um `$client` que veio da
+            // fila carrega relações já carregadas, e decidir sobre elas seria
+            // decidir sobre o estado de antes da transação.
+            $locked = Client::query()->whereKey($client->getKey())->lockForUpdate()->firstOrFail();
 
-        if ($draft !== null && $draft->hasManualEdits() && ! $force) {
-            throw new UpdateDraftHasManualEditsException;
-        }
+            $draft = $locked->draftUpdate();
 
-        $content = $this->compose($client);
+            if ($draft !== null && $draft->hasManualEdits() && ! $force) {
+                throw new UpdateDraftHasManualEditsException;
+            }
 
-        if ($draft === null) {
-            return $client->updates()->create([
-                'content' => $content,
-                'generated_content' => $content,
-            ]);
-        }
+            $content = $this->compose($locked);
 
-        $draft->update(['content' => $content, 'generated_content' => $content]);
+            if ($draft === null) {
+                return $locked->updates()->create([
+                    'content' => $content,
+                    'generated_content' => $content,
+                ]);
+            }
 
-        return $draft->refresh();
+            $draft->update(['content' => $content, 'generated_content' => $content]);
+
+            return $draft->refresh();
+        });
     }
 
     /**
@@ -295,11 +343,15 @@ class ClientUpdateService
     /**
      * O que entrou em Aguardando validação ou Feito dentro da janela.
      *
-     * O estado vem da etapa em que a Spec está *agora*, não da última
-     * movimentação: uma entrega que foi validada depois conta como validada,
-     * e uma que voltou a ser trabalho em andamento sai deste bloco e entra
-     * no próximo — dizer "entregue" de algo que voltou para a bancada seria
-     * a única mentira que este gerador poderia contar.
+     * A seleção é pelo **evento**: a entrega aconteceu nestes dias, e isso
+     * não deixa de ser verdade depois. O estado atual da Spec entra só no
+     * detalhe — validada, aguardando validação, ou de volta à bancada.
+     *
+     * Uma entrega que foi devolvida para ajustes é o caso que decide o
+     * desenho. Omiti-la seria a mentira mais fácil de contar: o cliente viu a
+     * entrega, e um update que não a menciona sugere que ela nunca saiu. Ela
+     * fica, dizendo o que de fato aconteceu — e reaparece em "Em andamento",
+     * que é onde o trabalho está agora.
      *
      * @param  EloquentCollection<int, Activity>  $specs
      * @return list<array{id: int, title: string, detail: string|null}>
@@ -307,25 +359,21 @@ class ClientUpdateService
     private function deliveredItems(EloquentCollection $specs, CarbonInterface $windowStart): array
     {
         return $specs
-            ->filter(function (Activity $spec) use ($windowStart): bool {
-                if (! in_array($spec->specStage(), ['entregue', 'validada'], true)) {
-                    return false;
-                }
-
-                return $spec->statusChanges->contains(
-                    fn (ActivityStatusChange $change): bool => in_array(
-                        $change->to_status,
-                        [ActivityStatus::AwaitingValidation, ActivityStatus::Done],
-                        true,
-                    ) && $change->changed_at->greaterThanOrEqualTo($windowStart)
-                );
-            })
+            ->filter(fn (Activity $spec): bool => $spec->statusChanges->contains(
+                fn (ActivityStatusChange $change): bool => in_array(
+                    $change->to_status,
+                    [ActivityStatus::AwaitingValidation, ActivityStatus::Done],
+                    true,
+                ) && $change->changed_at->greaterThanOrEqualTo($windowStart)
+            ))
             ->map(fn (Activity $spec): array => [
                 'id' => $spec->id,
                 'title' => $spec->title,
-                'detail' => $spec->specStage() === 'validada'
-                    ? 'validada ✓'
-                    : 'entregue, aguardando sua validação',
+                'detail' => match ($spec->specStage()) {
+                    'validada' => 'validada ✓',
+                    'entregue' => 'entregue, aguardando sua validação',
+                    default => 'entregue e devolvida para ajustes',
+                },
             ])
             ->values()
             ->all();
@@ -472,39 +520,29 @@ class ClientUpdateService
      */
     private function lastSentAt(Client $client): ?CarbonInterface
     {
-        $sentAt = $client->relationLoaded('updates')
-            ? $client->updates
-                ->filter(fn (ClientUpdate $update): bool => ! $update->isDraft())
-                ->sortByDesc('sent_at')
-                ->first()?->sent_at
+        $sentAt = $client->relationLoaded('latestSentUpdate')
+            ? $client->latestSentUpdate?->sent_at
             : $client->lastSentUpdate()?->sent_at;
 
         return $sentAt?->copy()->setTimezone($this->timezone());
     }
 
     /**
-     * O momento de cadência mais recente que já passou: a última ocorrência
-     * do dia da semana escolhido, na hora-alvo.
+     * A ocorrência de cadência que está sendo cobrada: o dia da semana
+     * escolhido, na hora-alvo, na sua passagem mais recente.
      *
-     * Sempre no passado (no máximo sete dias atrás), porque a pergunta que
-     * ele responde é "o compromisso mais recente já venceu?" — o próximo é
-     * derivado dele somando uma semana.
+     * O **dia** nunca é futuro (é hoje, ou até seis dias atrás); a **hora**
+     * pode ser — no dia do compromisso, às 08:00, o instante cobrado é hoje
+     * às 09:00. É essa distinção que faz "vence hoje" começar quando o dia
+     * começa, em vez de começar quando o relógio bate a hora-alvo.
      */
-    private function lastScheduledMoment(Client $client): CarbonInterface
+    private function chargedOccurrence(Client $client): CarbonInterface
     {
-        $now = $this->businessNow();
         $time = $client->update_time?->format('H:i') ?? self::DEFAULT_UPDATE_TIME;
 
-        $moment = $now->copy()->startOfDay()->setTimeFromTimeString($time);
+        $moment = $this->businessNow()->copy()->startOfDay()->setTimeFromTimeString($time);
 
-        $daysBack = ($moment->dayOfWeekIso - $client->update_day + 7) % 7;
-        $moment = $moment->subDays($daysBack);
-
-        if ($moment->greaterThan($now)) {
-            $moment = $moment->subWeek();
-        }
-
-        return $moment;
+        return $moment->subDays(($moment->dayOfWeekIso - $client->update_day + 7) % 7);
     }
 
     /**

@@ -14,6 +14,8 @@ use App\Models\MorningRitual;
 use App\Models\Project;
 use App\Services\ClientUpdateService;
 use App\Services\FlowMetricsService;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 
 /**
  * O gerador do update semanal (issue #149): a janela, os quatro blocos, a
@@ -373,6 +375,182 @@ test('a fila ordena por urgência e a badge conta só os devidos', function () {
 
     expect($overdue->fresh())->not->toBeNull()
         ->and($dueToday->fresh())->not->toBeNull();
+});
+
+test('no dia do compromisso o cliente vence hoje antes da hora-alvo, e não sete dias atrasado', function () {
+    // 11:00 no fuso de negócio, contra uma hora-alvo às 18:00 — o
+    // compromisso é hoje e ainda não chegou.
+    $this->travelTo('2026-08-07 14:00:00');
+
+    $client = Client::factory()->create([
+        'update_day' => MorningRitual::businessNow()->dayOfWeekIso,
+        'update_time' => '18:00',
+    ]);
+
+    $entry = updateService()->entryFor($client);
+
+    expect($entry->urgency)->toBe(UpdateUrgency::DueToday)
+        ->and($entry->daysLate())->toBe(0)
+        // O instante cobrado guarda a hora-alvo, ainda que ela não decida
+        // nada sobre a urgência.
+        ->and($entry->dueAt->format('Y-m-d H:i'))->toBe('2026-08-07 18:00');
+});
+
+test('depois da hora-alvo ele continua vencendo hoje, e só amanhã fica atrasado de um dia', function () {
+    $this->travelTo('2026-08-07 23:00:00'); // 20:00 no fuso de negócio.
+
+    $client = Client::factory()->create([
+        'update_day' => MorningRitual::businessNow()->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+
+    expect(updateService()->entryFor($client)->urgency)->toBe(UpdateUrgency::DueToday);
+
+    $this->travelTo('2026-08-08 14:00:00');
+
+    $tomorrow = updateService()->entryFor($client->fresh());
+
+    expect($tomorrow->urgency)->toBe(UpdateUrgency::Overdue)
+        ->and($tomorrow->daysLate())->toBe(1);
+});
+
+test('a virada do dia é a do fuso de negócio, não a do UTC', function () {
+    // 22:00 de sexta em Recife já é sábado em UTC. Quem vence "sexta" vence
+    // agora; quem vence "sábado" ainda está atrasado da semana passada.
+    $this->travelTo('2026-08-08 01:00:00');
+
+    expect(MorningRitual::businessNow()->format('Y-m-d'))->toBe('2026-08-07');
+
+    $friday = Client::factory()->create(['update_day' => 5, 'update_time' => '09:00']);
+    $saturday = Client::factory()->create(['update_day' => 6, 'update_time' => '09:00']);
+
+    expect(updateService()->entryFor($friday)->urgency)->toBe(UpdateUrgency::DueToday)
+        ->and(updateService()->entryFor($saturday)->urgency)->toBe(UpdateUrgency::Overdue)
+        ->and(updateService()->entryFor($saturday)->daysLate())->toBe(6);
+});
+
+test('enviar no dia do compromisso cobre o compromisso, mesmo antes da hora-alvo', function () {
+    $this->travelTo('2026-08-07 14:00:00'); // 11:00 no fuso de negócio.
+
+    $client = Client::factory()->create([
+        'update_day' => MorningRitual::businessNow()->dayOfWeekIso,
+        'update_time' => '18:00',
+    ]);
+    ClientUpdate::factory()->for($client)->sent(now()->toDateTimeString())->create();
+
+    expect(updateService()->entryFor($client)->urgency)->toBe(UpdateUrgency::OnTrack);
+});
+
+test('sem hora-alvo o compromisso cai ao meio-dia, e isso não muda a urgência', function () {
+    $this->travelTo('2026-08-07 12:00:00'); // 09:00 no fuso de negócio.
+
+    $client = Client::factory()->create([
+        'update_day' => MorningRitual::businessNow()->dayOfWeekIso,
+        'update_time' => null,
+    ]);
+
+    $entry = updateService()->entryFor($client);
+
+    expect($entry->urgency)->toBe(UpdateUrgency::DueToday)
+        ->and($entry->dueAt->format('H:i'))->toBe('12:00');
+});
+
+test('uma entrega devolvida para ajustes continua no bloco Entregue, dizendo isso', function () {
+    [$client, $project] = clientWithProject();
+
+    $bounced = Activity::factory()->epic()->create([
+        'project_id' => $project->id,
+        'title' => 'Portal de faturas',
+        'status' => ActivityStatus::Doing,
+    ]);
+    withSpecHistory($bounced, [
+        [ActivityStatus::AwaitingApproval, '2026-07-20 09:00:00'],
+        [ActivityStatus::Doing, '2026-07-22 09:00:00'],
+        [ActivityStatus::AwaitingValidation, '2026-08-04 09:00:00'],
+        // Reprovada na validação: voltou para a bancada dentro da mesma
+        // janela em que foi entregue.
+        [ActivityStatus::Doing, '2026-08-06 09:00:00'],
+    ]);
+
+    $blocks = collect(updateService()->blocks($client))->keyBy('key');
+
+    // A entrega aconteceu, o cliente a viu, e omiti-la sugeriria que ela
+    // nunca saiu — o bloco a mantém e conta o desfecho.
+    expect($blocks['entregue']['items'])->toHaveCount(1)
+        ->and($blocks['entregue']['items'][0]['detail'])->toBe('entregue e devolvida para ajustes')
+        // E o trabalho reaparece onde ele de fato está agora.
+        ->and(collect($blocks['em_andamento']['items'])->pluck('id')->all())->toBe([$bounced->id]);
+});
+
+test('o banco não deixa dois rascunhos abertos para o mesmo cliente', function () {
+    [$client] = clientWithProject();
+
+    updateService()->generate($client);
+
+    // A corrida que a transação evita, forçada à mão: se o índice único não
+    // estivesse lá, este segundo rascunho passaria e a fila cobraria um
+    // update que ninguém mais veria.
+    ClientUpdate::factory()->for($client)->create();
+})->throws(QueryException::class);
+
+test('gerar de novo reaproveita o rascunho aberto em vez de abrir um segundo', function () {
+    [$client] = clientWithProject();
+
+    updateService()->generate($client);
+    updateService()->generate($client->fresh());
+
+    expect(ClientUpdate::query()->draft()->where('client_id', $client->id)->count())->toBe(1);
+});
+
+test('a fila não hidrata o histórico inteiro de cada cliente', function () {
+    [$client] = clientWithProject();
+
+    ClientUpdate::factory()->for($client)->count(20)->sent()->create();
+    updateService()->generate($client);
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    $queue = updateService()->queue();
+
+    // Três consultas: os clientes, o último envio de cada um e o rascunho de
+    // cada um. A badge da sidebar roda isto em toda página, então o custo não
+    // pode crescer com o histórico.
+    expect(DB::getQueryLog())->toHaveCount(3)
+        ->and($queue->first()->lastSentAt)->not->toBeNull()
+        ->and($queue->first()->hasDraft())->toBeTrue();
+
+    DB::disableQueryLog();
+});
+
+test('uma edição só de formatação também conta como edição manual', function () {
+    [$client] = clientWithProject();
+
+    $draft = updateService()->generate($client);
+
+    // Em Markdown o espaço é conteúdo: uma linha em branco a mais separa
+    // parágrafos, e descartá-la sem perguntar seria descartar uma edição.
+    $draft->update(['content' => $draft->content."\n"]);
+
+    expect($draft->hasManualEdits())->toBeTrue();
+
+    updateService()->generate($client->fresh());
+})->throws(UpdateDraftHasManualEditsException::class);
+
+test('o histórico pagina em vez de sumir depois do décimo segundo envio', function () {
+    [$client] = clientWithProject();
+
+    foreach (range(1, 15) as $week) {
+        ClientUpdate::factory()->for($client)->sent(now()->subWeeks($week)->toDateTimeString())->create([
+            'content' => "Update da semana {$week}",
+        ]);
+    }
+
+    expect(updateService()->sentCount($client))->toBe(15)
+        ->and(updateService()->history($client))->toHaveCount(12)
+        ->and(updateService()->history($client, 24))->toHaveCount(15)
+        // E o mais antigo continua alcançável, que é o ponto do histórico.
+        ->and(updateService()->history($client, 24)->last()->content)->toBe('Update da semana 15');
 });
 
 test('marcar como enviado grava a data e o próximo rascunho cobre desde aí', function () {

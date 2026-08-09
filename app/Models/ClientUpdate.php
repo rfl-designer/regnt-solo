@@ -44,6 +44,21 @@ class ClientUpdate extends Model
         ];
     }
 
+    /**
+     * `draft_client_id` é derivada, nunca escrita à mão: vale `client_id`
+     * enquanto a linha é rascunho e NULL depois do envio.
+     *
+     * Mantê-la aqui, e não em cada chamador, é o que faz o índice único do
+     * banco valer sozinho — quem esquecesse de atualizá-la criaria de volta a
+     * corrida que ela existe para fechar (issue #149).
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (ClientUpdate $update): void {
+            $update->draft_client_id = $update->sent_at === null ? $update->client_id : null;
+        });
+    }
+
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
@@ -77,9 +92,15 @@ class ClientUpdate extends Model
      * `generated_content`), não contra uma geração nova: o quadro se move o
      * tempo todo, e regerar para comparar acusaria edição manual sempre que
      * uma task mudasse de status.
+     *
+     * Byte a byte, sem `trim()`. Em Markdown o espaço é conteúdo — uma linha
+     * em branco separa parágrafos, dois espaços no fim quebram a linha — e
+     * normalizar antes de comparar faria a confirmação calar justamente
+     * quando a edição foi só de formatação, que é uma edição como outra
+     * qualquer.
      */
     public function hasManualEdits(): bool
     {
-        return trim($this->content) !== trim((string) $this->generated_content);
+        return $this->content !== (string) $this->generated_content;
     }
 }

@@ -310,6 +310,26 @@ Tasks recorrentes e templates para automatizar atividades repetitivas e manter c
 - `tests/Feature/TaskTemplateTest.php` — model, factory, seeder
 - `tests/Feature/TemplatesPageTest.php` — UI, CRUD, integração
 
+## Update semanal por cliente (issue #149)
+
+Gerador determinístico do update semanal, com fila por urgência, rascunho persistido e histórico. Página `/updates` (sidebar, categoria Acompanhamento).
+
+- **Model `ClientUpdate`**: `client_id`, `content`, `generated_content`, `sent_at` (null = rascunho da semana)
+  - `hasManualEdits()` compara `content` com `generated_content` — é o que faz "Regenerar" pedir confirmação só quando há texto humano a perder
+  - `sent_at` não é fillable: só `ClientUpdateService::markSent()` o carimba
+- **Enum `HillPosition`**: `uphill` ("Em descoberta") / `downhill` ("Em execução") — coluna `activities.hill_position`, nullable, marcada à mão no modal do Épico
+- **Enum `UpdateUrgency`**: `overdue` / `due_today` / `on_track`
+- **Serviço `ClientUpdateService`** (um lugar computa; página, badge e MCP consomem):
+  - `queue()` / `dueCount()` — fila de clientes ativos por urgência (cadência × último envio, no fuso de negócio)
+  - `windowStart()` — desde o último `sent_at`; primeiro update = 7 dias; **sem teto**
+  - `blocks()` / `compose()` — os 4 blocos PT-BR (Entregue / Em andamento / Esperando você / Próximo), filtrados por cliente efetivo e `Activity::scopeSpecLevel()`, com bloco vazio omitido
+  - `generate(force)` — persiste o rascunho; recusa descartar edição manual sem confirmação
+  - `markSent()` — grava a data, fecha a janela e zera o relógio
+- **Página `/updates`**: fila com ícone do canal, editor com autosave (`wire:model.live.blur`), Copiar (não grava) e Marcar como enviado (grava) separados, Regenerar com confirmação, histórico por cliente
+- **Sidebar**: item "Updates" com badge da contagem de devidos (`⚡updates-badge`)
+- **Clientes**: atalho "Gerar update" leva para `/updates?client={slug}`
+- **Testes**: `ClientUpdateServiceTest`, `UpdatesPageTest`, `HillPositionTest`, `Mcp/ClientUpdateToolsTest`, `Browser/UpdatesFlowTest`
+
 ## Keyboard Shortcuts
 
 | Atalho   | Ação                        |
@@ -355,6 +375,9 @@ O SoloBoard expõe um MCP Server para integração com AI clients (Claude Code, 
   - `timer-status` — Mostra timer ativo (task ou feature)
   - `get-pull-queue` — Fila de puxar (Pronto em ordem, com o motivo de cada posição)
   - `get-ritual-status` — Estado do ritual matinal de hoje + snapshot do quadro (leitura)
+  - `get-update-queue` — Fila de updates semanais por urgência + contagem de devidos (leitura)
+  - `generate-client-update` — Gera e persiste o rascunho do update (mesma janela e template da UI; `force` para descartar edição manual)
+  - `mark-update-sent` — Marca um rascunho existente como enviado (exige `draft_id`; zera o relógio da cadência)
   - `list-projects` — Lista projetos por status
 - **Resource**: `soloboard://overview` — Resumo geral do estado (inclui active_features)
 - **Prompts**:

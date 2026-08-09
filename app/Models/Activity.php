@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
+use App\Enums\HillPosition;
 use App\Enums\ServiceClass;
 use App\Exceptions\ArchiveRequiresConcludedItemException;
 use App\Observers\ActivityObserver;
@@ -50,6 +51,9 @@ class Activity extends Model
         'appetite_days',
         'rabbit_holes',
         'no_gos',
+        // Onde a spec está na colina (issue #149). Manual e binário: é uma
+        // declaração do dev, não algo derivado do quadro.
+        'hill_position',
         'status',
         'priority',
         'service_class',
@@ -89,6 +93,7 @@ class Activity extends Model
             'status' => ActivityStatus::class,
             'priority' => ActivityPriority::class,
             'service_class' => ServiceClass::class,
+            'hill_position' => HillPosition::class,
             'appetite_days' => 'integer',
             'waiting_since' => 'datetime',
             'emergency_since' => 'datetime',
@@ -588,6 +593,50 @@ class Activity extends Model
             ActivityType::Epic => ! $this->children()->exists(),
             default => false,
         };
+    }
+
+    /**
+     * Scope to the items that stand in front of a client on their own — the
+     * "nível spec" the weekly update speaks in (issue #149).
+     *
+     * That is an Épico, or an item with no parent at all: a task avulsa
+     * taken for a client is a commitment of the same kind, just without
+     * children. What is deliberately out are the *children* of an Épico —
+     * naming them in an update would report the plumbing of a delivery the
+     * client only agreed to as one thing, and it is why the generator can
+     * say "a spec foi entregue" instead of listing five tickets.
+     *
+     * Ideias are out too: they are not commitments, they are drafts.
+     */
+    public function scopeSpecLevel(Builder $query): void
+    {
+        $query->where('type', '!=', ActivityType::Draft)->whereNull('parent_id');
+    }
+
+    /**
+     * The instance-level counterpart of {@see scopeSpecLevel()}.
+     */
+    public function isSpecLevel(): bool
+    {
+        return $this->type !== ActivityType::Draft && $this->parent_id === null;
+    }
+
+    /**
+     * Scope to what belongs to one client, by the *effective* client — the
+     * project's client when there is a project, the direct link when there
+     * isn't.
+     *
+     * This mirrors {@see effectiveClient()} in SQL so a listing and a card
+     * can never disagree about whose work something is.
+     */
+    public function scopeForClient(Builder $query, Client|int $client): void
+    {
+        $clientId = $client instanceof Client ? $client->id : $client;
+
+        $query->where(function (Builder $q) use ($clientId): void {
+            $q->whereHas('project', fn (Builder $project) => $project->where('client_id', $clientId))
+                ->orWhere(fn (Builder $direct) => $direct->whereNull('project_id')->where('client_id', $clientId));
+        });
     }
 
     /**

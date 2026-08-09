@@ -8,6 +8,7 @@ use App\Models\MorningRitual;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\ClientUpdateService;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 
 /**
@@ -133,6 +134,78 @@ test('regenerar não pede confirmação quando o rascunho está intocado', funct
         ->test('pages::updates')
         ->call('requestRegenerate')
         ->assertSet('showRegenerateConfirm', false);
+});
+
+test('chamar regenerate direto não descarta a edição — pergunta, como o botão', function () {
+    [$client] = updatesPageClient(['slug' => 'acme']);
+
+    app(ClientUpdateService::class)->generate($client);
+
+    // O modal é a pergunta, não a autorização. Uma chamada Livewire direta
+    // pula o modal, e é justamente por isso que o `force` não pode sair dele.
+    Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->set('content', 'Texto escrito na mão.')
+        ->call('regenerate')
+        ->assertSet('showRegenerateConfirm', true)
+        ->assertSet('content', 'Texto escrito na mão.');
+
+    expect($client->fresh()->draftUpdate()->content)->toBe('Texto escrito na mão.');
+});
+
+test('forjar o estado do modal não autoriza o descarte', function () {
+    [$client] = updatesPageClient(['slug' => 'acme']);
+
+    app(ClientUpdateService::class)->generate($client);
+
+    Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->set('content', 'Texto escrito na mão.')
+        // O que o browser consegue mudar: o booleano que abre o modal.
+        ->set('showRegenerateConfirm', true)
+        ->call('regenerate');
+
+    expect($client->fresh()->draftUpdate()->content)->toBe('Texto escrito na mão.');
+
+    // O que autoriza de fato é uma propriedade travada, que o browser não
+    // alcança — tentar mudá-la é um erro, não uma permissão.
+    expect(fn () => Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->set('regenerateConfirmedFor', $client->fresh()->draftUpdate()->id))
+        ->toThrow(CannotUpdateLockedPropertyException::class);
+});
+
+test('chamar generate direto num rascunho editado também pede confirmação', function () {
+    [$client] = updatesPageClient(['slug' => 'acme']);
+
+    app(ClientUpdateService::class)->generate($client);
+
+    Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->set('content', 'Texto escrito na mão.')
+        ->call('generate')
+        ->assertSet('showRegenerateConfirm', true);
+
+    expect($client->fresh()->draftUpdate()->content)->toBe('Texto escrito na mão.');
+});
+
+test('o histórico carrega mais quando passa de doze envios', function () {
+    [$client] = updatesPageClient(['slug' => 'acme']);
+
+    foreach (range(1, 15) as $week) {
+        ClientUpdate::factory()->for($client)->sent(now()->subWeeks($week)->toDateTimeString())->create([
+            'content' => "Update da semana {$week}",
+        ]);
+    }
+
+    Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->assertSee('Update da semana 12')
+        ->assertDontSee('Update da semana 15')
+        ->assertSeeHtml('data-test="load-more-history"')
+        ->call('loadMoreHistory')
+        ->assertSee('Update da semana 15')
+        ->assertDontSeeHtml('data-test="load-more-history"');
 });
 
 test('copiar leva o texto ao clipboard sem gravar nada', function () {

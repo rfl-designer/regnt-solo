@@ -8,6 +8,7 @@ use App\Exceptions\UpdateAlreadySentException;
 use App\Exceptions\UpdateDraftHasManualEditsException;
 use Flux\Flux;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -40,6 +41,26 @@ new class extends Component
     public string $content = '';
 
     public bool $showRegenerateConfirm = false;
+
+    /**
+     * O id do rascunho cujo descarte o usuário confirmou.
+     *
+     * `#[Locked]` porque é ele, e não o modal, que autoriza o `force`: uma
+     * propriedade pública comum pode ser mudada pelo browser, e um
+     * `showRegenerateConfirm = true` forjado bastaria para apagar texto
+     * humano sem que ninguém tivesse confirmado nada. Guardar o *id* e não um
+     * booleano fecha a outra ponta: confirmar o descarte de um rascunho não
+     * autoriza o descarte do rascunho seguinte.
+     */
+    #[Locked]
+    public ?int $regenerateConfirmedFor = null;
+
+    /**
+     * Quantos envios o histórico mostra. Cresce só por `loadMoreHistory()` —
+     * travada para que o cliente não peça dez mil de uma vez.
+     */
+    #[Locked]
+    public int $historyLimit = 12;
 
     public function mount(): void
     {
@@ -83,7 +104,27 @@ new class extends Component
 
         return $client === null
             ? new \Illuminate\Database\Eloquent\Collection
-            : app(ClientUpdateService::class)->history($client);
+            : app(ClientUpdateService::class)->history($client, $this->historyLimit);
+    }
+
+    /**
+     * Quantos envios ainda não estão na tela.
+     */
+    #[Computed]
+    public function historyRemaining(): int
+    {
+        $client = $this->selected;
+
+        return $client === null
+            ? 0
+            : max(0, app(ClientUpdateService::class)->sentCount($client) - $this->history->count());
+    }
+
+    public function loadMoreHistory(): void
+    {
+        $this->historyLimit += 12;
+
+        unset($this->history, $this->historyRemaining);
     }
 
     /**
@@ -105,25 +146,14 @@ new class extends Component
     }
 
     /**
-     * Gera o rascunho do zero. Só aparece quando não há rascunho aberto —
-     * com um aberto, o botão é "Regenerar", que passa pela confirmação.
+     * Gera o rascunho. O botão só aparece quando não há nenhum aberto, mas o
+     * método não conta com isso: nada aqui passa `force`, então uma chamada
+     * direta a `generate` esbarra na mesma recusa do serviço e vira a mesma
+     * pergunta na tela.
      */
     public function generate(): void
     {
-        $client = $this->selected;
-
-        if ($client === null) {
-            return;
-        }
-
-        $this->persistDraft();
-
-        $draft = app(ClientUpdateService::class)->generate($client, force: true);
-
-        $this->content = $draft->content;
-        $this->refreshClientState();
-
-        Flux::toast(variant: 'success', heading: 'Rascunho gerado', text: 'Do estado real do quadro.');
+        $this->composeDraft(force: false, heading: 'Rascunho gerado', text: 'Do estado real do quadro.');
     }
 
     /**
@@ -131,6 +161,35 @@ new class extends Component
      * direto — não há nada a perder.
      */
     public function requestRegenerate(): void
+    {
+        $this->composeDraft(force: false, heading: 'Rascunho regerado', text: 'Do estado real do quadro.');
+    }
+
+    /**
+     * O "Regerar" do modal.
+     *
+     * Só descarta o que o usuário confirmou: o `force` sai do id guardado em
+     * {@see $regenerateConfirmedFor}, e não do modal estar aberto. Chamado
+     * direto, sem confirmação, este método se comporta como
+     * {@see requestRegenerate()} — pergunta em vez de apagar.
+     */
+    public function regenerate(): void
+    {
+        $confirmed = $this->regenerateConfirmedFor !== null
+            && $this->regenerateConfirmedFor === $this->draft?->id;
+
+        $this->composeDraft(
+            force: $confirmed,
+            heading: 'Rascunho regerado',
+            text: $confirmed ? 'A edição anterior foi descartada.' : 'Do estado real do quadro.',
+        );
+    }
+
+    /**
+     * O caminho único de escrita do rascunho gerado — e o único lugar da
+     * página que decide o que fazer com uma recusa do serviço.
+     */
+    private function composeDraft(bool $force, string $heading, string $text): void
     {
         $client = $this->selected;
 
@@ -143,34 +202,20 @@ new class extends Component
         $this->persistDraft();
 
         try {
-            $draft = app(ClientUpdateService::class)->generate($client);
+            $draft = app(ClientUpdateService::class)->generate($client, force: $force);
         } catch (UpdateDraftHasManualEditsException) {
+            $this->regenerateConfirmedFor = $this->draft?->id;
             $this->showRegenerateConfirm = true;
 
             return;
         }
 
         $this->content = $draft->content;
-        $this->refreshClientState();
-
-        Flux::toast(variant: 'success', heading: 'Rascunho regerado', text: 'Do estado real do quadro.');
-    }
-
-    public function regenerate(): void
-    {
-        $client = $this->selected;
-
-        if ($client === null) {
-            return;
-        }
-
-        $draft = app(ClientUpdateService::class)->generate($client, force: true);
-
-        $this->content = $draft->content;
         $this->showRegenerateConfirm = false;
+        $this->regenerateConfirmedFor = null;
         $this->refreshClientState();
 
-        Flux::toast(variant: 'success', heading: 'Rascunho regerado', text: 'A edição anterior foi descartada.');
+        Flux::toast(variant: 'success', heading: $heading, text: $text);
     }
 
     /**
@@ -243,15 +288,17 @@ new class extends Component
      */
     private function syncSelection(): void
     {
-        unset($this->selected, $this->draft, $this->history, $this->windowStart);
+        unset($this->selected, $this->draft, $this->history, $this->historyRemaining, $this->windowStart);
 
         $this->showRegenerateConfirm = false;
+        $this->regenerateConfirmedFor = null;
+        $this->historyLimit = 12;
         $this->content = $this->draft?->content ?? '';
     }
 
     private function refreshClientState(): void
     {
-        unset($this->queue, $this->draft, $this->history, $this->windowStart);
+        unset($this->queue, $this->draft, $this->history, $this->historyRemaining, $this->windowStart);
     }
 };
 
@@ -264,6 +311,19 @@ new class extends Component
         navigator.clipboard.writeText($event.detail.markdown).catch(() => {
             $flux.toast({ variant: 'danger', heading: 'Erro', text: 'Não foi possível copiar.' })
         })
+    "
+    {{-- Os dois atalhos valem também de dentro do editor, ao contrário dos
+         globais do layout: é lá que a mão está quando se quer regerar ou
+         copiar. "Marcar como enviado" fica de fora de propósito — é o ato que
+         carimba o histórico e zera o relógio da cadência, e ele merece um
+         clique consciente em vez de um atalho ao alcance de um engano. --}}
+    x-on:keydown.window="
+        if (!$event.ctrlKey && !$event.metaKey) return;
+
+        const key = $event.key.toLowerCase();
+
+        if (key === 'g') { $event.preventDefault(); $wire.{{ $this->draft ? 'requestRegenerate' : 'generate' }}(); }
+        if (key === 'enter') { $event.preventDefault(); $wire.copy(); }
     "
 >
     <div class="flex items-start justify-between gap-4">
@@ -322,6 +382,7 @@ new class extends Component
                 <div class="py-8 text-center">
                     <flux:icon name="building-office-2" class="mx-auto mb-2 size-8 text-zinc-600" />
                     <flux:text class="text-sm">Nenhum cliente ativo.</flux:text>
+                    <flux:text class="mt-1 text-xs text-zinc-500">A fila é feita de quem tem cadência de update.</flux:text>
                     <flux:button :href="route('clients')" wire:navigate size="xs" variant="ghost" class="mt-3">
                         Cadastrar cliente
                     </flux:button>
@@ -337,6 +398,21 @@ new class extends Component
                         <flux:icon name="paper-airplane" class="mx-auto mb-3 size-10 text-zinc-600" />
                         <flux:heading size="lg">Escolha um cliente</flux:heading>
                         <flux:text class="mt-1">O rascunho é montado do que aconteceu desde o último envio.</flux:text>
+                        @if ($this->queue->isNotEmpty())
+                            <flux:button
+                                wire:click="select('{{ $this->queue->first()->client->slug }}')"
+                                size="sm"
+                                variant="primary"
+                                icon="arrow-right"
+                                class="mt-4"
+                                data-test="select-first-client"
+                            >
+                                Começar por {{ $this->queue->first()->client->name }}
+                            </flux:button>
+                            <flux:text class="mt-3 text-xs text-zinc-500">
+                                Depois, <flux:badge size="sm" color="zinc">Ctrl+G</flux:badge> gera o rascunho.
+                            </flux:text>
+                        @endif
                     </div>
                 </div>
             @else
@@ -386,14 +462,22 @@ new class extends Component
                                 data-test="update-editor"
                             />
                             <flux:text class="mt-2 text-xs text-zinc-500">
-                                Salva sozinho ao sair do campo. Copiar não marca como enviado.
+                                Salva sozinho ao sair do campo. Copiar (<flux:badge size="sm" color="zinc">Ctrl+Enter</flux:badge>)
+                                não marca como enviado; regerar é <flux:badge size="sm" color="zinc">Ctrl+G</flux:badge>.
                             </flux:text>
                         @else
                             <div class="flex items-center justify-center rounded-lg border border-dashed border-zinc-700 bg-zinc-800/30 p-8 text-center">
                                 <div>
+                                    <flux:icon name="document-text" class="mx-auto mb-2 size-8 text-zinc-600" />
                                     <flux:text class="text-sm">Nenhum rascunho aberto para este cliente.</flux:text>
                                     <flux:text class="mt-1 text-xs text-zinc-500">
                                         Gerar monta os quatro blocos do estado real do quadro.
+                                    </flux:text>
+                                    <flux:button wire:click="generate" size="sm" variant="primary" icon="sparkles" class="mt-3">
+                                        Gerar update
+                                    </flux:button>
+                                    <flux:text class="mt-2 text-xs text-zinc-500">
+                                        Ou <flux:badge size="sm" color="zinc">Ctrl+G</flux:badge>.
                                     </flux:text>
                                 </div>
                             </div>
@@ -416,10 +500,27 @@ new class extends Component
                             <pre class="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap text-xs text-zinc-400">{{ $update->content }}</pre>
                         </div>
                     @empty
-                        <flux:text class="mt-3 block text-sm text-zinc-500">
-                            Nenhum update enviado ainda para este cliente.
-                        </flux:text>
+                        <div class="mt-3 rounded-lg border border-dashed border-zinc-700 bg-zinc-800/30 p-6 text-center">
+                            <flux:icon name="inbox" class="mx-auto mb-2 size-8 text-zinc-600" />
+                            <flux:text class="text-sm">Nenhum update enviado ainda para este cliente.</flux:text>
+                            <flux:text class="mt-1 text-xs text-zinc-500">
+                                O histórico é escrito por "Marcar como enviado" — copiar não entra aqui.
+                            </flux:text>
+                        </div>
                     @endforelse
+
+                    @if ($this->historyRemaining > 0)
+                        <flux:button
+                            wire:click="loadMoreHistory"
+                            size="xs"
+                            variant="ghost"
+                            icon="arrow-down"
+                            class="mt-3 w-full"
+                            data-test="load-more-history"
+                        >
+                            Carregar mais {{ min($this->historyRemaining, 12) }} de {{ $this->historyRemaining }}
+                        </flux:button>
+                    @endif
                 </div>
             @endif
         </div>

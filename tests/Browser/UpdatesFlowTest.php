@@ -60,11 +60,10 @@ function clientWithSomethingToSay(): array
         'name' => 'Acme Corp',
         'slug' => 'acme',
         'update_day' => MorningRitual::businessNow()->dayOfWeekIso,
-        // 00:01 põe o compromisso da cadência sempre no passado de hoje,
-        // qualquer que seja a hora em que a suíte rode: antes de enviar o
-        // cliente vence hoje, depois de enviar fica em dia. Uma hora-alvo
-        // no meio do dia faria o teste depender do relógio da máquina.
-        'update_time' => '00:01',
+        // Uma hora-alvo no meio do dia, de propósito: a urgência é uma
+        // pergunta de dia, então o cliente vence hoje tanto às 08:00 quanto
+        // às 20:00 — a suíte não depende do relógio da máquina.
+        'update_time' => '14:00',
     ]);
 
     $project = Project::factory()->create(['client_id' => $client->id]);
@@ -116,6 +115,32 @@ test('o que se digita no editor chega ao banco no blur', function (): void {
         ->assertNoJavaScriptErrors();
 
     expect($client->fresh()->draftUpdate()->content)->toBe('Oi! Escrevi eu mesmo.');
+});
+
+test('Ctrl+G gera o rascunho e Ctrl+Enter copia, mesmo com o foco no editor', function (): void {
+    [$client] = clientWithSomethingToSay();
+
+    $page = visit(route('updates', ['client' => 'acme']))
+        ->assertNoJavaScriptErrors();
+
+    // A tecla vai para um elemento de verdade (o item da fila); quem escuta
+    // é a janela, que é o ponto do atalho.
+    $page->keys('[data-test="queue-item-acme"]', 'Control+g')
+        ->waitForText('Salva sozinho')
+        ->assertNoJavaScriptErrors();
+
+    expect($client->fresh()->draftUpdate())->not->toBeNull();
+
+    // De dentro do campo: os atalhos globais do layout ignoram textarea, e
+    // estes dois não podem ignorar — é lá que a mão está.
+    $page->script(captureCopiedUpdateScript());
+
+    $page->click('[data-test="update-editor"]')
+        ->keys('[data-test="update-editor"]', 'Control+Enter')
+        ->waitForText('Copiado!')
+        ->assertNoJavaScriptErrors();
+
+    expect($page->script('window.__copiedUpdate'))->toContain('Spec do checkout');
 });
 
 test('copiar leva o texto ao clipboard e não marca nada como enviado', function (): void {

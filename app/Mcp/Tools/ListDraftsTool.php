@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Models\Activity;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
@@ -14,7 +15,7 @@ class ListDraftsTool extends Tool
 {
     protected string $name = 'list-drafts';
 
-    protected string $description = 'Lists drafts (type=Draft) — immature ideas that have not yet become roadmap. A draft is just a title and a note; it lives outside any status board, has no GitHub mirror and never appears on the stakeholder board. Reading a draft is the first step to promote it: read it here, then run /to-prd or /to-issues to create the GitHub issue. Returns draft id, title and note.';
+    protected string $description = 'Lists drafts (type=Draft) — immature ideas that have not been bet on yet. A draft is just a title and a note; it lives outside any status board and never appears on the stakeholder board. Reading a draft is the first step to promote it: read it here, use get-pitch to see how far its shaping got, then call promote-draft, which turns that same record into an Épico in place, inside the SoloBoard. Nothing on this path creates a GitHub issue. Returns draft id, title and note.';
 
     /**
      * Handle the tool request.
@@ -42,7 +43,7 @@ class ListDraftsTool extends Tool
     /**
      * Get the tool's input schema.
      *
-     * @return array<string, \Illuminate\JsonSchema\Types\Type>
+     * @return array<string, Type>
      */
     public function schema(JsonSchema $schema): array
     {

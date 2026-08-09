@@ -3,7 +3,9 @@
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
 use App\Mcp\Servers\SoloBoardServer;
+use App\Mcp\Tools\CreateDraftTool;
 use App\Mcp\Tools\GetPitchTool;
+use App\Mcp\Tools\ListDraftsTool;
 use App\Mcp\Tools\PromoteDraftTool;
 use App\Models\Activity;
 use App\Models\Project;
@@ -43,6 +45,27 @@ test('promote-draft refuses a shaped idea with no project, naming the project', 
     $response->assertSee('falta: Projeto.');
 
     expect($draft->refresh()->type)->toBe(ActivityType::Draft);
+});
+
+test('no draft tool still tells an agent to go through GitHub', function () {
+    // As descrições são as instruções que o cliente MCP realmente lê. Enquanto
+    // elas mandarem rodar /to-prd ou /to-issues, um agente vai abrir issue no
+    // GitHub e ignorar a promoção in-place — a tool certa não basta.
+    $descriptions = collect([
+        new CreateDraftTool,
+        new ListDraftsTool,
+        new PromoteDraftTool,
+        new GetPitchTool,
+    ])->map(fn ($tool): string => $tool->description());
+
+    foreach ($descriptions as $description) {
+        expect($description)
+            ->not->toContain('/to-prd')
+            ->not->toContain('/to-issues')
+            ->not->toContain('mirror');
+    }
+
+    expect($descriptions->implode(' '))->toContain('promote-draft');
 });
 
 test('promote-draft refuses a project that is not active, exactly as the page does', function () {

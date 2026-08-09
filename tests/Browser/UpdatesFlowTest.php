@@ -213,6 +213,45 @@ test('marcar como enviado limpa o rascunho e escreve o histórico', function ():
         ->assertNoJavaScriptErrors();
 });
 
+test('um gatilho põe o cliente como evento no topo da fila, com o chip do motivo', function (): void {
+    $today = MorningRitual::businessNow();
+
+    Client::factory()->create([
+        'name' => 'Atrasado Ltda',
+        'slug' => 'atrasado',
+        'update_day' => $today->copy()->subDays(2)->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+
+    // Em dia pelo relógio: recebeu update há três horas. O que o põe acima do
+    // atrasado é a Emergência aberta *depois* desse envio (issue #150).
+    $client = Client::factory()->create([
+        'name' => 'Fogo Ltda',
+        'slug' => 'fogo',
+        'update_day' => $today->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+
+    ClientUpdate::factory()->for($client)->sent(now()->subHours(3)->toDateTimeString())->create();
+
+    $project = Project::factory()->create(['client_id' => $client->id]);
+    Activity::factory()->issue()->doing()->emergency()->create(['project_id' => $project->id]);
+
+    $page = visit('/updates')
+        ->assertNoJavaScriptErrors()
+        ->assertSeeIn('[data-test="queue-item-fogo"]', 'Evento')
+        ->assertPresent('[data-test="queue-trigger-emergency"]')
+        ->assertSeeIn('[data-test="queue-trigger-emergency"]', 'Emergência');
+
+    // A ordem é metade do recado: o evento fura a cadência e sobe acima de
+    // quem está atrasado no relógio.
+    $order = <<<'JS'
+    [...document.querySelectorAll('[data-test^="queue-item-"]')].map(el => el.dataset.test).join(',')
+    JS;
+
+    expect($page->script($order))->toBe('queue-item-fogo,queue-item-atrasado');
+});
+
 test('o histórico mostra o que o cliente recebeu', function (): void {
     $client = Client::factory()->create(['name' => 'Acme Corp', 'slug' => 'acme']);
 

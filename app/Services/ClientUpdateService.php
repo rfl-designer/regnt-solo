@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
+use App\Enums\UpdateTrigger;
 use App\Enums\UpdateUrgency;
 use App\Exceptions\UpdateAlreadySentException;
 use App\Exceptions\UpdateDraftHasManualEditsException;
@@ -11,7 +13,9 @@ use App\Models\ActivityStatusChange;
 use App\Models\Client;
 use App\Models\ClientUpdate;
 use App\Models\MorningRitual;
+use App\Models\Project;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -50,6 +54,15 @@ use Illuminate\Support\Facades\DB;
  * As datas dos blocos 1 e 2 são as do ciclo de vida da Spec (issue #146),
  * derivadas do histórico de status. Não há coluna de "entregue em" para
  * divergir do quadro.
+ *
+ * ## Os gatilhos por evento
+ *
+ * A cadência não é o único jeito de um cliente entrar na fila: uma entrega
+ * esperando validação e uma Emergência são notícias que não esperam a terça
+ * (issue #150). Elas promovem o cliente para {@see UpdateUrgency::Event},
+ * acima de "atrasado", e contam na badge. Como tudo aqui, são derivadas —
+ * veja {@see triggersFor()} para o que dispara, por que a janela também
+ * limita a Emergência ativa, e qual furo isso aceita de propósito.
  */
 class ClientUpdateService
 {
@@ -92,7 +105,7 @@ class ClientUpdateService
      */
     public function queue(): Collection
     {
-        return Client::query()
+        $clients = Client::query()
             ->active()
             // Duas linhas por cliente, não o histórico inteiro: a badge da
             // sidebar roda esta mesma fila em toda página.
@@ -103,8 +116,18 @@ class ClientUpdateService
                 'currentDraft',
             ])
             ->orderBy('name')
-            ->get()
-            ->map(fn (Client $client): ClientUpdateQueueEntry => $this->entryFor($client))
+            ->get();
+
+        // Os gatilhos saem de uma varredura só para a fila inteira — uma
+        // consulta, com ou sem candidatos. Perguntar por cliente faria a
+        // badge da sidebar custar uma consulta por cliente em toda página.
+        $triggers = $this->triggersFor($clients);
+
+        return $clients
+            ->map(fn (Client $client): ClientUpdateQueueEntry => $this->entryFor(
+                $client,
+                $triggers[$client->getKey()] ?? [],
+            ))
             ->sort(fn (ClientUpdateQueueEntry $a, ClientUpdateQueueEntry $b): int => $a->sortKey() <=> $b->sortKey())
             ->values();
     }
@@ -134,9 +157,19 @@ class ClientUpdateService
      * mostra ({@see ClientUpdateQueueEntry::$dueAt}) e no desempate de um
      * envio feito no próprio dia do compromisso — enviar terça às 08:00 cobre
      * a terça, mesmo que a hora-alvo fosse 09:00.
+     *
+     * A cadência é só metade da resposta: os gatilhos por evento (issue #150)
+     * podem promover o cliente para {@see UpdateUrgency::Event} por cima de
+     * qualquer degrau do relógio. Quem já os computou em lote passa a lista
+     * pronta; quem chama por um cliente só deixa o parâmetro de fora e paga a
+     * varredura.
+     *
+     * @param  list<UpdateTrigger>|null  $triggers
      */
-    public function entryFor(Client $client): ClientUpdateQueueEntry
+    public function entryFor(Client $client, ?array $triggers = null): ClientUpdateQueueEntry
     {
+        $triggers ??= $this->triggersFor(new EloquentCollection([$client]))[$client->getKey()] ?? [];
+
         $lastSent = $this->lastSentAt($client);
         $charged = $this->chargedOccurrence($client);
 
@@ -162,7 +195,214 @@ class ClientUpdateService
             $dueAt,
             $lastSent,
             $this->draftFor($client),
+            $triggers,
         );
+    }
+
+    /**
+     * Os gatilhos por evento de cada cliente, computados numa varredura só
+     * (issue #150).
+     *
+     * ## O que dispara
+     *
+     * Duas coisas, ambas medidas contra a **janela** do cliente — o mesmo
+     * "desde o último envio" que o texto do update cobre ({@see
+     * windowStart()}), e sempre **estritamente depois** dele: um evento
+     * carimbado no mesmo segundo do envio pertence ao update que acabou de
+     * sair, e cobrá-lo de novo faria "enviar apaga o gatilho" falhar na
+     * fronteira. As três datas envolvidas (`sent_at`, `changed_at`,
+     * `emergency_since`) têm precisão de segundo, então o empate é
+     * alcançável de fato.
+     *
+     * 1. **Entrega aguardando validação** — uma spec do cliente entrou em
+     *    Aguardando validação na janela. É o evento, não o estado: uma spec
+     *    entregue e já validada depois continua sendo notícia, porque a
+     *    entrega aconteceu nestes dias.
+     * 2. **Emergência** — um item do cliente (qualquer um, não só nível
+     *    spec: uma Emergência é uma Emergência mesmo numa filha) foi
+     *    classificado como Emergência na janela e ainda está ativo, **ou**
+     *    foi concluído na janela tendo motivo registrado.
+     *
+     * ## Por que a Emergência ativa também olha a janela
+     *
+     * "Ativa agora" sozinho manteria o cliente em "evento" para sempre
+     * enquanto o fogo durasse — inclusive depois de um update que já falou
+     * dela. Datar pelo `emergency_since` mantém a promessa que vale para os
+     * dois gatilhos: **enviar apaga o gatilho**, porque enviar abre uma
+     * janela nova. Uma Emergência aberta há duas semanas e ainda ativa já foi
+     * contada; se ela for concluída, a conclusão é notícia de novo.
+     *
+     * ## Nada é marcado como lido
+     *
+     * Não há coluna, tabela nem flag de "gatilho disparado": a pergunta é
+     * refeita a cada leitura da fila. Daí decorre o furo aceito e documentado
+     * na issue #150 — uma Emergência **rebaixada** antes do envio some do
+     * radar, porque rebaixar apaga `service_class`, `emergency_reason` e
+     * `emergency_since`, e não sobra nada no estado que prove que ela
+     * existiu. O preço de fechar esse furo seria persistência nova, que é
+     * exatamente o que esta feature se recusa a ter.
+     *
+     * @param  EloquentCollection<int, Client>  $clients
+     * @return array<int, list<UpdateTrigger>>
+     */
+    public function triggersFor(EloquentCollection $clients): array
+    {
+        if ($clients->isEmpty()) {
+            return [];
+        }
+
+        /** @var array<int, CarbonInterface> $windows */
+        $windows = $clients
+            ->mapWithKeys(fn (Client $client): array => [$client->getKey() => $this->windowStart($client)])
+            ->all();
+
+        // A janela mais antiga é o piso da varredura: um evento anterior a
+        // ela não interessa a nenhum cliente, e filtrar por ela no banco
+        // evita hidratar o histórico inteiro do quadro.
+        $earliest = collect($windows)->reduce(
+            fn (?CarbonInterface $carry, CarbonInterface $start): CarbonInterface => $carry === null || $start->lessThan($carry) ? $start : $carry,
+        );
+
+        $found = [];
+
+        foreach ($this->triggerCandidates($earliest) as $activity) {
+            $clientId = $activity->effective_client_id ?? $activity->client_id;
+
+            if ($clientId === null || ! isset($windows[$clientId])) {
+                continue;
+            }
+
+            foreach ($this->triggersOf($activity, $windows[$clientId]) as $trigger) {
+                $found[$clientId][] = $trigger;
+            }
+        }
+
+        return array_map(UpdateTrigger::order(...), $found);
+    }
+
+    /**
+     * Os itens que podem ter disparado alguma coisa desde `$earliest`, numa
+     * consulta só.
+     *
+     * **Uma consulta é o requisito, não um detalhe**: a badge da sidebar
+     * chama isto em toda página carregada. Por isso nada de relação
+     * carregada — o cliente efetivo e as duas datas que decidem os gatilhos
+     * vêm como colunas calculadas, em subconsultas correlacionadas. Hidratar
+     * `statusChanges` e `project` custaria mais duas consultas exatamente
+     * quando há evento, que é quando a fila mais é lida.
+     *
+     * As três colunas:
+     *
+     * - `effective_client_id` — o cliente do projeto quando há projeto; a
+     *   coluna direta do item quando não há. É o que
+     *   {@see Activity::scopeForClient()} espelha em SQL, resolvido aqui em
+     *   PHP porque a fila precisa do valor, não do filtro.
+     * - `delivered_at` — a **última** entrada em Aguardando validação. O
+     *   máximo basta: se a mais recente ficou fora da janela, nenhuma
+     *   anterior cabe nela.
+     * - `concluded_at` — idem para a entrada em Feito, que é o que data uma
+     *   Emergência encerrada.
+     *
+     * @return EloquentCollection<int, Activity>
+     */
+    private function triggerCandidates(CarbonInterface $earliest): EloquentCollection
+    {
+        return Activity::query()
+            ->select('activities.*')
+            ->addSelect([
+                'effective_client_id' => Project::query()
+                    ->select('client_id')
+                    ->whereColumn('projects.id', 'activities.project_id'),
+                'delivered_at' => $this->lastChangeInto(ActivityStatus::AwaitingValidation),
+                'concluded_at' => $this->lastChangeInto(ActivityStatus::Done),
+            ])
+            ->withCasts(['delivered_at' => 'datetime', 'concluded_at' => 'datetime'])
+            ->where(function (Builder $query) use ($earliest): void {
+                $query
+                    ->where(fn (Builder $delivered) => $delivered
+                        ->specLevel()
+                        ->whereHas('statusChanges', fn (Builder $change) => $change
+                            ->where('to_status', ActivityStatus::AwaitingValidation)
+                            ->where('changed_at', '>', $earliest)))
+                    ->orWhere(fn (Builder $emergency) => $emergency
+                        ->where('service_class', ServiceClass::Emergency)
+                        ->where(fn (Builder $slot) => $slot
+                            ->where(fn (Builder $open) => $open
+                                ->activeEmergency()
+                                ->where('emergency_since', '>', $earliest))
+                            ->orWhere(fn (Builder $closed) => $closed
+                                ->where('status', ActivityStatus::Done)
+                                ->whereNotNull('emergency_reason')
+                                ->whereHas('statusChanges', fn (Builder $change) => $change
+                                    ->where('to_status', ActivityStatus::Done)
+                                    ->where('changed_at', '>', $earliest)))));
+            })
+            ->get();
+    }
+
+    /**
+     * A data da última entrada de um item neste status, como subconsulta
+     * correlacionada.
+     */
+    private function lastChangeInto(ActivityStatus $status): Builder
+    {
+        return ActivityStatusChange::query()
+            ->selectRaw('max(changed_at)')
+            ->whereColumn('activity_id', 'activities.id')
+            ->where('to_status', $status);
+    }
+
+    /**
+     * Os gatilhos que este item dispara para uma janela — a mesma pergunta
+     * do banco, refeita contra a janela do cliente de fato.
+     *
+     * @return list<UpdateTrigger>
+     */
+    private function triggersOf(Activity $activity, CarbonInterface $windowStart): array
+    {
+        $triggers = [];
+
+        if ($activity->isSpecLevel() && $this->within($activity->delivered_at, $windowStart)) {
+            $triggers[] = UpdateTrigger::DeliveryAwaitingValidation;
+        }
+
+        if ($this->isEmergencyEvent($activity, $windowStart)) {
+            $triggers[] = UpdateTrigger::Emergency;
+        }
+
+        return $triggers;
+    }
+
+    /**
+     * Se a Emergência deste item é notícia dentro da janela: aberta nela e
+     * ainda ativa, ou concluída nela com motivo.
+     */
+    private function isEmergencyEvent(Activity $activity, CarbonInterface $windowStart): bool
+    {
+        if ($activity->service_class !== ServiceClass::Emergency) {
+            return false;
+        }
+
+        if ($activity->isActiveEmergency()) {
+            return $this->within($activity->emergency_since, $windowStart);
+        }
+
+        // O motivo é o que faz uma Emergência concluída ser contável: sem
+        // ele não há o que dizer ao cliente além de "houve um incêndio".
+        return $activity->status === ActivityStatus::Done
+            && $activity->emergency_reason !== null
+            && $this->within($activity->concluded_at, $windowStart);
+    }
+
+    /**
+     * Se um instante cai na janela: **estritamente depois** do envio que a
+     * abriu. Um evento carimbado no mesmo segundo do envio já saiu no texto
+     * que acabou de ir; cobrá-lo de novo deixaria o cliente em "evento" por
+     * uma notícia que ele acabou de receber.
+     */
+    private function within(?CarbonInterface $moment, CarbonInterface $windowStart): bool
+    {
+        return $moment !== null && $moment->greaterThan($windowStart);
     }
 
     /**

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Models\Client;
 use App\Models\ClientUpdate;
@@ -53,6 +54,66 @@ test('a página carrega e ordena a fila por urgência', function () {
         ->assertOk()
         ->assertSeeInOrder(['Atrasada ME', 'Em dia SA'])
         ->assertSee('Atrasado');
+});
+
+test('um gatilho por evento sobe o cliente na fila, com o chip do motivo', function () {
+    $today = MorningRitual::businessNow();
+
+    Client::factory()->create([
+        'name' => 'Atrasada ME',
+        'update_day' => $today->copy()->subDays(3)->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+
+    // Em dia pelo relógio: recebeu update há três horas. O que a põe no topo
+    // é a entrega esperando validação desde então (issue #150).
+    [$eventful, $project] = updatesPageClient([
+        'name' => 'Com evento SA',
+        'update_day' => $today->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+    ClientUpdate::factory()->for($eventful)->sent(now()->subHours(3)->toDateTimeString())->create();
+
+    $spec = Activity::factory()->epic()->create([
+        'project_id' => $project->id,
+        'status' => ActivityStatus::AwaitingValidation,
+    ]);
+    withSpecHistory($spec, [[ActivityStatus::AwaitingValidation, now()->subHour()->toDateTimeString()]]);
+
+    Livewire::test('pages::updates')
+        ->assertOk()
+        ->assertSeeInOrder(['Com evento SA', 'Atrasada ME'])
+        ->assertSee('Evento')
+        ->assertSee('Entrega aguardando validação')
+        ->assertSeeHtml('data-test="queue-trigger-delivery_awaiting_validation"')
+        // A chave é por cliente *e* por gatilho: sem ela, o morph do Livewire
+        // reaproveitaria por posição o chip da linha anterior quando um envio
+        // apaga o gatilho de um cliente e não o do outro.
+        ->assertSeeHtml('wire:key="queue-trigger-'.$eventful->id.'-delivery_awaiting_validation"');
+});
+
+test('a badge da sidebar conta um cliente que só está devido por evento', function () {
+    $today = MorningRitual::businessNow();
+
+    // Cadência em dia: sem o gatilho, este cliente não apareceria na badge.
+    [$client, $project] = updatesPageClient([
+        'update_day' => $today->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+    ClientUpdate::factory()->for($client)->sent(now()->subHours(3)->toDateTimeString())->create();
+
+    Livewire::test('updates-badge')->assertDontSeeHtml('data-test="updates-due-badge"');
+
+    Activity::factory()->issue()->doing()->create([
+        'project_id' => $project->id,
+        'title' => 'Servidor fora do ar',
+        'service_class' => ServiceClass::Emergency,
+        'emergency_reason' => 'Produção parada desde as 8h.',
+    ]);
+
+    Livewire::test('updates-badge')
+        ->assertSee('1')
+        ->assertSeeHtml('data-test="updates-due-badge"');
 });
 
 test('a badge da sidebar conta os updates devidos e some quando não há nenhum', function () {

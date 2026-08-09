@@ -319,7 +319,7 @@ Gerador determinístico do update semanal, com fila por urgência, rascunho pers
   - `sent_at` não é fillable: só `ClientUpdateService::markSent()` o carimba
   - **Um rascunho aberto por cliente, garantido pelo banco**: `draft_client_id` (derivada no `saving`, = `client_id` enquanto rascunho, NULL depois do envio) com índice único. `generate()` roda em transação com a linha do cliente travada
 - **Enum `HillPosition`**: `uphill` ("Em descoberta") / `downhill` ("Em execução") — coluna `activities.hill_position`, nullable, marcada à mão no modal do Épico
-- **Enum `UpdateUrgency`**: `overdue` / `due_today` / `on_track`
+- **Enum `UpdateUrgency`**: `event` / `overdue` / `due_today` / `on_track` (nesta ordem na fila)
 - **Serviço `ClientUpdateService`** (um lugar computa; página, badge e MCP consomem):
   - `queue()` / `dueCount()` — fila de clientes ativos por urgência. **A urgência é uma pergunta de dia**: no dia da cadência o cliente vence hoje de meia-noite a meia-noite, e só no dia seguinte fica atrasado. A hora-alvo (`update_time`, default 12:00) é o instante que a fila mostra em `dueAt` e o desempate de um envio feito no próprio dia — nunca decide a urgência. Tudo no fuso de negócio (`MorningRitual::businessNow()`)
   - `windowStart()` — desde o último `sent_at`; primeiro update = 7 dias; **sem teto**
@@ -327,11 +327,28 @@ Gerador determinístico do update semanal, com fila por urgência, rascunho pers
   - `generate(force)` — persiste o rascunho; recusa descartar edição manual sem confirmação
   - `markSent()` — grava a data, fecha a janela e zera o relógio
   - `history(limit)` / `sentCount()` — histórico paginado
+  - `triggersFor(clients)` — os gatilhos por evento (veja abaixo), numa varredura só para a fila inteira
 - **Página `/updates`**: fila com ícone do canal, editor com autosave (`wire:model.live.blur`), Copiar (não grava) e Marcar como enviado (grava) separados, Regenerar com confirmação, histórico por cliente com "carregar mais"
   - O `force` do "Regenerar" sai de `#[Locked] $regenerateConfirmedFor` (o id do rascunho confirmado), não do booleano do modal: uma chamada Livewire direta a `generate`/`regenerate` pergunta em vez de apagar
 - **Sidebar**: item "Updates" com badge da contagem de devidos (`⚡updates-badge`)
 - **Clientes**: atalho "Gerar update" leva para `/updates?client={slug}`
 - **Testes**: `ClientUpdateServiceTest`, `UpdatesPageTest`, `HillPositionTest`, `Mcp/ClientUpdateToolsTest`, `Browser/UpdatesFlowTest`
+
+### Gatilhos de update por evento (issue #150)
+
+Um cliente também entra na fila quando o quadro produz notícia que não espera a cadência. **Sem persistência nova** — nenhuma tabela, coluna ou flag de "gatilho disparado": a pergunta é refeita a cada leitura da fila, contra a janela desde o último envio. É isso que faz **enviar apagar o gatilho** (enviar abre janela nova) sem nada precisar ser marcado como lido. O update disparado é um update comum: enviar zera o relógio e antecipa a cadência.
+
+- **Enum `UpdateTrigger`**: `emergency` ("Emergência") / `delivery_awaiting_validation` ("Entrega aguardando validação"). Ordem de declaração = ordem dos chips (a Emergência primeiro). Cores/ícones emprestados de `ServiceClass::Emergency` e `ActivityStatus::AwaitingValidation`
+- **O que dispara** (`ClientUpdateService::triggersFor()`), sempre medido contra `windowStart()`:
+  1. Uma spec do cliente (`scopeSpecLevel()`) **entrou em Aguardando validação** na janela. É o evento, não o estado: entregue e já validada depois continua disparando
+  2. Uma **Emergência de item** do cliente (qualquer item, não só nível spec) foi classificada na janela (`emergency_since`) e está ativa, **ou** foi concluída na janela tendo `emergency_reason`
+- **Por que a Emergência ativa também olha a janela**: "ativa agora" sozinho manteria o cliente em "evento" para sempre enquanto o fogo durasse, inclusive depois de um update que já falou dela. Datar pelo `emergency_since` mantém a promessa dos dois gatilhos — enviar apaga
+- **Furo aceito e documentado**: uma Emergência **rebaixada** antes do envio some do radar. Rebaixar apaga `service_class`, `emergency_reason` e `emergency_since`, e não sobra nada no estado que prove que ela existiu. Fechar o furo exigiria persistência nova, que é o que a feature se recusa a ter
+- **`ClientUpdateQueueEntry`**: `urgency` é a **categoria** (`Event` quando há gatilho), `cadence` é o degrau do relógio. As duas convivem: "atrasado há 3 dias" e `daysLate()` continuam saindo da cadência, e a badge/ordenação saem da categoria
+- **A fronteira é estrita**: o evento tem de ser **posterior** ao envio, não simultâneo. `sent_at`, `changed_at` e `emergency_since` têm precisão de segundo, e enviar logo depois de mexer no quadro é o gesto normal — com `>=`, um evento carimbado no mesmo segundo do envio sobreviveria a ele e quebraria a promessa
+- **Sem notificação ativa**: sem toast, sem banner. O gatilho espera na fila (chip na linha + badge da sidebar) em vez de interromper
+- **Custo**: a varredura é **uma consulta para a fila inteira** — com ou sem candidatos, e não uma por cliente. A badge da sidebar roda isso em toda página, então nada de relação carregada: o cliente efetivo e as duas datas que decidem (`delivered_at`, `concluded_at`) vêm como colunas calculadas em subconsultas correlacionadas
+- **MCP `get-update-queue`**: publica `urgency` (com `event`), `cadence` e `triggers[]` (`key`, `label`, `reason`); `only_due` e `due_count` incluem os eventos. As **instruções do servidor MCP** também descrevem a categoria e os gatilhos — um agente lê elas antes da descrição da tool, e há teste que impede a divergência
 
 ## Keyboard Shortcuts
 

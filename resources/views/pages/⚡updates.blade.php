@@ -372,6 +372,23 @@ new class extends Component
                         @if ($entry->hasDraft())
                             <flux:badge size="sm" color="zinc" icon="pencil">rascunho</flux:badge>
                         @endif
+
+                        {{-- O chip diz *o que* aconteceu; a categoria "Evento"
+                             só diz que alguma coisa aconteceu. Sem notificação
+                             ativa de propósito (issue #150): o gatilho espera
+                             na fila em vez de interromper. --}}
+                        @foreach ($entry->triggers as $trigger)
+                            <flux:badge
+                                wire:key="queue-trigger-{{ $entry->client->id }}-{{ $trigger->value }}"
+                                size="sm"
+                                :color="$trigger->color()"
+                                :icon="$trigger->icon()"
+                                :title="$trigger->reason()"
+                                data-test="queue-trigger-{{ $trigger->value }}"
+                            >
+                                {{ $trigger->label() }}
+                            </flux:badge>
+                        @endforeach
                     </div>
 
                     <div class="mt-2 text-xs text-zinc-500">

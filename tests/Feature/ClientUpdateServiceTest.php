@@ -3,6 +3,7 @@
 use App\Enums\ActivityStatus;
 use App\Enums\HillPosition;
 use App\Enums\ServiceClass;
+use App\Enums\UpdateTrigger;
 use App\Enums\UpdateUrgency;
 use App\Exceptions\UpdateAlreadySentException;
 use App\Exceptions\UpdateDraftHasManualEditsException;
@@ -513,10 +514,11 @@ test('a fila não hidrata o histórico inteiro de cada cliente', function () {
 
     $queue = updateService()->queue();
 
-    // Três consultas: os clientes, o último envio de cada um e o rascunho de
-    // cada um. A badge da sidebar roda isto em toda página, então o custo não
-    // pode crescer com o histórico.
-    expect(DB::getQueryLog())->toHaveCount(3)
+    // Quatro consultas: os clientes, o último envio de cada um, o rascunho de
+    // cada um e a varredura de gatilhos por evento (issue #150) — uma para a
+    // fila inteira, não uma por cliente. A badge da sidebar roda isto em toda
+    // página, então o custo não pode crescer com o histórico.
+    expect(DB::getQueryLog())->toHaveCount(4)
         ->and($queue->first()->lastSentAt)->not->toBeNull()
         ->and($queue->first()->hasDraft())->toBeTrue();
 
@@ -654,6 +656,283 @@ test('uma Emergência do cliente lidera o bloco Próximo, como na fila de puxar'
     $blocks = collect(updateService()->blocks($client))->keyBy('key');
 
     expect($blocks['proximo']['items'][0]['title'])->toBe('Servidor fora do ar');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Gatilhos de update por evento (issue #150)
+|--------------------------------------------------------------------------
+|
+| Nada aqui é persistido: o gatilho é uma pergunta refeita a cada leitura da
+| fila, contra a janela desde o último envio. É por isso que "enviar apaga o
+| gatilho" não precisa de nenhuma marcação de lido — enviar abre uma janela
+| nova, e a pergunta passa a ser feita sobre outros dias.
+|
+*/
+
+test('uma spec entregue para validação na janela põe o cliente em evento', function () {
+    [$client, $project] = clientWithProject();
+
+    $spec = Activity::factory()->epic()->create([
+        'project_id' => $project->id,
+        'title' => 'Portal de faturas',
+        'status' => ActivityStatus::AwaitingValidation,
+    ]);
+    withSpecHistory($spec, [
+        [ActivityStatus::AwaitingApproval, '2026-07-20 09:00:00'],
+        [ActivityStatus::AwaitingValidation, '2026-08-05 09:00:00'],
+    ]);
+
+    $entry = updateService()->entryFor($client->fresh());
+
+    expect($entry->urgency)->toBe(UpdateUrgency::Event)
+        ->and($entry->triggers)->toBe([UpdateTrigger::DeliveryAwaitingValidation])
+        ->and($entry->triggers[0]->label())->toBe('Entrega aguardando validação')
+        // A cadência continua sendo a cadência: o evento promove a categoria,
+        // não apaga o relógio.
+        ->and($entry->cadence)->not->toBe(UpdateUrgency::Event);
+});
+
+test('uma entrega anterior à janela não dispara gatilho', function () {
+    [$client, $project] = clientWithProject();
+
+    ClientUpdate::factory()->for($client)->sent('2026-08-06 10:00:00')->create();
+
+    $spec = Activity::factory()->epic()->create([
+        'project_id' => $project->id,
+        'status' => ActivityStatus::AwaitingValidation,
+    ]);
+    // Entregue antes do último envio: o cliente já foi avisado.
+    withSpecHistory($spec, [[ActivityStatus::AwaitingValidation, '2026-08-04 09:00:00']]);
+
+    expect(updateService()->entryFor($client->fresh())->triggers)->toBe([]);
+});
+
+test('uma Emergência ativa de item do cliente põe o cliente em evento', function () {
+    [$client, $project] = clientWithProject();
+
+    $epic = Activity::factory()->epic()->create(['project_id' => $project->id]);
+
+    // Numa filha de propósito: o gatilho fala de *item* do cliente, não de
+    // nível spec — uma Emergência é uma Emergência onde quer que ela esteja.
+    Activity::factory()->issue()->doing()->forParent($epic)->create([
+        'project_id' => $project->id,
+        'title' => 'Servidor fora do ar',
+        'service_class' => ServiceClass::Emergency,
+        'emergency_reason' => 'Produção parada desde as 8h.',
+    ]);
+
+    $entry = updateService()->entryFor($client->fresh());
+
+    expect($entry->urgency)->toBe(UpdateUrgency::Event)
+        ->and($entry->triggers)->toBe([UpdateTrigger::Emergency])
+        ->and($entry->triggers[0]->label())->toBe('Emergência');
+});
+
+test('uma Emergência concluída na janela com motivo põe o cliente em evento', function () {
+    [$client, $project] = clientWithProject();
+
+    $emergency = Activity::factory()->issue()->done()->create([
+        'project_id' => $project->id,
+        'title' => 'Servidor fora do ar',
+        'service_class' => ServiceClass::Emergency,
+        'emergency_reason' => 'Produção parada desde as 8h.',
+    ]);
+    withSpecHistory($emergency, [
+        [ActivityStatus::Doing, '2026-08-04 09:00:00'],
+        [ActivityStatus::Done, '2026-08-06 09:00:00'],
+    ]);
+
+    expect(updateService()->entryFor($client->fresh())->triggers)->toBe([UpdateTrigger::Emergency]);
+});
+
+test('uma Emergência concluída antes da janela não dispara gatilho', function () {
+    [$client, $project] = clientWithProject();
+
+    $emergency = Activity::factory()->issue()->done()->create([
+        'project_id' => $project->id,
+        'service_class' => ServiceClass::Emergency,
+        'emergency_reason' => 'Produção parada.',
+    ]);
+    withSpecHistory($emergency, [[ActivityStatus::Done, '2026-07-20 09:00:00']]);
+
+    expect(updateService()->entryFor($client->fresh())->triggers)->toBe([]);
+});
+
+test('uma Emergência concluída sem motivo não dispara gatilho', function () {
+    [$client, $project] = clientWithProject();
+
+    $emergency = Activity::factory()->issue()->done()->create([
+        'project_id' => $project->id,
+        'service_class' => ServiceClass::Emergency,
+        'emergency_reason' => 'Produção parada.',
+    ]);
+    withSpecHistory($emergency, [[ActivityStatus::Done, '2026-08-06 09:00:00']]);
+
+    // Sem motivo não há o que contar ao cliente além de "houve um incêndio".
+    // Só se chega aqui por baixo do modelo (o observer exige o motivo), que é
+    // exatamente a forma dos registros legados da issue #143.
+    $emergency->forceFill(['emergency_reason' => null])->saveQuietly();
+
+    expect(updateService()->entryFor($client->fresh())->triggers)->toBe([]);
+});
+
+test('uma Emergência ativa mais velha que a janela já foi contada e não dispara de novo', function () {
+    [$client, $project] = clientWithProject();
+
+    ClientUpdate::factory()->for($client)->sent('2026-08-06 10:00:00')->create();
+
+    $emergency = Activity::factory()->issue()->doing()->create([
+        'project_id' => $project->id,
+        'service_class' => ServiceClass::Emergency,
+        'emergency_reason' => 'Produção parada.',
+    ]);
+    // `emergency_since` só é carimbado pelo observer (issue #143) — envelhecer
+    // a classificação é escrever a coluna por baixo do modelo.
+    $emergency->forceFill(['emergency_since' => '2026-08-01 09:00:00'])->saveQuietly();
+
+    // O update de 06/08 já falou dela; continuar cobrando manteria o cliente
+    // em "evento" enquanto o fogo durasse.
+    expect(updateService()->entryFor($client->fresh())->triggers)->toBe([]);
+
+    // Concluí-la, porém, é notícia nova.
+    withSpecHistory($emergency, [[ActivityStatus::Done, now()->toDateTimeString()]]);
+    $emergency->forceFill(['status' => ActivityStatus::Done])->saveQuietly();
+
+    expect(updateService()->entryFor($client->fresh())->triggers)->toBe([UpdateTrigger::Emergency]);
+});
+
+test('a categoria evento ordena acima de atrasado e conta na badge', function () {
+    $today = MorningRitual::businessNow();
+
+    Client::factory()->create([
+        'name' => 'Atrasado',
+        'update_day' => $today->copy()->subDays(2)->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+
+    // Em dia pelo relógio: recebeu update hoje mesmo. O que o põe no topo da
+    // fila é o evento, não a cadência.
+    [$eventful, $project] = clientWithProject([
+        'name' => 'Com evento',
+        'update_day' => $today->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+    ClientUpdate::factory()->for($eventful)->sent(now()->subHours(3)->toDateTimeString())->create();
+
+    $spec = Activity::factory()->epic()->create([
+        'project_id' => $project->id,
+        'status' => ActivityStatus::AwaitingValidation,
+    ]);
+    withSpecHistory($spec, [[ActivityStatus::AwaitingValidation, now()->subHour()->toDateTimeString()]]);
+
+    $onTrack = Client::factory()->create([
+        'name' => 'Em dia',
+        'update_day' => $today->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+    ClientUpdate::factory()->for($onTrack)->sent(now()->toDateTimeString())->create();
+
+    $queue = updateService()->queue();
+
+    expect($queue->pluck('client.name')->all())->toBe(['Com evento', 'Atrasado', 'Em dia'])
+        ->and($queue[0]->urgency)->toBe(UpdateUrgency::Event)
+        ->and($queue[0]->cadence)->toBe(UpdateUrgency::OnTrack)
+        ->and($queue[1]->urgency)->toBe(UpdateUrgency::Overdue)
+        // A badge soma os dois: o atrasado pelo relógio e o do evento, que a
+        // cadência sozinha não cobraria.
+        ->and(updateService()->dueCount())->toBe(2);
+});
+
+test('enviar o update apaga o gatilho, porque abre uma janela nova', function () {
+    [$client, $project] = clientWithProject();
+
+    $spec = Activity::factory()->epic()->create([
+        'project_id' => $project->id,
+        'status' => ActivityStatus::AwaitingValidation,
+    ]);
+    withSpecHistory($spec, [[ActivityStatus::AwaitingValidation, '2026-08-05 09:00:00']]);
+
+    expect(updateService()->entryFor($client->fresh())->urgency)->toBe(UpdateUrgency::Event);
+
+    updateService()->markSent(updateService()->generate($client->fresh()));
+
+    $entry = updateService()->entryFor($client->fresh());
+
+    expect($entry->triggers)->toBe([])
+        ->and($entry->urgency)->toBe(UpdateUrgency::OnTrack);
+});
+
+test('um evento resolvido antes do envio mantém o gatilho até enviar', function () {
+    [$client, $project] = clientWithProject();
+
+    $spec = Activity::factory()->epic()->create([
+        'project_id' => $project->id,
+        'status' => ActivityStatus::Done,
+    ]);
+    // Entregue e já validada dentro da mesma janela: o evento aconteceu, e
+    // isso não deixa de ser verdade porque ele terminou bem.
+    withSpecHistory($spec, [
+        [ActivityStatus::AwaitingValidation, '2026-08-05 09:00:00'],
+        [ActivityStatus::Done, '2026-08-06 09:00:00'],
+    ]);
+
+    expect(updateService()->entryFor($client->fresh())->triggers)
+        ->toBe([UpdateTrigger::DeliveryAwaitingValidation]);
+});
+
+test('furo aceito: uma Emergência rebaixada antes do envio some do radar', function () {
+    [$client, $project] = clientWithProject();
+
+    $emergency = Activity::factory()->issue()->doing()->create([
+        'project_id' => $project->id,
+        'service_class' => ServiceClass::Emergency,
+        'emergency_reason' => 'Produção parada.',
+    ]);
+
+    expect(updateService()->entryFor($client->fresh())->triggers)->toBe([UpdateTrigger::Emergency]);
+
+    // Rebaixar apaga classe, motivo e data (issue #143). Sem persistência de
+    // gatilho, não sobra nada no estado que prove que a Emergência existiu —
+    // o preço documentado de não ter tabela nova (issue #150).
+    $emergency->update(['service_class' => ServiceClass::Standard]);
+
+    expect(updateService()->entryFor($client->fresh())->triggers)->toBe([]);
+});
+
+test('o gatilho de um cliente não vaza para outro', function () {
+    [$mine, $project] = clientWithProject(['name' => 'Meu']);
+    [$theirs] = clientWithProject(['name' => 'Outro']);
+
+    $spec = Activity::factory()->epic()->create([
+        'project_id' => $project->id,
+        'status' => ActivityStatus::AwaitingValidation,
+    ]);
+    withSpecHistory($spec, [[ActivityStatus::AwaitingValidation, '2026-08-05 09:00:00']]);
+
+    expect(updateService()->entryFor($mine->fresh())->triggers)->toBe([UpdateTrigger::DeliveryAwaitingValidation])
+        ->and(updateService()->entryFor($theirs->fresh())->triggers)->toBe([]);
+});
+
+test('os dois gatilhos convivem na mesma linha, na ordem dos chips', function () {
+    [$client, $project] = clientWithProject();
+
+    $spec = Activity::factory()->epic()->create([
+        'project_id' => $project->id,
+        'status' => ActivityStatus::AwaitingValidation,
+    ]);
+    withSpecHistory($spec, [[ActivityStatus::AwaitingValidation, '2026-08-05 09:00:00']]);
+
+    Activity::factory()->issue()->doing()->create([
+        'project_id' => $project->id,
+        'service_class' => ServiceClass::Emergency,
+        'emergency_reason' => 'Produção parada.',
+    ]);
+
+    // A Emergência primeiro: quem bate o olho na fila lê antes o que grita
+    // mais alto.
+    expect(updateService()->entryFor($client->fresh())->triggers)
+        ->toBe([UpdateTrigger::Emergency, UpdateTrigger::DeliveryAwaitingValidation]);
 });
 
 test('a frase do hill só sai de uma spec, nunca de uma filha', function () {

@@ -83,6 +83,49 @@ test('get-update-queue devolve a fila na ordem da página e conta os devidos', f
         ->toBe(app(ClientUpdateService::class)->queue()->pluck('client.slug')->all());
 });
 
+test('get-update-queue publica o gatilho por evento e o põe no topo', function () {
+    $today = MorningRitual::businessNow();
+
+    Client::factory()->create([
+        'name' => 'Atrasada ME',
+        'slug' => 'atrasada',
+        'update_day' => $today->copy()->subDays(2)->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+
+    // Em dia pelo relógio; o que a põe no topo é a entrega esperando
+    // validação desde o último envio (issue #150).
+    $eventful = Client::factory()->create([
+        'name' => 'Com evento SA',
+        'slug' => 'com-evento',
+        'update_day' => $today->dayOfWeekIso,
+        'update_time' => '09:00',
+    ]);
+    ClientUpdate::factory()->for($eventful)->sent(now()->subHours(3)->toDateTimeString())->create();
+
+    $project = Project::factory()->create(['client_id' => $eventful->id]);
+    $spec = Activity::factory()->epic()->create([
+        'project_id' => $project->id,
+        'status' => ActivityStatus::AwaitingValidation,
+    ]);
+    withSpecHistory($spec, [[ActivityStatus::AwaitingValidation, now()->subHour()->toDateTimeString()]]);
+
+    $payload = updateToolPayload(GetUpdateQueueTool::class);
+
+    expect($payload['queue'][0]['client_slug'])->toBe('com-evento')
+        ->and($payload['queue'][0]['urgency'])->toBe('event')
+        // A cadência continua publicada ao lado da categoria: um cliente com
+        // evento também pode estar atrasado, e o agente precisa saber.
+        ->and($payload['queue'][0]['cadence'])->toBe('on_track')
+        ->and($payload['queue'][0]['triggers'])->toHaveCount(1)
+        ->and($payload['queue'][0]['triggers'][0]['key'])->toBe('delivery_awaiting_validation')
+        ->and($payload['queue'][0]['triggers'][0]['label'])->toBe('Entrega aguardando validação')
+        ->and($payload['queue'][1]['urgency'])->toBe('overdue')
+        ->and($payload['queue'][1]['triggers'])->toBe([])
+        // O evento conta como devido, mesmo com a cadência em dia.
+        ->and($payload['due_count'])->toBe(2);
+});
+
 test('get-update-queue pode devolver só os devidos', function () {
     $today = MorningRitual::businessNow();
 

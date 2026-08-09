@@ -63,6 +63,22 @@
 
                         <flux:table.cell>
                             <div class="flex items-center justify-end gap-1">
+                                {{-- Atalho para a página Updates com o cliente
+                                     já escolhido (issue #149). O update mora
+                                     lá, junto da fila e do histórico; aqui é
+                                     só a porta. --}}
+                                @if ($client->is_active)
+                                    <flux:button
+                                        :href="route('updates', ['client' => $client->slug])"
+                                        wire:navigate
+                                        size="sm"
+                                        variant="ghost"
+                                        icon="paper-airplane"
+                                        title="Gerar update"
+                                        data-test="client-generate-update-{{ $client->slug }}"
+                                    />
+                                @endif
+
                                 <flux:button
                                     wire:click="toggleActive({{ $client->id }})"
                                     size="sm"

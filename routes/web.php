@@ -55,6 +55,12 @@ Route::livewire('clients', 'pages::clients')
     ->middleware(['auth'])
     ->name('clients');
 
+// O update semanal por cliente (issue #149). O `?client=` é o atalho
+// "Gerar update" da página Clientes chegando com o cliente já escolhido.
+Route::livewire('updates', 'pages::updates')
+    ->middleware(['auth'])
+    ->name('updates');
+
 Route::livewire('projects/{slug}', 'pages::project-detail')
     ->middleware(['auth'])
     ->name('project.detail');

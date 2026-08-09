@@ -44,6 +44,10 @@
                     <flux:sidebar.item icon="building-office-2" :href="route('clients')" :current="request()->routeIs('clients')" wire:navigate>
                         Clientes
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="paper-airplane" :href="route('updates')" :current="request()->routeIs('updates')" wire:navigate>
+                        Updates
+                        <livewire:updates-badge />
+                    </flux:sidebar.item>
                     <flux:sidebar.item icon="clock" :href="route('time')" :current="request()->routeIs('time')" wire:navigate>
                         Tempo
                     </flux:sidebar.item>

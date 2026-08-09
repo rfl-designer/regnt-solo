@@ -122,6 +122,44 @@ test('a note captured in the Ideias editor arrives as Dor without being flattene
         ->not->toContain('<strong>');
 });
 
+test('a second tab does not restore the fields the first one wrote', function () {
+    $draft = Activity::factory()->draft()->create(['description' => null, 'spec' => null]);
+
+    // Duas abas abertas na mesma Ideia: ambas hidratam com tudo vazio.
+    $tabA = Livewire::test('pages::shaping', ['draft' => $draft->id]);
+    $tabB = Livewire::test('pages::shaping', ['draft' => $draft->id]);
+
+    $tabA->set('dor', 'A dor que a aba A escreveu');
+
+    // A aba B nunca soube da dor. Gravando o snapshot inteiro, este blur
+    // devolveria `description` para null.
+    $tabB->set('noGos', 'O no-go que a aba B escreveu');
+
+    expect($draft->refresh())
+        ->description->toBe('A dor que a aba A escreveu')
+        ->no_gos->toBe('O no-go que a aba B escreveu');
+});
+
+test('an out-of-order autosave only loses to another edit of the same field', function () {
+    $draft = Activity::factory()->draft()->create();
+
+    $stale = Livewire::test('pages::shaping', ['draft' => $draft->id]);
+
+    // Um request mais novo grava apetite e esboço...
+    Livewire::test('pages::shaping', ['draft' => $draft->id])
+        ->call('chooseAppetite', 14)
+        ->set('esboco', 'O esboço mais novo');
+
+    // ...e o request velho chega depois, carregando um snapshot sem nenhum
+    // dos dois. Só a coluna que ele de fato editou pode mudar.
+    $stale->set('rabbitHoles', 'Um buraco atrasado');
+
+    expect($draft->refresh())
+        ->appetite_days->toBe(14)
+        ->spec->toBe('O esboço mais novo')
+        ->rabbit_holes->toBe('Um buraco atrasado');
+});
+
 test('the write target cannot be moved onto another kind of activity', function () {
     $draft = Activity::factory()->draft()->create();
     $epic = Activity::factory()->epic()->create([

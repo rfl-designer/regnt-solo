@@ -131,17 +131,48 @@ new class extends Component
     }
 
     /**
-     * Autosave. Every bound field lands here, so no section needs a save
-     * button and none of them can disagree about when the work is safe.
+     * Autosave, one column at a time.
+     *
+     * Each field writes only its own column. Writing the whole snapshot on
+     * every change looked simpler, but the snapshot is the one hydrated for
+     * *that* request: two overlapping blurs, or a second tab, would each
+     * rewrite all six columns from their own stale copy, and the request that
+     * landed last would quietly restore the other's old values. A field can
+     * now only ever lose to another edit of the same field.
      */
-    public function updated(string $property): void
+    public function updatedDor(): void
     {
-        if ($property === 'customAppetiteDays') {
-            $this->customAppetiteDays = app(ShapingService::class)->normalizeAppetite($this->customAppetiteDays);
-            $this->appetiteDays = $this->customAppetiteDays;
-        }
+        $this->persistColumn('description', $this->dor);
+    }
 
-        $this->persist();
+    public function updatedEsboco(): void
+    {
+        $this->persistColumn('spec', $this->esboco);
+    }
+
+    public function updatedRabbitHoles(): void
+    {
+        $this->persistColumn('rabbit_holes', $this->rabbitHoles);
+    }
+
+    public function updatedNoGos(): void
+    {
+        $this->persistColumn('no_gos', $this->noGos);
+    }
+
+    public function updatedProjectId(): void
+    {
+        $this->projectId = $this->eligibleProjectId();
+
+        $this->persistColumn('project_id', $this->projectId);
+    }
+
+    public function updatedCustomAppetiteDays(): void
+    {
+        $this->customAppetiteDays = app(ShapingService::class)->normalizeAppetite($this->customAppetiteDays);
+        $this->appetiteDays = $this->customAppetiteDays;
+
+        $this->persistColumn('appetite_days', $this->appetiteDays);
     }
 
     /**
@@ -160,7 +191,7 @@ new class extends Component
         $this->customAppetiteDays = null;
         $this->appetiteDays = $days;
 
-        $this->persist();
+        $this->persistColumn('appetite_days', $this->appetiteDays);
     }
 
     public function chooseCustomAppetite(): void
@@ -169,7 +200,7 @@ new class extends Component
         $this->customAppetiteDays = app(ShapingService::class)->normalizeAppetite($this->customAppetiteDays);
         $this->appetiteDays = $this->customAppetiteDays;
 
-        $this->persist();
+        $this->persistColumn('appetite_days', $this->appetiteDays);
     }
 
     /**
@@ -184,19 +215,21 @@ new class extends Component
         return app(ShapingService::class)->eligibleProjectId($this->projectId);
     }
 
-    private function persist(): void
+    /**
+     * Write one column of this Ideia, and nothing else.
+     *
+     * Deliberately a query update rather than a model save: loading the row
+     * and saving it back would carry the whole hydrated snapshot along, which
+     * is exactly what this avoids. The `drafts()` filter travels with the
+     * write, so the target cannot drift even here.
+     */
+    private function persistColumn(string $column, mixed $value): void
     {
-        $this->appetiteDays = app(ShapingService::class)->normalizeAppetite($this->appetiteDays);
-        $this->projectId = $this->eligibleProjectId();
+        if (is_string($value)) {
+            $value = $value !== '' ? $value : null;
+        }
 
-        $this->draft->update([
-            'description' => $this->dor !== '' ? $this->dor : null,
-            'spec' => $this->esboco !== '' ? $this->esboco : null,
-            'rabbit_holes' => $this->rabbitHoles !== '' ? $this->rabbitHoles : null,
-            'no_gos' => $this->noGos !== '' ? $this->noGos : null,
-            'appetite_days' => $this->appetiteDays,
-            'project_id' => $this->projectId,
-        ]);
+        Activity::query()->drafts()->whereKey($this->draftId)->update([$column => $value]);
 
         unset($this->draft, $this->sections, $this->progress, $this->missing, $this->history, $this->pitch);
     }
@@ -207,8 +240,9 @@ new class extends Component
      */
     public function promote()
     {
-        $this->persist();
-
+        // Nothing to flush first: every field wrote itself when it changed,
+        // and the blur that this very click triggers is batched into the same
+        // request, ahead of this call.
         try {
             $epic = app(ShapingService::class)->promote($this->draft, $this->projectId);
         } catch (ShapingIncompleteException $e) {

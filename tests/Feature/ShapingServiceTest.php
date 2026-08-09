@@ -247,6 +247,26 @@ test('the history aside is measured from the last baseline cut', function () {
     expect(shaping()->appetiteHistory(7)['sample_size'])->toBe(0);
 });
 
+test('the cached sample follows a new bet and a new cut instead of going stale', function () {
+    BaselineCut::query()->delete();
+
+    validatedBet(4);
+    validatedBet(8);
+    validatedBet(12);
+
+    expect(shaping()->appetiteHistory(8)['sample_size'])->toBe(3);
+
+    // Uma aposta a mais tem de aparecer sem ninguém limpar cache na mão.
+    validatedBet(20);
+
+    expect(shaping()->appetiteHistory(8)['sample_size'])->toBe(4);
+
+    // E um corte novo zera a história, lida logo depois de já ter sido lida.
+    BaselineCut::create(['reason' => 'Novo corte', 'cut_at' => now()->addDay()]);
+
+    expect(shaping()->appetiteHistory(8)['sample_size'])->toBe(0);
+});
+
 test('an epic reopened after validation is a live bet again and leaves the history', function () {
     BaselineCut::query()->delete();
 

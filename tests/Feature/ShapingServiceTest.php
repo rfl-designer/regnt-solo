@@ -217,6 +217,23 @@ test('the history aside says "ainda sem histórico" under three validated specs'
         ->and($history['message'])->toContain('Ainda sem histórico');
 });
 
+test('the small-sample message is written in Portuguese, not in "spec(s)"', function () {
+    BaselineCut::query()->delete();
+
+    expect(shaping()->appetiteHistory(7)['message'])
+        ->toBe('Ainda sem histórico — nenhuma spec validada desde o corte.');
+
+    validatedBet(5);
+
+    expect(shaping()->appetiteHistory(7)['message'])
+        ->toBe('Ainda sem histórico — 1 spec validada desde o corte.');
+
+    validatedBet(9);
+
+    expect(shaping()->appetiteHistory(7)['message'])
+        ->toBe('Ainda sem histórico — 2 specs validadas desde o corte.');
+});
+
 test('the history aside quotes a real percentile from three validated specs up', function () {
     BaselineCut::query()->delete();
 

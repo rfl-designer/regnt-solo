@@ -240,6 +240,16 @@ test('a forged project id never reaches the database', function () {
     expect($draft->refresh()->project_id)->toBeNull();
 });
 
+test('the chosen chip says it is chosen, not just looks it', function () {
+    $draft = Activity::factory()->draft()->create();
+
+    Livewire::test('pages::shaping', ['draft' => $draft->id])
+        ->call('chooseAppetite', 14)
+        ->assertSeeHtml('data-test="appetite-chip-14" aria-pressed="true"')
+        ->assertSeeHtml('data-test="appetite-chip-7" aria-pressed="false"')
+        ->assertSeeHtml('data-test="appetite-chip-other" aria-pressed="false"');
+});
+
 test('the history aside shows "ainda sem histórico" with fewer than three validated specs', function () {
     $draft = Activity::factory()->draft()->create();
 

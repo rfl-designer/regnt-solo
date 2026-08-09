@@ -264,7 +264,7 @@ new class extends Component
      * Bet on it. The refusal and the mutation both belong to
      * {@see ShapingService} — this only decides where to go afterwards.
      */
-    public function promote()
+    public function promote(): void
     {
         // Nothing to flush first: every field wrote itself when it changed,
         // and the blur that this very click triggers is batched into the same
@@ -274,12 +274,12 @@ new class extends Component
         } catch (ShapingIncompleteException $e) {
             Flux::toast(variant: 'warning', heading: 'Ainda não dá para promover', text: $e->getMessage());
 
-            return null;
+            return;
         }
 
         Flux::toast(variant: 'success', heading: 'Épico criado', text: "{$epic->title} nasceu em Backlog.");
 
-        return $this->redirect(route('kanban'), navigate: true);
+        $this->redirect(route('kanban'), navigate: true);
     }
 }
 
@@ -336,30 +336,26 @@ new class extends Component
                     <flux:text class="mb-3 text-xs text-zinc-500">Quanto tempo corrido isso vale — orçamento, não estimativa.</flux:text>
 
                     <div class="flex flex-wrap items-center gap-2">
+                        {{-- aria-pressed: a escolha não pode existir só na cor. --}}
                         @foreach (App\Services\ShapingService::APPETITE_CHIPS as $chip)
-                            <button
-                                type="button"
+                            @php($selected = ! $customAppetite && $appetiteDays === $chip)
+                            <flux:button
+                                size="sm"
                                 wire:key="chip-{{ $chip }}"
                                 wire:click="chooseAppetite({{ $chip }})"
                                 data-test="appetite-chip-{{ $chip }}"
-                                @class([
-                                    'rounded-lg border px-3 py-1.5 text-sm transition',
-                                    'border-violet-500/60 bg-violet-500/10 text-violet-200' => ! $customAppetite && $appetiteDays === $chip,
-                                    'border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500' => $customAppetite || $appetiteDays !== $chip,
-                                ])
-                            >{{ $chip }} dias</button>
+                                aria-pressed="{{ $selected ? 'true' : 'false' }}"
+                                class="{{ $selected ? 'border-violet-500/60! bg-violet-500/10! text-violet-200!' : '' }}"
+                            >{{ $chip }} dias</flux:button>
                         @endforeach
 
-                        <button
-                            type="button"
+                        <flux:button
+                            size="sm"
                             wire:click="chooseCustomAppetite"
                             data-test="appetite-chip-other"
-                            @class([
-                                'rounded-lg border px-3 py-1.5 text-sm transition',
-                                'border-violet-500/60 bg-violet-500/10 text-violet-200' => $customAppetite,
-                                'border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500' => ! $customAppetite,
-                            ])
-                        >Outro</button>
+                            aria-pressed="{{ $customAppetite ? 'true' : 'false' }}"
+                            class="{{ $customAppetite ? 'border-violet-500/60! bg-violet-500/10! text-violet-200!' : '' }}"
+                        >Outro</flux:button>
 
                         @if ($customAppetite)
                             <flux:input

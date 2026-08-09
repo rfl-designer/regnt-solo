@@ -273,7 +273,7 @@ class ShapingService
                 'median' => null,
                 'p85' => null,
                 'percentile' => null,
-                'message' => "Ainda sem histórico — {$count} spec(s) validada(s) desde o corte.",
+                'message' => 'Ainda sem histórico — '.$this->countValidatedSpecs($count).' desde o corte.',
             ];
         }
 
@@ -312,6 +312,18 @@ class ShapingService
     public function appetiteLabel(int $days): string
     {
         return $days === 1 ? '1 dia' : "{$days} dias";
+    }
+
+    /**
+     * How many validated Specs there are, written the way a person writes it.
+     */
+    private function countValidatedSpecs(int $count): string
+    {
+        return match ($count) {
+            0 => 'nenhuma spec validada',
+            1 => '1 spec validada',
+            default => "{$count} specs validadas",
+        };
     }
 
     private function formatDays(?float $days): string

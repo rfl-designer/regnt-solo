@@ -95,6 +95,11 @@ test('substituting from the task modal hands the slot over in one move', functio
         ->wait(1)
         ->click(emergencyButton('replaceEmergency'))
         ->waitForText('Task salva')
+        // O toast aparece antes de o board terminar de se reconciliar, e as
+        // asserções abaixo leem o banco. Sem deixar a troca assentar, elas
+        // podem ler o estado de antes do swap e acusar uma substituição que
+        // aconteceu — o teste mede a decisão, não a velocidade do render.
+        ->wait(1)
         ->assertNoJavaScriptErrors();
 
     // The challenger starts as Intangível rather than Padrão on purpose: it

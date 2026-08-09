@@ -3,6 +3,7 @@
 use App\Enums\ActivityPriority;
 use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
+use App\Enums\HillPosition;
 use App\Models\Activity;
 use App\Exceptions\WaitingRequiresWaitingForException;
 use App\Models\Project;
@@ -35,6 +36,13 @@ new class extends Component
     public bool $showDeleteConfirm = false;
 
     public bool $editingSpec = false;
+
+    /**
+     * A posição da spec na colina (issue #149), ou null enquanto não foi
+     * declarada. Só existe em nível spec — é aqui, no modal do Épico, e em
+     * lugar nenhum dos cards filhos.
+     */
+    public ?string $hillPosition = null;
 
     /**
      * @return \Illuminate\Database\Eloquent\Collection<int, Project>
@@ -174,6 +182,39 @@ new class extends Component
         $this->moveTo(ActivityStatus::AwaitingValidation, 'Entregue para validação');
     }
 
+    /**
+     * Marca (ou desmarca) o hill da spec (issue #149).
+     *
+     * Grava na hora, sem passar pelo Salvar: é uma declaração de uma
+     * palavra, e enterrá-la num formulário faria com que ela nunca fosse
+     * atualizada. Clicar na posição já marcada a limpa — "não sei dizer" é
+     * um estado legítimo, e o update simplesmente omite a frase.
+     */
+    public function setHill(string $position): void
+    {
+        $feature = $this->feature;
+
+        if ($feature === null) {
+            return;
+        }
+
+        $hill = HillPosition::tryFrom($position);
+
+        if ($hill === null) {
+            return;
+        }
+
+        $next = $feature->hill_position === $hill ? null : $hill;
+
+        $feature->update(['hill_position' => $next]);
+
+        $this->hillPosition = $next?->value;
+
+        unset($this->feature);
+
+        $this->dispatch('feature-updated');
+    }
+
     private function moveTo(ActivityStatus $status, string $heading): void
     {
         if (! $this->feature) {
@@ -231,6 +272,7 @@ new class extends Component
                 $this->projectId = $feature->project_id;
                 $this->priority = $feature->priority?->value ?? 'medium';
                 $this->dueDate = $feature->due_date?->format('Y-m-d');
+                $this->hillPosition = $feature->hill_position?->value;
 
                 $this->editingSpec = $feature->status === ActivityStatus::Done
                     ? false
@@ -564,6 +606,36 @@ new class extends Component
                         @endif
                     </div>
                 @endif
+
+                {{-- Hill da spec (issue #149): binário e manual. É a única
+                     frase de progresso que o update semanal publica, e
+                     "não marcado" é um estado — a frase some. --}}
+                <div class="mt-4 border-t border-zinc-700 pt-4" data-test="hill-toggle">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <flux:heading size="sm">Colina</flux:heading>
+                            <flux:text class="mt-0.5 text-xs text-zinc-500">
+                                Entra no update do cliente como "{{ $this->feature->hill_position?->phrase() ?? '—' }}".
+                            </flux:text>
+                        </div>
+
+                        <div class="flex gap-2">
+                            @foreach (HillPosition::cases() as $hill)
+                                <flux:button
+                                    type="button"
+                                    wire:click="setHill('{{ $hill->value }}')"
+                                    size="sm"
+                                    :variant="$hillPosition === $hill->value ? 'primary' : 'ghost'"
+                                    :icon="$hill->icon()"
+                                    wire:key="hill-{{ $hill->value }}"
+                                    data-test="hill-{{ $hill->value }}"
+                                >
+                                    {{ $hill->label() }}
+                                </flux:button>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
 
                 {{-- Eficiência de fluxo desta spec: toque ÷ janela. --}}
                 @if ($this->specEfficiency)

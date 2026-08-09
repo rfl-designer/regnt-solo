@@ -3,14 +3,16 @@
 namespace App\Models;
 
 use App\Enums\ClientChannel;
+use Database\Factories\ClientFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Client extends Model
 {
-    /** @use HasFactory<\Database\Factories\ClientFactory> */
+    /** @use HasFactory<ClientFactory> */
     use HasFactory;
 
     /**
@@ -67,6 +69,57 @@ class Client extends Model
     public function stakeholders(): HasMany
     {
         return $this->hasMany(Stakeholder::class);
+    }
+
+    /**
+     * Every weekly update written for this client — the draft in progress
+     * and everything already sent (issue #149).
+     */
+    public function updates(): HasMany
+    {
+        return $this->hasMany(ClientUpdate::class);
+    }
+
+    /**
+     * The two updates the queue actually needs: the last one sent and the
+     * draft still open.
+     *
+     * They exist as relations so the queue can eager-load exactly these two
+     * rows per client. Loading `updates` instead would hydrate every update
+     * ever written — full markdown and all — on a page the sidebar badge
+     * renders everywhere, and the cost would grow with the history forever
+     * (issue #149).
+     */
+    public function latestSentUpdate(): HasOne
+    {
+        return $this->hasOne(ClientUpdate::class)->sent()->latestOfMany('sent_at');
+    }
+
+    public function currentDraft(): HasOne
+    {
+        return $this->hasOne(ClientUpdate::class)->draft()->latestOfMany();
+    }
+
+    /**
+     * The last update the client actually received, or null while none has
+     * been sent. This is the anchor of both the cadence clock and the
+     * window the next draft covers.
+     */
+    public function lastSentUpdate(): ?ClientUpdate
+    {
+        return $this->updates()->sent()->orderByDesc('sent_at')->orderByDesc('id')->first();
+    }
+
+    /**
+     * The draft currently being written, or null when there is none.
+     *
+     * There is at most one in practice — the page and the MCP tool both
+     * reuse the open draft instead of opening a second — and the newest one
+     * wins if a stale row ever survives.
+     */
+    public function draftUpdate(): ?ClientUpdate
+    {
+        return $this->updates()->draft()->orderByDesc('id')->first();
     }
 
     /**

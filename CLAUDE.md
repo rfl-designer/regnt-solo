@@ -310,6 +310,29 @@ Tasks recorrentes e templates para automatizar atividades repetitivas e manter c
 - `tests/Feature/TaskTemplateTest.php` — model, factory, seeder
 - `tests/Feature/TemplatesPageTest.php` — UI, CRUD, integração
 
+## Update semanal por cliente (issue #149)
+
+Gerador determinístico do update semanal, com fila por urgência, rascunho persistido e histórico. Página `/updates` (sidebar, categoria Acompanhamento).
+
+- **Model `ClientUpdate`**: `client_id`, `content`, `generated_content`, `sent_at` (null = rascunho da semana)
+  - `hasManualEdits()` compara `content` com `generated_content` **byte a byte** (sem `trim()`: em Markdown o espaço é conteúdo) — é o que faz "Regenerar" pedir confirmação só quando há texto humano a perder
+  - `sent_at` não é fillable: só `ClientUpdateService::markSent()` o carimba
+  - **Um rascunho aberto por cliente, garantido pelo banco**: `draft_client_id` (derivada no `saving`, = `client_id` enquanto rascunho, NULL depois do envio) com índice único. `generate()` roda em transação com a linha do cliente travada
+- **Enum `HillPosition`**: `uphill` ("Em descoberta") / `downhill` ("Em execução") — coluna `activities.hill_position`, nullable, marcada à mão no modal do Épico
+- **Enum `UpdateUrgency`**: `overdue` / `due_today` / `on_track`
+- **Serviço `ClientUpdateService`** (um lugar computa; página, badge e MCP consomem):
+  - `queue()` / `dueCount()` — fila de clientes ativos por urgência. **A urgência é uma pergunta de dia**: no dia da cadência o cliente vence hoje de meia-noite a meia-noite, e só no dia seguinte fica atrasado. A hora-alvo (`update_time`, default 12:00) é o instante que a fila mostra em `dueAt` e o desempate de um envio feito no próprio dia — nunca decide a urgência. Tudo no fuso de negócio (`MorningRitual::businessNow()`)
+  - `windowStart()` — desde o último `sent_at`; primeiro update = 7 dias; **sem teto**
+  - `blocks()` / `compose()` — os 4 blocos PT-BR (Entregue / Em andamento / Esperando você / Próximo), filtrados por cliente efetivo e `Activity::scopeSpecLevel()`, com bloco vazio omitido. **Entregue seleciona pelo evento na janela**, não pelo estágio atual: uma entrega devolvida para ajustes continua no bloco, com esse detalhe
+  - `generate(force)` — persiste o rascunho; recusa descartar edição manual sem confirmação
+  - `markSent()` — grava a data, fecha a janela e zera o relógio
+  - `history(limit)` / `sentCount()` — histórico paginado
+- **Página `/updates`**: fila com ícone do canal, editor com autosave (`wire:model.live.blur`), Copiar (não grava) e Marcar como enviado (grava) separados, Regenerar com confirmação, histórico por cliente com "carregar mais"
+  - O `force` do "Regenerar" sai de `#[Locked] $regenerateConfirmedFor` (o id do rascunho confirmado), não do booleano do modal: uma chamada Livewire direta a `generate`/`regenerate` pergunta em vez de apagar
+- **Sidebar**: item "Updates" com badge da contagem de devidos (`⚡updates-badge`)
+- **Clientes**: atalho "Gerar update" leva para `/updates?client={slug}`
+- **Testes**: `ClientUpdateServiceTest`, `UpdatesPageTest`, `HillPositionTest`, `Mcp/ClientUpdateToolsTest`, `Browser/UpdatesFlowTest`
+
 ## Keyboard Shortcuts
 
 | Atalho   | Ação                        |
@@ -323,6 +346,15 @@ Tasks recorrentes e templates para automatizar atividades repetitivas e manter c
 | `Ctrl+K` | Command Palette             |
 
 Todos os atalhos requerem `Ctrl` (ou `Cmd` no Mac). Ignorar quando foco em `input`/`textarea`/`select`/`[contenteditable]`.
+
+Atalhos de página (registrados no próprio componente, não no layout):
+
+| Atalho       | Página     | Ação                                        |
+| ------------ | ---------- | ------------------------------------------- |
+| `Ctrl+G`     | `/updates` | Gerar / regerar o rascunho do update        |
+| `Ctrl+Enter` | `/updates` | Copiar o rascunho para a área de transferência |
+
+Esses dois valem **também com o foco no editor** — é lá que a mão está. "Marcar como enviado" fica deliberadamente sem atalho: é o ato que escreve o histórico e zera o relógio da cadência, e merece um clique consciente.
 
 ## Regras Gerais
 
@@ -355,6 +387,9 @@ O SoloBoard expõe um MCP Server para integração com AI clients (Claude Code, 
   - `timer-status` — Mostra timer ativo (task ou feature)
   - `get-pull-queue` — Fila de puxar (Pronto em ordem, com o motivo de cada posição)
   - `get-ritual-status` — Estado do ritual matinal de hoje + snapshot do quadro (leitura)
+  - `get-update-queue` — Fila de updates semanais por urgência + contagem de devidos (leitura)
+  - `generate-client-update` — Gera e persiste o rascunho do update (mesma janela e template da UI; `force` para descartar edição manual)
+  - `mark-update-sent` — Marca um rascunho existente como enviado (exige `draft_id`; zera o relógio da cadência)
   - `list-projects` — Lista projetos por status
 - **Resource**: `soloboard://overview` — Resumo geral do estado (inclui active_features)
 - **Prompts**:

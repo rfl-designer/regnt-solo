@@ -6,6 +6,7 @@ use App\Enums\ActivityStatus;
 use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Services\EmergencySlotService;
+use App\Services\FlowMetricsService;
 use App\Services\PullQueueEntry;
 use App\Services\PullQueueService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -34,12 +35,12 @@ class GetPullQueueTool extends Tool
 {
     protected string $name = 'get-pull-queue';
 
-    protected string $description = 'Returns the board pull queue: everything sitting in Pronto (todo), in the order it should be pulled, plus the board context needed to decide. The order has three degraus: the single active Emergência first, then Data fixa items at risk (due within the configured risk window, overdue included) by due date ascending, then everything else in a single FIFO by the last time the item entered Pronto. Each item carries id, title, service_class, project, client, reason (emergency / fixed_date_at_risk / fifo), a human-readable motivo, due_date when it is a Data fixa, and its age on the board in days. The context block reports the Fazendo WIP as count/limit and the active Emergência, if any. There is no recommendation field: the queue states the order, pulling is the user\'s decision.';
+    protected string $description = 'Returns the board pull queue: everything sitting in Pronto (todo), in the order it should be pulled, plus the board context needed to decide. The order has three degraus: the single active Emergência first, then Data fixa items at risk (due within the configured risk window, overdue included) by due date ascending, then everything else in a single FIFO by the last time the item entered Pronto. Each item carries id, title, service_class, project, client, reason (emergency / fixed_date_at_risk / fifo), a human-readable motivo, due_date when it is a Data fixa, and its age on the board in days. The context block reports the Fazendo WIP as count/limit, the active Emergência if any, and the intangible hunger (issue #153): days since the last Intangível entered Feito, the configured threshold, whether it is starving, the anchor of the clock (completion / cut / board / none) and how many Intangíveis are sitting in Pronto — pulling one without concluding it never resets the clock, and a cold start with no conclusion in the history anchors on the current baseline cut and starves. There is no recommendation field: the queue states the order, pulling is the user\'s decision.';
 
     /**
      * Handle the tool request.
      */
-    public function handle(Request $request, PullQueueService $queue, EmergencySlotService $emergencySlot): Response
+    public function handle(Request $request, PullQueueService $queue, EmergencySlotService $emergencySlot, FlowMetricsService $flow): Response
     {
         $validated = $request->validate([
             'project_id' => 'nullable|integer|exists:projects,id',
@@ -70,7 +71,7 @@ class GetPullQueueTool extends Tool
             // then (issue #145). Without this the same number would mean
             // two very different things to a reader.
             'risk_window_source' => $queue->riskWindowFromSle() ? 'sle' : 'config',
-            'context' => $this->context($emergencySlot),
+            'context' => $this->context($emergencySlot, $flow),
         ];
 
         return Response::text(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
@@ -109,16 +110,33 @@ class GetPullQueueTool extends Tool
     }
 
     /**
-     * What the queue can't say on its own: how full Fazendo is, and
-     * whether an Emergência is already burning.
+     * What the queue can't say on its own: how full Fazendo is, whether an
+     * Emergência is already burning, and how hungry the board is for
+     * Intangível.
+     *
+     * The hunger belongs here rather than on any item because it is a
+     * property of the *board*, not of a position: it fires even when there
+     * is no Intangível in Pronto at all, and in that case `ready_in_pronto`
+     * being zero is what tells a client the remedy is to create or promote
+     * work of that class instead of pulling one.
      *
      * @return array<string, mixed>
      */
-    private function context(EmergencySlotService $emergencySlot): array
+    private function context(EmergencySlotService $emergencySlot, FlowMetricsService $flow): array
     {
         $activeEmergency = $emergencySlot->active();
+        $hunger = $flow->intangibleStarvation();
 
         return [
+            'intangible_hunger' => [
+                'days' => round($hunger['days'], 1),
+                'threshold_days' => $hunger['threshold'],
+                'starving' => $hunger['starving'],
+                'anchor' => $hunger['anchor'],
+                'last_completed_at' => $hunger['last_completed_at']?->toDateTimeString(),
+                'ready_in_pronto' => $hunger['ready_count'],
+                'label' => $hunger['label'],
+            ],
             'doing_wip' => [
                 'count' => Activity::query()->leaf()->where('status', ActivityStatus::Doing)->count(),
                 'limit' => (int) config('soloboard.wip_limit_doing', 2),

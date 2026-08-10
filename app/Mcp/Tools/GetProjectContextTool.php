@@ -3,9 +3,11 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\ActivityStatus;
+use App\Enums\ActivityType;
 use App\Models\Activity;
 use App\Models\Document;
 use App\Models\Project;
+use App\Services\FlowMetricsService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -17,7 +19,7 @@ class GetProjectContextTool extends Tool
 {
     protected string $name = 'get-project-context';
 
-    protected string $description = 'Gets complete project context including all documents and active tasks. Use this to understand a project before starting work.';
+    protected string $description = 'Gets complete project context including all documents and active tasks. Use this to understand a project before starting work. Every active epic also carries its apetite guard: appetite.days (the budget chosen in shaping, in calendar days), appetite.consumed_days (calendar days from spec approval to validation, or to now while the bet is live) and appetite.status (ok, warning at 80% of the budget, exceeded at 100%, or no_appetite when no budget was chosen). appetite.status and appetite.consumed_days are null while the spec has never been approved — there is no bet running to measure, the same contract list-epics publishes.';
 
     /**
      * Handle the tool request.
@@ -43,9 +45,14 @@ class GetProjectContextTool extends Tool
         $activeTasks = Activity::query()
             ->where('project_id', $project->id)
             ->where('status', '!=', ActivityStatus::Done)
+            ->with('statusChanges')
             ->orderByServiceClass()
             ->orderBy('due_date')
             ->get();
+
+        // A guarda de apetite (issue #152), lida do mesmo serviço que a UI. O
+        // histórico já veio junto, então a lista inteira custa uma consulta.
+        $metrics = app(FlowMetricsService::class);
 
         $allTasks = Activity::query()
             ->where('project_id', $project->id)
@@ -89,6 +96,7 @@ class GetProjectContextTool extends Tool
                 'session_prompt' => $task->session_prompt,
                 'due_date' => $task->due_date?->toDateString(),
                 'is_overdue' => $task->isOverdue(),
+                'appetite' => $this->appetite($task, $metrics),
             ])->all(),
             'metrics' => [
                 'total_tasks' => $allTasks->count(),
@@ -99,6 +107,42 @@ class GetProjectContextTool extends Tool
         ];
 
         return Response::text(json_encode($data, JSON_PRETTY_PRINT));
+    }
+
+    /**
+     * O apetite de um Épico e o quanto dele já foi (issue #152), ou null para
+     * o que não é uma aposta — uma Issue não tem apetite, e publicar um campo
+     * vazio nela sugeriria que deveria ter.
+     *
+     * Sem aprovação o `status` é null, exatamente como em `list-epics`: são
+     * quatro estados publicados (ok, warning, exceeded, no_appetite) e um
+     * quinto valor aqui faria as duas costuras MCP discordarem sobre o mesmo
+     * estado — e quebraria quem valida o enum. A ausência de janela já está
+     * dita por `consumed_days: null`.
+     *
+     * @return array{days: int|null, consumed_days: float|null, status: string|null}|null
+     */
+    private function appetite(Activity $activity, FlowMetricsService $metrics): ?array
+    {
+        if ($activity->type !== ActivityType::Epic) {
+            return null;
+        }
+
+        $consumption = $metrics->appetiteConsumption($activity);
+
+        if ($consumption === null) {
+            return [
+                'days' => ($activity->appetite_days !== null && $activity->appetite_days >= 1) ? (int) $activity->appetite_days : null,
+                'consumed_days' => null,
+                'status' => null,
+            ];
+        }
+
+        return [
+            'days' => $consumption['appetite_days'],
+            'consumed_days' => round($consumption['consumed_days'], 1),
+            'status' => $consumption['level'],
+        ];
     }
 
     /**

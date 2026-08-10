@@ -1,12 +1,14 @@
 <?php
 
 use App\Enums\ActivityPriority;
+use App\Enums\ActivityStatus;
 use App\Enums\ActivityType;
 use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\CreateEpicTool;
 use App\Mcp\Tools\ListEpicsTool;
 use App\Mcp\Tools\UpdateEpicTool;
 use App\Models\Activity;
+use App\Models\ActivityStatusChange;
 use App\Models\Project;
 
 // ListEpicsTool tests
@@ -287,7 +289,7 @@ test('update-epic rejects a non-epic activity', function () {
                 'epic_id' => $activity->id,
                 'title' => 'Should not apply',
             ]);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $refused = true;
         }
 
@@ -296,4 +298,74 @@ test('update-epic rejects a non-epic activity', function () {
         $activity->refresh();
         expect($activity->title)->not->toBe('Should not apply');
     }
+});
+
+/**
+ * A guarda de apetite na costura MCP (issue #152). O agente lê exatamente a
+ * conta que o modal do Épico e a página Fluxo mostram.
+ */
+test('list-epics publishes the apetite, its consumption and its status', function () {
+    $epic = Activity::factory()->epic()->create([
+        'title' => 'Aposta estourada',
+        'status' => 'backlog',
+        'appetite_days' => 7,
+    ]);
+
+    ActivityStatusChange::query()->where('activity_id', $epic->id)->delete();
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $epic->id,
+        'from_status' => null,
+        'to_status' => ActivityStatus::AwaitingApproval,
+        'changed_at' => now()->copy()->subDays(13),
+    ]);
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $epic->id,
+        'from_status' => ActivityStatus::AwaitingApproval,
+        'to_status' => ActivityStatus::Doing,
+        'changed_at' => now()->copy()->subDays(12),
+    ]);
+
+    $response = SoloBoardServer::tool(ListEpicsTool::class, []);
+
+    $response->assertOk();
+    $response->assertSee('"appetite_days": 7');
+    $response->assertSee('"appetite_consumed_days": 12');
+    $response->assertSee('"appetite_status": "exceeded"');
+});
+
+test('list-epics says no_appetite instead of inventing a budget', function () {
+    $epic = Activity::factory()->epic()->create(['status' => 'backlog', 'appetite_days' => null]);
+
+    ActivityStatusChange::query()->where('activity_id', $epic->id)->delete();
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $epic->id,
+        'from_status' => ActivityStatus::AwaitingApproval,
+        'to_status' => ActivityStatus::Doing,
+        'changed_at' => now()->copy()->subDays(3),
+    ]);
+
+    $response = SoloBoardServer::tool(ListEpicsTool::class, []);
+
+    $response->assertOk();
+    $response->assertSee('"appetite_status": "no_appetite"');
+});
+
+test('list-epics leaves the status out while there is no bet running', function () {
+    Activity::factory()->epic()->create(['status' => 'backlog', 'appetite_days' => 14]);
+
+    $response = SoloBoardServer::tool(ListEpicsTool::class, []);
+
+    $response->assertOk();
+    $response->assertSee('"appetite_days": 14');
+    $response->assertSee('"appetite_status": null');
+});
+
+test('the server instructions describe the apetite guard, so an agent reads it before the tool', function () {
+    $instructions = (new ReflectionClass(SoloBoardServer::class))
+        ->getDefaultProperties()['instructions'];
+
+    expect($instructions)
+        ->toContain('apetite guard')
+        ->toContain('no_appetite')
+        ->toContain('exceeded');
 });

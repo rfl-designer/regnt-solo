@@ -11,7 +11,7 @@ use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
- * Dar forma a uma Ideia (issue #148).
+ * Dar forma a uma Ideia (issue #148), e rever o escopo de um Épico (issue #152).
  *
  * Five sections stacked on one page, navigable in any order. There is no
  * wizard and no step validation on the way through, because shaping is not a
@@ -23,6 +23,14 @@ use Livewire\Component;
  * to Ideias: there is nothing to discard and nothing to confirm, which is the
  * point — leaving in the middle has to cost nothing or partial shaping stops
  * happening.
+ *
+ * ## A mesma página serve a revisão de escopo
+ *
+ * An Épico whose apetite estourou is cut here, in the five sections it was
+ * shaped in — cutting scope is shaping done again, and a second form would
+ * have meant two places writing the same four columns. Only the footer
+ * changes: there is nothing to promote (the bet was already made) and nothing
+ * to postpone, so it carries the way back to the board instead.
  */
 new class extends Component
 {
@@ -36,6 +44,15 @@ new class extends Component
      */
     #[Locked]
     public int $draftId;
+
+    /**
+     * Whether the target is an Épico being revised rather than an Ideia being
+     * shaped. Locked for the same reason the id is: the footer's two exits and
+     * the promotion gate hang off it, and a forged `false` would offer
+     * "Promover a Épico" on something already promoted.
+     */
+    #[Locked]
+    public bool $isEpic = false;
 
     public string $dor = '';
 
@@ -58,9 +75,10 @@ new class extends Component
 
     public function mount(int $draft): void
     {
-        $activity = Activity::query()->drafts()->findOrFail($draft);
+        $activity = Activity::query()->shapeable()->findOrFail($draft);
 
         $this->draftId = $activity->id;
+        $this->isEpic = $activity->type === ActivityType::Epic;
         $this->dor = $activity->description ?? '';
         $this->esboco = $activity->spec ?? '';
         $this->rabbitHoles = $activity->rabbit_holes ?? '';
@@ -75,15 +93,14 @@ new class extends Component
     }
 
     /**
-     * The target, re-read as an Ideia on every request. `#[Locked]` already
-     * stops the id from moving; the `drafts()` filter is the second lock, so
-     * even a bug that let the id through could not aim a write at another kind
-     * of Activity.
+     * The target, re-read on every request. `#[Locked]` already stops the id
+     * from moving; the `shapeable()` filter is the second lock, so even a bug
+     * that let the id through could not aim a write at a Task or an Issue.
      */
     #[Computed]
     public function draft(): Activity
     {
-        return Activity::query()->drafts()->findOrFail($this->draftId);
+        return Activity::query()->shapeable()->findOrFail($this->draftId);
     }
 
     /**
@@ -191,8 +208,23 @@ new class extends Component
         $this->persistColumn('no_gos', $this->noGos);
     }
 
+    /**
+     * A revisão de escopo não reatribui projeto.
+     *
+     * O seletor não é renderizado para um Épico, mas `projectId` continua uma
+     * propriedade pública: um `$set('projectId', ...)` forjado cairia aqui e
+     * moveria a aposta para outro projeto — uma escrita fora das cinco seções
+     * que a página se propõe a editar. Esconder o campo é UI; a recusa é a
+     * regra. O valor volta ao que está gravado para o estado não mentir.
+     */
     public function updatedProjectId(): void
     {
+        if ($this->isEpic) {
+            $this->projectId = $this->draft->project_id;
+
+            return;
+        }
+
         $this->projectId = $this->eligibleProjectId();
 
         $this->persistColumn('project_id', $this->projectId);
@@ -251,7 +283,7 @@ new class extends Component
      *
      * Deliberately a query update rather than a model save: loading the row
      * and saving it back would carry the whole hydrated snapshot along, which
-     * is exactly what this avoids. The `drafts()` filter travels with the
+     * is exactly what this avoids. The `shapeable()` filter travels with the
      * write, so the target cannot drift even here.
      */
     private function persistColumn(string $column, mixed $value): void
@@ -260,7 +292,7 @@ new class extends Component
             $value = $value !== '' ? $value : null;
         }
 
-        Activity::query()->drafts()->whereKey($this->draftId)->update([$column => $value]);
+        Activity::query()->shapeable()->whereKey($this->draftId)->update([$column => $value]);
 
         unset($this->draft, $this->sections, $this->progress, $this->missing, $this->history, $this->pitch);
     }
@@ -274,6 +306,15 @@ new class extends Component
         // Nothing to flush first: every field wrote itself when it changed,
         // and the blur that this very click triggers is batched into the same
         // request, ahead of this call.
+        // An Épico has already been bet on. The button is not rendered for
+        // one, so this only ever answers a forged call — and it answers it
+        // with a refusal rather than the service's exception.
+        if ($this->isEpic) {
+            Flux::toast(variant: 'warning', heading: 'Já é um Épico', text: 'Esta aposta já foi feita — aqui só se revisa o escopo.');
+
+            return;
+        }
+
         try {
             $epic = app(ShapingService::class)->promote($this->draft, $this->projectId);
         } catch (ShapingIncompleteException $e) {
@@ -304,11 +345,18 @@ new class extends Component
         <div class="flex items-start justify-between gap-4">
             <div class="min-w-0">
                 <div class="flex items-center gap-2">
-                    <flux:icon name="light-bulb" class="size-6 text-amber-400" />
+                    <flux:icon
+                        :name="$isEpic ? 'rectangle-stack' : 'light-bulb'"
+                        class="size-6 {{ $isEpic ? 'text-violet-400' : 'text-amber-400' }}"
+                    />
                     <flux:heading size="xl" class="truncate">{{ $this->draft->title }}</flux:heading>
                 </div>
-                <flux:text class="mt-1 text-sm text-zinc-400">
-                    Dar forma antes de apostar: dor, apetite e esboço bastam para virar Épico.
+                <flux:text class="mt-1 text-sm text-zinc-400" data-test="shaping-subtitle">
+                    @if ($isEpic)
+                        Revisão de escopo: corte o que não cabe no apetite — ou mate a aposta.
+                    @else
+                        Dar forma antes de apostar: dor, apetite e esboço bastam para virar Épico.
+                    @endif
                 </flux:text>
             </div>
 
@@ -467,36 +515,49 @@ new class extends Component
                 <span class="text-xs text-zinc-400">{{ $this->progress }}/5</span>
             </div>
 
+            {{-- O rodapé da revisão não promove nem adia: a aposta já foi
+                 feita, e o que resta é cortar escopo e voltar ao quadro. --}}
             <div class="flex flex-wrap items-center gap-2">
-                <flux:select wire:model.live="projectId" size="sm" class="max-w-56" data-test="project-select">
-                    <option value="">Escolha um projeto</option>
-                    @foreach ($this->projects as $project)
-                        <option value="{{ $project->id }}">
-                            {{ $project->emoji }} {{ $project->name }}{{ $project->client_id === null ? ' · interno' : '' }}
-                        </option>
-                    @endforeach
-                </flux:select>
+                @if ($isEpic)
+                    <flux:button
+                        variant="ghost"
+                        size="sm"
+                        icon="arrow-uturn-left"
+                        :href="route('kanban')"
+                        wire:navigate
+                        data-test="back-to-board"
+                    >Voltar ao quadro</flux:button>
+                @else
+                    <flux:select wire:model.live="projectId" size="sm" class="max-w-56" data-test="project-select">
+                        <option value="">Escolha um projeto</option>
+                        @foreach ($this->projects as $project)
+                            <option value="{{ $project->id }}">
+                                {{ $project->emoji }} {{ $project->name }}{{ $project->client_id === null ? ' · interno' : '' }}
+                            </option>
+                        @endforeach
+                    </flux:select>
 
-                <flux:button
-                    variant="ghost"
-                    size="sm"
-                    :href="route('ideas')"
-                    wire:navigate
-                    data-test="maybe-later"
-                >Talvez mais adiante</flux:button>
+                    <flux:button
+                        variant="ghost"
+                        size="sm"
+                        :href="route('ideas')"
+                        wire:navigate
+                        data-test="maybe-later"
+                    >Talvez mais adiante</flux:button>
 
-                <flux:button
-                    variant="primary"
-                    size="sm"
-                    icon="rocket-launch"
-                    class="bg-violet-600 hover:bg-violet-500"
-                    wire:click="promote"
-                    data-test="promote"
-                >Promover a Épico</flux:button>
+                    <flux:button
+                        variant="primary"
+                        size="sm"
+                        icon="rocket-launch"
+                        class="bg-violet-600 hover:bg-violet-500"
+                        wire:click="promote"
+                        data-test="promote"
+                    >Promover a Épico</flux:button>
+                @endif
             </div>
         </div>
 
-        @if ($this->missing !== [])
+        @if (! $isEpic && $this->missing !== [])
             <p class="mt-2 text-xs text-zinc-500" data-test="promote-hint">
                 Falta para promover: {{ implode(', ', $this->missing) }}.
             </p>

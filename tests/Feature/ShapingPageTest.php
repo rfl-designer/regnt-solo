@@ -31,19 +31,79 @@ test('the page opens from an idea with the five sections', function () {
         ->assertSee('No-gos');
 });
 
-test('the page refuses to open anything that is not an idea', function () {
-    $epic = Activity::factory()->epic()->create();
+test('the page refuses anything that is neither an idea nor an epic', function () {
+    $issue = Activity::factory()->issue()->create();
 
-    // Pela rota, o "não" chega como 404 — shaping é da Ideia, e um Épico já
-    // apostado não volta para a mesa.
-    $this->get(route('shaping', $epic))->assertNotFound();
+    // Pela rota, o "não" chega como 404: uma Issue não tem dor, apetite nem
+    // no-gos, e apontar a página para uma deixaria o autosave escrever um
+    // esboço por cima da descrição de um card.
+    $this->get(route('shaping', $issue))->assertNotFound();
+
+    expect(fn () => Livewire::test('pages::shaping', ['draft' => $issue->id]))
+        ->toThrow(ModelNotFoundException::class);
 });
 
-test('the shaping component itself refuses a non-idea', function () {
+test('an epic opens for a scope review, with the same five sections (issue #152)', function () {
+    $epic = Activity::factory()->epic()->create(['title' => 'Fila de puxar', 'appetite_days' => 14]);
+
+    Livewire::test('pages::shaping', ['draft' => $epic->id])
+        ->assertSuccessful()
+        ->assertSet('isEpic', true)
+        ->assertSee('Fila de puxar')
+        ->assertSee('Revisão de escopo')
+        ->assertSee('Dor')
+        ->assertSee('Apetite')
+        ->assertSee('Esboço')
+        ->assertSee('Rabbit holes')
+        ->assertSee('No-gos');
+
+    $this->get(route('epic-shaping', $epic))->assertSuccessful();
+});
+
+test('the review footer has no promotion and no postponement (issue #152)', function () {
     $epic = Activity::factory()->epic()->create();
 
-    expect(fn () => Livewire::test('pages::shaping', ['draft' => $epic->id]))
-        ->toThrow(ModelNotFoundException::class);
+    Livewire::test('pages::shaping', ['draft' => $epic->id])
+        ->assertDontSee('Promover a Épico')
+        ->assertDontSee('Talvez mais adiante')
+        ->assertSee('Voltar ao quadro');
+});
+
+test('saving on the review edits the epic itself (issue #152)', function () {
+    $epic = Activity::factory()->epic()->create();
+
+    Livewire::test('pages::shaping', ['draft' => $epic->id])
+        ->set('esboco', 'Metade do que estava aqui.')
+        ->set('noGos', 'Sem exportação nesta aposta.');
+
+    expect($epic->refresh())
+        ->spec->toBe('Metade do que estava aqui.')
+        ->no_gos->toBe('Sem exportação nesta aposta.');
+});
+
+test('a forged project change on the review does not move the epic (issue #152)', function () {
+    $home = Project::factory()->create();
+    $elsewhere = Project::factory()->create();
+
+    $epic = Activity::factory()->epic()->create(['project_id' => $home->id]);
+
+    // O seletor nem é renderizado na revisão — isto é o payload forjado que
+    // sobraria se esconder o campo fosse a única defesa.
+    Livewire::test('pages::shaping', ['draft' => $epic->id])
+        ->set('projectId', $elsewhere->id)
+        ->assertSet('projectId', $home->id);
+
+    expect($epic->refresh()->project_id)->toBe($home->id);
+});
+
+test('an epic cannot be promoted again from the review (issue #152)', function () {
+    $epic = Activity::factory()->epic()->create();
+
+    Livewire::test('pages::shaping', ['draft' => $epic->id])
+        ->call('promote')
+        ->assertHasNoErrors();
+
+    expect($epic->refresh()->type)->toBe(ActivityType::Epic);
 });
 
 test('every section autosaves, including the three new fields', function () {

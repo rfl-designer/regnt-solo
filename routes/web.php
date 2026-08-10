@@ -30,6 +30,13 @@ Route::livewire('ideas/{draft}/shaping', 'pages::shaping')
     ->middleware(['auth'])
     ->name('shaping');
 
+// Revisar o escopo de um Épico (issue #152): a mesma página, sobre uma aposta
+// já feita. Duas rotas e um componente só — o caminho diz de que lado da
+// promoção o item está, mas as cinco seções e o autosave são os mesmos.
+Route::livewire('epics/{draft}/shaping', 'pages::shaping')
+    ->middleware(['auth'])
+    ->name('epic-shaping');
+
 Route::livewire('kanban', 'pages::kanban')
     ->middleware(['auth'])
     ->name('kanban');

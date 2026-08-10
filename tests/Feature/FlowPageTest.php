@@ -203,10 +203,12 @@ test('the aging list costs the same whether it holds 3 items or 30', function ()
     //
     // The ceiling is 5 rather than 4 since issue #146: the page gained the
     // "esperas por cliente" ranking, which reads the history for its own
-    // 30-day window. Like every other read here it is a fixed number of
-    // queries — which is what the equality above is actually guarding.
+    // 30-day window. Issue #152 adds one more for "apostas em andamento",
+    // which reads every live bet's history in a single eager load rather
+    // than one query per bet. Like every other read here it is a fixed
+    // number of queries — which is what the equality above is guarding.
     expect($many)->toBe($few)
-        ->and($few)->toBeLessThanOrEqual(5);
+        ->and($few)->toBeLessThanOrEqual(6);
 });
 
 test('without a usable baseline the page raises no alarm at all', function () {

@@ -167,6 +167,24 @@ new class extends Component
     }
 
     /**
+     * Quanto do apetite esta aposta já comeu (issue #152), ou null enquanto
+     * não há aprovação — sem janela não há consumo.
+     *
+     * Vem inteiro de {@see FlowMetricsService::appetiteConsumption()}: a barra
+     * daqui, a lista da página Fluxo e o que o MCP publica são a mesma conta,
+     * então não podem discordar.
+     *
+     * @return array{appetite_days: int|null, consumed_days: float, ratio: float|null, over_days: float|null, over_label: string|null, headline: string|null, level: string, open: bool, window_start: \Carbon\CarbonInterface, window_end: \Carbon\CarbonInterface, label: string}|null
+     */
+    #[Computed]
+    public function appetiteConsumption(): ?array
+    {
+        return $this->feature
+            ? app(FlowMetricsService::class)->appetiteConsumption($this->feature)
+            : null;
+    }
+
+    /**
      * The two shortcuts on the timeline are sugar and nothing else: they
      * set the status, and the status change *is* the lifecycle event. There
      * is no second mechanism recording a "sent at" — moving the Épico from
@@ -236,7 +254,7 @@ new class extends Component
             return;
         }
 
-        unset($this->feature, $this->specTimeline, $this->specEfficiency, $this->pitch);
+        unset($this->feature, $this->specTimeline, $this->specEfficiency, $this->appetiteConsumption, $this->pitch);
 
         Flux::toast(variant: 'success', heading: $heading, text: $this->title);
         $this->dispatch('feature-updated');
@@ -603,6 +621,81 @@ new class extends Component
                             >
                                 Entregar p/ validação
                             </flux:button>
+                        @endif
+                    </div>
+                @endif
+
+                {{-- Consumo do apetite (issue #152): mesma janela da eficiência
+                     de fluxo, mesmos limiares do aging. Sem apetite escolhido a
+                     guarda fica em silêncio — nem barra, nem alerta. --}}
+                @if ($this->appetiteConsumption)
+                    @php $appetite = $this->appetiteConsumption; @endphp
+
+                    <div class="mt-4 border-t border-zinc-700 pt-3" data-test="appetite-consumption">
+                        @if ($appetite['level'] === 'no_appetite')
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <span class="text-sm text-zinc-400">Apetite</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-zinc-500">sem apetite definido</span>
+                                    <flux:button
+                                        variant="ghost"
+                                        size="xs"
+                                        icon="scissors"
+                                        :href="route('epic-shaping', $this->feature->id)"
+                                        wire:navigate
+                                        data-test="appetite-review-scope"
+                                    >Revisar escopo</flux:button>
+                                </div>
+                            </div>
+                        @else
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-zinc-400">Apetite consumido</span>
+                                <span @class([
+                                    'font-medium',
+                                    'text-red-400' => $appetite['level'] === 'exceeded',
+                                    'text-amber-400' => $appetite['level'] === 'warning',
+                                    'text-zinc-200' => $appetite['level'] === 'ok',
+                                ])>{{ $appetite['label'] }}</span>
+                            </div>
+
+                            <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-zinc-700">
+                                <div
+                                    @class([
+                                        'h-full rounded-full transition-all duration-300',
+                                        'bg-red-500' => $appetite['level'] === 'exceeded',
+                                        'bg-amber-500' => $appetite['level'] === 'warning',
+                                        'bg-emerald-500' => $appetite['level'] === 'ok',
+                                    ])
+                                    style="width: {{ min(100, round($appetite['ratio'] * 100, 2)) }}%"
+                                ></div>
+                            </div>
+
+                            @if ($appetite['level'] === 'exceeded')
+                                <div
+                                    class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3"
+                                    data-test="appetite-banner"
+                                >
+                                    <div class="flex items-center gap-2">
+                                        <flux:icon name="exclamation-triangle" class="size-4 shrink-0 text-red-400" />
+                                        <span class="text-sm text-red-200">
+                                            {{ $appetite['headline'] }} — corte escopo ou mate a aposta.
+                                        </span>
+                                    </div>
+                                    <flux:button
+                                        variant="ghost"
+                                        size="xs"
+                                        icon="scissors"
+                                        :href="route('epic-shaping', $this->feature->id)"
+                                        wire:navigate
+                                        data-test="appetite-review-scope"
+                                    >Revisar escopo</flux:button>
+                                </div>
+                            @else
+                                <span class="mt-2 block text-xs text-zinc-500">
+                                    {{ $appetite['open'] ? 'Corrido desde a aprovação (ainda contando)' : 'Corrido entre a aprovação e a validação' }}.
+                                    O apetite é orçamento, não estimativa.
+                                </span>
+                            @endif
                         @endif
                     </div>
                 @endif

@@ -332,7 +332,7 @@ class FlowMetricsService
             'sle' => $sle,
             'ratio' => $ratio,
             'level' => $level,
-            'tooltip' => sprintf('%s de %d dias da SLE', $this->formatDays($days, $level), $sle),
+            'tooltip' => sprintf('%s de %d dias da SLE', $this->formatDays($days, roundUp: $level === 'breach'), $sle),
         ];
     }
 
@@ -349,10 +349,15 @@ class FlowMetricsService
      * has broken it. That makes the number and the border agree by
      * construction: an amber card can never read as having reached the
      * SLE, and a red one can never read as being short of it.
+     *
+     * The apetite bar reads the same way against its own budget (issue #152),
+     * which is why the rule is a parameter here rather than a second copy
+     * there: "9 de 14 dias" and "13 de 10 dias" have to round the way the
+     * colour they sit on does.
      */
-    private function formatDays(float $days, string $level): string
+    private function formatDays(float $days, bool $roundUp): string
     {
-        $value = $level === 'breach'
+        $value = $roundUp
             ? ceil($days * 10) / 10
             : floor($days * 10) / 10;
 
@@ -599,6 +604,142 @@ class FlowMetricsService
             'ratio' => $ratio,
             'percent' => (int) round($ratio * 100),
         ];
+    }
+
+    /**
+     * How much of an Épico's apetite the bet has already eaten (issue #152).
+     *
+     * ## The window is the same one
+     *
+     * Aprovada -> validada, and it runs to *now* while the Spec has not been
+     * validated yet — byte for byte the window {@see specEfficiency()} measures
+     * in, and for the same reason: the apetite is a budget for the time the
+     * bet is a live commitment, and the approval is what turns it into one.
+     * Nothing here is stored; the window comes out of the status history, so
+     * an Épico reopened after being validated is a live bet again and its
+     * consumption starts moving again on its own.
+     *
+     * Returns null when the Spec has never been approved: there is no bet
+     * running, and a zero would read as "nothing spent" on something that has
+     * not started.
+     *
+     * ## The thresholds are the aging's
+     *
+     * {@see attentionPercent()} for âmbar, 100% for vermelho — the same two
+     * numbers a card wears against the SLE. A second scale would mean the board
+     * flags lateness one way and overspending another.
+     *
+     * ## No apetite is a silent state, not a zero
+     *
+     * An Épico promoted before the apetite existed (or one whose value fell out
+     * of range) reports `no_appetite`: no ratio, no excess, and every surface
+     * shows it without a bar and without an alarm. Comparing against a budget
+     * nobody chose would be inventing the budget.
+     *
+     * @return array{appetite_days: int|null, consumed_days: float, ratio: float|null, over_days: float|null, over_label: string|null, level: string, open: bool, window_start: CarbonInterface, window_end: CarbonInterface, label: string}|null
+     */
+    public function appetiteConsumption(Activity $epic): ?array
+    {
+        $start = $epic->spec_aprovada;
+
+        if ($start === null) {
+            return null;
+        }
+
+        // Same reading as the flow efficiency: the validation only closes the
+        // window while the Spec is *still* validated.
+        $validatedAt = $epic->isSpecValidated() ? $epic->spec_validada : null;
+        $open = $validatedAt === null || $validatedAt->lessThan($start);
+        $end = $open ? now() : $validatedAt;
+
+        $consumed = max(0.0, $start->floatDiffInDays($end));
+
+        // Zero, negative or absent is not an apetite. The upper bound is the
+        // column's and is enforced on write ({@see ShapingService::normalizeAppetite()}).
+        $appetite = ($epic->appetite_days !== null && $epic->appetite_days >= 1)
+            ? (int) $epic->appetite_days
+            : null;
+
+        if ($appetite === null) {
+            return [
+                'appetite_days' => null,
+                'consumed_days' => $consumed,
+                'ratio' => null,
+                'over_days' => null,
+                'over_label' => null,
+                'level' => 'no_appetite',
+                'open' => $open,
+                'window_start' => $start,
+                'window_end' => $end,
+                'label' => 'sem apetite definido',
+            ];
+        }
+
+        $ratio = $consumed / $appetite;
+        $level = match (true) {
+            $ratio >= 1.0 => 'exceeded',
+            $ratio >= $this->attentionPercent() / 100 => 'warning',
+            default => 'ok',
+        };
+
+        $over = max(0.0, $consumed - $appetite);
+
+        return [
+            'appetite_days' => $appetite,
+            'consumed_days' => $consumed,
+            'ratio' => $ratio,
+            'over_days' => $over,
+            'over_label' => $level === 'exceeded' ? '+'.$this->formatDays($over, roundUp: true).'d' : null,
+            'level' => $level,
+            'open' => $open,
+            'window_start' => $start,
+            'window_end' => $end,
+            'label' => sprintf(
+                '%s de %d dias',
+                $this->formatDays($consumed, roundUp: $level === 'exceeded'),
+                $appetite,
+            ),
+        ];
+    }
+
+    /**
+     * Every bet currently running — the "Apostas em andamento" list on the
+     * Fluxo page (issue #152).
+     *
+     * A bet is running when its Spec has been approved and not validated:
+     * stages `aprovada` and `entregue`. An Épico still waiting for the yes is
+     * not a bet yet, and a validated one is a bet that closed.
+     *
+     * Ordered the way the page reads it: estourados first, then by how much of
+     * the apetite is gone, with the ones that never chose an apetite last —
+     * they have nothing to be ranked by, and putting them anywhere in the
+     * middle would suggest they do.
+     *
+     * @return Collection<int, array{epic: Activity, consumption: array{appetite_days: int|null, consumed_days: float, ratio: float|null, over_days: float|null, over_label: string|null, level: string, open: bool, window_start: CarbonInterface, window_end: CarbonInterface, label: string}}>
+     */
+    public function liveBets(): Collection
+    {
+        $ranks = ['exceeded' => 0, 'warning' => 1, 'ok' => 2, 'no_appetite' => 3];
+
+        return Activity::query()
+            ->epics()
+            ->whereHas('statusChanges', fn ($query) => $query
+                ->where('to_status', ActivityStatus::AwaitingApproval->value))
+            ->with(['project', 'client', 'statusChanges'])
+            ->get()
+            ->map(fn (Activity $epic): array => [
+                'epic' => $epic,
+                'consumption' => $this->appetiteConsumption($epic),
+                'stage' => $epic->specStage(),
+            ])
+            ->filter(fn (array $row): bool => $row['consumption'] !== null
+                && in_array($row['stage'], ['aprovada', 'entregue'], true))
+            ->sortBy([
+                fn (array $a, array $b): int => $ranks[$a['consumption']['level']] <=> $ranks[$b['consumption']['level']],
+                fn (array $a, array $b): int => ($b['consumption']['ratio'] ?? 0.0) <=> ($a['consumption']['ratio'] ?? 0.0),
+            ])
+            ->map(fn (array $row): array => ['epic' => $row['epic'], 'consumption' => $row['consumption']])
+            ->values();
     }
 
     /**

@@ -220,7 +220,8 @@ SOLOBOARD_AI_MODEL=claude-sonnet-4-20250514  # modelo utilizado
   - `isEnabled(): bool` — verifica feature flag + API key configurada
   - `analyzeBacklog(Collection $tasks): array` — analisa inbox/backlog e sugere ações (arquivar, priorizar, estimar)
   - `detectPatterns(array $weeklyData): array` — detecta padrões de produtividade (projetos abandonados, over-commitment, falta de deep work)
-- **Graceful degradation**: todos os métodos retornam `[]` se desabilitado, sem tasks, ou em caso de erro da API
+  - `refineUpdate(string $draft): string` — revisa o texto do update semanal como copy editor (issue #151)
+- **Graceful degradation**: todos os métodos retornam vazio (`[]` ou `''`) se desabilitado, sem entrada, ou em caso de erro da API
 
 ### AI no Inbox
 
@@ -349,6 +350,17 @@ Um cliente também entra na fila quando o quadro produz notícia que não espera
 - **Sem notificação ativa**: sem toast, sem banner. O gatilho espera na fila (chip na linha + badge da sidebar) em vez de interromper
 - **Custo**: a varredura é **uma consulta para a fila inteira** — com ou sem candidatos, e não uma por cliente. A badge da sidebar roda isso em toda página, então nada de relação carregada: o cliente efetivo e as duas datas que decidem (`delivered_at`, `concluded_at`) vêm como colunas calculadas em subconsultas correlacionadas
 - **MCP `get-update-queue`**: publica `urgency` (com `event`), `cadence` e `triggers[]` (`key`, `label`, `reason`); `only_due` e `due_count` incluem os eventos. As **instruções do servidor MCP** também descrevem a categoria e os gatilhos — um agente lê elas antes da descrição da tool, e há teste que impede a divergência
+
+### Refinar o update com AI (issue #151)
+
+Botão "✨ Refinar com AI" no editor do rascunho, atrás da mesma feature flag do Epic 16 (`ai_enabled` + chave). **A AI é copy editor, não redatora**: reescreve tom, fluidez, concisão e transições do rascunho atual — incluindo as edições feitas à mão —, e nada mais.
+
+- **Contrato duro no prompt** (`AiAssistantService::buildRefineUpdatePrompt()`): proibido adicionar, remover ou alterar item, estado, data, número, nome ou compromisso; proibido resumir, fundir ou reordenar blocos; formatação que degrada bem em qualquer canal (WhatsApp, e-mail, Slack); tom fixo PT-BR profissional-próximo. A resposta é o texto refinado e mais nada — é a única chamada de AI que **não** responde JSON, e por isso o prompt não é montado sobre `BASE_SYSTEM_PROMPT` (a persona de coach convidaria exatamente as sugestões que o contrato proíbe)
+- **Nunca escreve direto no editor**: o resultado abre num modal de preview. "Aplicar" substitui o conteúdo do editor (o autosave segue daí); "Descartar" não altera nada. `$aiRefinement` é `#[Locked]` — o preview é o que a API respondeu, não o que o browser mandar
+- **Trocar de cliente descarta o preview**: um refinamento pertence ao rascunho que o gerou
+- **Degradação graciosa**: erro da API ou resposta vazia vira toast amigável e o rascunho fica intacto — sem flag, a barra é a mesma de antes e o fluxo determinístico continua inteiro
+- **Rate limit de 1 chamada/minuto**, no mesmo padrão de cache do "Analisar pendentes" do Inbox
+- **Testes**: `AiAssistantTest` (contrato do prompt com API mockada, degradação) e `UpdatesPageTest` (flag, preview, aplicar/descartar, erro, rate limit)
 
 ## Keyboard Shortcuts
 

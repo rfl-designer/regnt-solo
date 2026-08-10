@@ -81,6 +81,21 @@ test('saving on the review edits the epic itself (issue #152)', function () {
         ->no_gos->toBe('Sem exportação nesta aposta.');
 });
 
+test('a forged project change on the review does not move the epic (issue #152)', function () {
+    $home = Project::factory()->create();
+    $elsewhere = Project::factory()->create();
+
+    $epic = Activity::factory()->epic()->create(['project_id' => $home->id]);
+
+    // O seletor nem é renderizado na revisão — isto é o payload forjado que
+    // sobraria se esconder o campo fosse a única defesa.
+    Livewire::test('pages::shaping', ['draft' => $epic->id])
+        ->set('projectId', $elsewhere->id)
+        ->assertSet('projectId', $home->id);
+
+    expect($epic->refresh()->project_id)->toBe($home->id);
+});
+
 test('an epic cannot be promoted again from the review (issue #152)', function () {
     $epic = Activity::factory()->epic()->create();
 

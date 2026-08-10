@@ -208,8 +208,23 @@ new class extends Component
         $this->persistColumn('no_gos', $this->noGos);
     }
 
+    /**
+     * A revisão de escopo não reatribui projeto.
+     *
+     * O seletor não é renderizado para um Épico, mas `projectId` continua uma
+     * propriedade pública: um `$set('projectId', ...)` forjado cairia aqui e
+     * moveria a aposta para outro projeto — uma escrita fora das cinco seções
+     * que a página se propõe a editar. Esconder o campo é UI; a recusa é a
+     * regra. O valor volta ao que está gravado para o estado não mentir.
+     */
     public function updatedProjectId(): void
     {
+        if ($this->isEpic) {
+            $this->projectId = $this->draft->project_id;
+
+            return;
+        }
+
         $this->projectId = $this->eligibleProjectId();
 
         $this->persistColumn('project_id', $this->projectId);

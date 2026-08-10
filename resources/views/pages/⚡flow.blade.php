@@ -75,6 +75,7 @@ new class extends Component
         $distribution = $metrics->distribution();
         $agingItems = $metrics->agingItems();
         $lastCut = $metrics->lastCut();
+        $liveBets = $metrics->liveBets();
         $clientWaits = $metrics->clientWaitRanking(30);
         $longestWait = $clientWaits->max('minutes') ?: 1;
     @endphp
@@ -228,6 +229,115 @@ new class extends Component
                             {{ $aging['tooltip'] }}
                         </flux:badge>
                     </button>
+                @endforeach
+            </div>
+        @endif
+    </div>
+
+    {{-- Apostas em andamento (issue #152): specs aprovadas e ainda não
+         validadas, com o quanto do apetite já foi. Estouradas no topo; as sem
+         apetite ficam no fim, listadas sem barra e sem alarme. --}}
+    <div class="rounded-xl border border-zinc-700 bg-zinc-900/50 p-6" data-test="live-bets">
+        <flux:heading size="lg">Apostas em andamento</flux:heading>
+        <flux:text class="mt-1 text-sm">
+            Épicos com a spec aprovada e ainda não validada. O consumo corre da aprovação até agora, na mesma
+            janela da eficiência de fluxo, e avisa aos {{ $metrics->attentionPercent() }}% do apetite.
+        </flux:text>
+
+        @if ($liveBets->isEmpty())
+            <div class="flex flex-col items-center gap-2 py-10 text-center">
+                <flux:icon name="rectangle-stack" class="size-8 text-zinc-600" />
+                <flux:text>Nenhuma aposta em andamento.</flux:text>
+                <flux:text class="text-xs">
+                    Uma spec aprovada vira aposta viva e aparece aqui até ser validada.
+                </flux:text>
+            </div>
+        @else
+            <div class="mt-4 flex flex-col gap-2">
+                @foreach ($liveBets as $row)
+                    @php
+                        $epic = $row['epic'];
+                        $appetite = $row['consumption'];
+                    @endphp
+
+                    <div
+                        wire:key="bet-{{ $epic->id }}"
+                        @class([
+                            'rounded-lg border bg-zinc-800 p-3',
+                            'border-red-500' => $appetite['level'] === 'exceeded',
+                            'border-amber-500' => $appetite['level'] === 'warning',
+                            'border-zinc-700' => in_array($appetite['level'], ['ok', 'no_appetite'], true),
+                        ])
+                        data-test="bet-{{ $appetite['level'] }}"
+                    >
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <button
+                                type="button"
+                                wire:click="$dispatch('open-feature-modal', { featureId: {{ $epic->id }} })"
+                                class="min-w-0 text-left"
+                            >
+                                <span class="block truncate text-sm font-medium text-zinc-200">{{ $epic->title }}</span>
+                                <span class="mt-0.5 block text-xs text-zinc-500">
+                                    {{ $epic->status->label() }}
+                                    @if ($epic->project)
+                                        · {{ $epic->project->emoji }} {{ $epic->project->name }}
+                                    @endif
+                                </span>
+                            </button>
+
+                            @if ($appetite['level'] === 'no_appetite')
+                                <div class="flex shrink-0 items-center gap-2">
+                                    <span class="text-xs text-zinc-500">sem apetite definido</span>
+                                    <flux:button
+                                        variant="ghost"
+                                        size="xs"
+                                        icon="scissors"
+                                        :href="route('epic-shaping', $epic->id)"
+                                        wire:navigate
+                                        data-test="bet-shaping-{{ $epic->id }}"
+                                    >Definir no shaping</flux:button>
+                                </div>
+                            @else
+                                <div class="flex shrink-0 items-center gap-2">
+                                    <flux:badge
+                                        size="sm"
+                                        :color="match ($appetite['level']) { 'exceeded' => 'red', 'warning' => 'amber', default => 'emerald' }"
+                                    >{{ $appetite['label'] }}</flux:badge>
+
+                                    @if ($appetite['level'] === 'exceeded')
+                                        <flux:button
+                                            variant="ghost"
+                                            size="xs"
+                                            icon="scissors"
+                                            :href="route('epic-shaping', $epic->id)"
+                                            wire:navigate
+                                            data-test="bet-shaping-{{ $epic->id }}"
+                                        >Revisar escopo</flux:button>
+                                    @endif
+                                </div>
+                            @endif
+                        </div>
+
+                        @if ($appetite['level'] !== 'no_appetite')
+                            <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-zinc-700">
+                                <div
+                                    @class([
+                                        'h-full rounded-full',
+                                        'bg-red-500' => $appetite['level'] === 'exceeded',
+                                        'bg-amber-500' => $appetite['level'] === 'warning',
+                                        'bg-emerald-500' => $appetite['level'] === 'ok',
+                                    ])
+                                    style="width: {{ min(100, round($appetite['ratio'] * 100, 2)) }}%"
+                                ></div>
+                            </div>
+
+                            @if ($appetite['level'] === 'exceeded')
+                                <p class="mt-2 text-xs text-red-300" data-test="bet-banner-{{ $epic->id }}">
+                                    Apetite estourado ({{ $appetite['over_label'] }}) — corte escopo ou mate a aposta.
+                                </p>
+                            @endif
+                        @endif
+                    </div>
                 @endforeach
             </div>
         @endif

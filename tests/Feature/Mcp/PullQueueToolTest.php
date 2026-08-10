@@ -5,6 +5,7 @@ use App\Mcp\Servers\SoloBoardServer;
 use App\Mcp\Tools\GetPullQueueTool;
 use App\Models\Activity;
 use App\Models\ActivityStatusChange;
+use App\Models\BaselineCut;
 use App\Models\Project;
 use Carbon\Carbon;
 
@@ -182,4 +183,104 @@ test('get-pull-queue exposes the configured risk window', function () {
 test('get-pull-queue rejects an unknown project', function () {
     SoloBoardServer::tool(GetPullQueueTool::class, ['project_id' => 999999])
         ->assertHasErrors(['Project not found. Use list-projects to find available project ids.']);
+});
+
+// ── Fome de Intangível (issue #153) ──────────────────────────────────────
+
+/**
+ * Deixa o quadro com exatamente um corte de baseline, no momento dado — a
+ * migration semeia o corte de adoção com `cut_at = now()` do relógio real.
+ */
+function onlyPullQueueCutAt(?string $at): void
+{
+    BaselineCut::query()->delete();
+
+    if ($at !== null) {
+        BaselineCut::factory()->create(['cut_at' => Carbon::parse($at)]);
+    }
+}
+
+test('the context carries the intangible hunger, measured from the last conclusion', function () {
+    Carbon::setTestNow('2026-08-10 12:00:00');
+    onlyPullQueueCutAt('2026-06-01 12:00');
+
+    $concluded = Activity::factory()->issue()->intangible()->done()->create();
+    ActivityStatusChange::query()->where('activity_id', $concluded->id)->delete();
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $concluded->id,
+        'to_status' => ActivityStatus::Done,
+        'changed_at' => Carbon::parse('2026-07-20 12:00'),
+    ]);
+
+    queuedInPronto(Activity::factory()->issue()->intangible()->todo()->create(), '2026-08-01 09:00');
+
+    $hunger = pullQueuePayload()['context']['intangible_hunger'];
+
+    expect($hunger['days'])->toEqualWithDelta(21.0, 0.01)
+        ->and($hunger['threshold_days'])->toBe(14)
+        ->and($hunger['starving'])->toBeTrue()
+        ->and($hunger['anchor'])->toBe('completion')
+        ->and($hunger['last_completed_at'])->toBe('2026-07-20 12:00:00')
+        ->and($hunger['ready_in_pronto'])->toBe(1)
+        ->and($hunger['label'])->toBe('última conclusão há 21 dias');
+
+    Carbon::setTestNow();
+});
+
+test('the context reports the hunger as fed while it is inside the threshold', function () {
+    Carbon::setTestNow('2026-08-10 12:00:00');
+    onlyPullQueueCutAt('2026-06-01 12:00');
+
+    $concluded = Activity::factory()->issue()->intangible()->done()->create();
+    ActivityStatusChange::query()->where('activity_id', $concluded->id)->delete();
+    ActivityStatusChange::factory()->create([
+        'activity_id' => $concluded->id,
+        'to_status' => ActivityStatus::Done,
+        'changed_at' => Carbon::parse('2026-08-07 12:00'),
+    ]);
+
+    expect(pullQueuePayload()['context']['intangible_hunger'])
+        ->days->toEqualWithDelta(3.0, 0.01)
+        ->starving->toBeFalse();
+
+    Carbon::setTestNow();
+});
+
+test('a cold start is published as starving, anchored on the cut, with an empty pantry', function () {
+    Carbon::setTestNow('2026-08-10 12:00:00');
+    onlyPullQueueCutAt('2026-07-01 12:00');
+
+    $hunger = pullQueuePayload()['context']['intangible_hunger'];
+
+    expect($hunger['starving'])->toBeTrue()
+        ->and($hunger['anchor'])->toBe('cut')
+        ->and($hunger['last_completed_at'])->toBeNull()
+        ->and($hunger['ready_in_pronto'])->toBe(0)
+        ->and($hunger['label'])->toBe('nenhuma conclusão desde o corte, há 40 dias');
+
+    Carbon::setTestNow();
+});
+
+test('a cold start starves over MCP even when the cut is younger than the threshold', function () {
+    Carbon::setTestNow('2026-08-10 12:00:00');
+    onlyPullQueueCutAt('2026-08-10 08:00');
+
+    $hunger = pullQueuePayload()['context']['intangible_hunger'];
+
+    expect($hunger['starving'])->toBeTrue()
+        ->and($hunger['anchor'])->toBe('cut')
+        ->and($hunger['last_completed_at'])->toBeNull()
+        ->and($hunger['label'])->toBe('nenhuma conclusão desde o corte, feito hoje');
+
+    Carbon::setTestNow();
+});
+
+test('the server instructions describe the intangible hunger, so an agent reads it before the tool', function () {
+    $instructions = (new ReflectionClass(SoloBoardServer::class))
+        ->getDefaultProperties()['instructions'];
+
+    expect($instructions)
+        ->toContain('intangible hunger')
+        ->toContain('intangible_starvation_days')
+        ->toContain('ready_in_pronto');
 });

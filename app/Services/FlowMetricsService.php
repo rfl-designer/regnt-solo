@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Models\ActivityStatusChange;
 use App\Models\BaselineCut;
 use App\Models\Client;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -754,6 +756,166 @@ class FlowMetricsService
             ])
             ->map(fn (array $row): array => ['epic' => $row['epic'], 'consumption' => $row['consumption']])
             ->values();
+    }
+
+    /**
+     * How many days without concluding an Intangível the board tolerates
+     * before it says so.
+     */
+    public function intangibleStarvationDays(): int
+    {
+        return (int) config('soloboard.intangible_starvation_days', 14);
+    }
+
+    /**
+     * The intangible hunger: how long the board has gone without *finishing*
+     * an item classified as Intangível (issue #153).
+     *
+     * ## The clock is a conclusion, not a pull
+     *
+     * The last entry into Feito of an Intangível, read from
+     * {@see ActivityStatusChange} like every other metric here. Pulling one
+     * into Fazendo does not reset it, on purpose: Intangível is the class
+     * that only pays off when it *lands*, and a counter satisfied by
+     * starting would be silenced forever by an item parked in Fazendo.
+     *
+     * The last conclusion counts even when it happened before the current
+     * baseline cut. A cut redefines the population the SLE is measured over;
+     * it does not un-happen a refactor, and re-anchoring on the cut would
+     * quietly reset the hunger of a board that has been starving for months.
+     *
+     * ## Cold start is maximum hunger, not missing data
+     *
+     * With no Intangível conclusion in the history at all, the clock anchors
+     * on the current {@see BaselineCut} — "nenhuma conclusão desde o corte,
+     * há X dias" — and the alert fires *regardless of the threshold*, even on
+     * a cut made today. "Nunca concluí um Intangível" is the hungriest the
+     * board can be; the threshold measures the age of a real conclusion, and
+     * there is none to age. Gating the cold start on it would buy a
+     * freshly-cut board two silent weeks precisely while it has never
+     * concluded one. The days reported still come from the cut, so the card
+     * says how long the board has been watched — but they decide nothing.
+     *
+     * A board with no cut yet anchors on the first status change it ever
+     * recorded, which is the day it started running, and starves the same
+     * way; a board with no history at all has no clock and stays silent.
+     *
+     * ## An empty pantry does not silence it
+     *
+     * `ready_count` reports how many Intangíveis are sitting in Pronto, and
+     * zero is *not* a reason to suppress the alert — it only changes the
+     * remedy from "puxe um" to "crie ou promova um". Suppressing it would
+     * hand the board a way to stay quiet by never creating this class of
+     * work at all.
+     *
+     * @return array{days: float, days_label: string, threshold: int, starving: bool, anchor: string, last_completed_at: CarbonInterface|null, ready_count: int, label: string, headline: string|null}
+     */
+    public function intangibleStarvation(): array
+    {
+        $threshold = $this->intangibleStarvationDays();
+        $lastCompletedAt = $this->lastIntangibleConclusion();
+
+        // O corte só é consultado na partida a frio, e uma vez só: a página
+        // do Fluxo lê esta métrica junto com todas as outras, e uma segunda
+        // chamada aqui seria mais uma query por render.
+        $cutAt = $lastCompletedAt === null ? $this->lastCut()?->cut_at : null;
+
+        $anchoredAt = $lastCompletedAt ?? $cutAt ?? $this->firstRecordedChange();
+        $anchor = match (true) {
+            $lastCompletedAt !== null => 'completion',
+            $cutAt !== null => 'cut',
+            $anchoredAt !== null => 'board',
+            default => 'none',
+        };
+
+        $days = $anchoredAt === null ? 0.0 : max(0.0, $anchoredAt->floatDiffInDays(now()));
+
+        // O limiar mede a idade de uma conclusão real. Na partida a frio não
+        // há o que medir — a idade exibida é a do corte, que só diz desde
+        // quando o quadro está sendo observado — e o alerta dispara de
+        // qualquer jeito, inclusive num corte feito hoje. Se dependesse do
+        // limiar, um quadro recém-cortado passaria duas semanas em silêncio
+        // justamente enquanto nunca concluiu um Intangível.
+        $coldStart = $anchor === 'cut' || $anchor === 'board';
+        $starving = $coldStart || ($anchor === 'completion' && $days >= $threshold);
+
+        $daysLabel = $this->formatDays($days, roundUp: $starving);
+        $sameDay = $days < 1.0;
+
+        $readyCount = Activity::query()
+            ->leaf()
+            ->where('status', ActivityStatus::Todo)
+            ->where('service_class', ServiceClass::Intangible->value)
+            ->count();
+
+        $label = match ($anchor) {
+            'completion' => "última conclusão há {$daysLabel} dias",
+            'cut' => $sameDay
+                ? 'nenhuma conclusão desde o corte, feito hoje'
+                : "nenhuma conclusão desde o corte, há {$daysLabel} dias",
+            'board' => $sameDay
+                ? 'nenhuma conclusão registrada desde que o quadro começou, hoje'
+                : "nenhuma conclusão registrada, há {$daysLabel} dias",
+            default => 'nenhuma conclusão e nenhum histórico ainda',
+        };
+
+        return [
+            'days' => $days,
+            'days_label' => $daysLabel,
+            'threshold' => $threshold,
+            'starving' => $starving,
+            'anchor' => $anchor,
+            'last_completed_at' => $lastCompletedAt,
+            'ready_count' => $readyCount,
+            'label' => $label,
+            'headline' => $starving
+                ? "Fome de Intangível: {$label}"
+                : null,
+        ];
+    }
+
+    /**
+     * Every Intangível sitting in Pronto, in the order the pull queue would
+     * read them — oldest in Pronto first. The shortcut the ritual's banner
+     * offers, so the remedy is one click from the alert.
+     *
+     * @return Collection<int, Activity>
+     */
+    public function readyIntangibles(): Collection
+    {
+        return Activity::query()
+            ->leaf()
+            ->where('status', ActivityStatus::Todo)
+            ->where('service_class', ServiceClass::Intangible->value)
+            ->with(['project', 'client'])
+            ->get()
+            ->sortBy(fn (Activity $activity): string => (string) $activity->created_at)
+            ->values();
+    }
+
+    /**
+     * When an Intangível last entered Feito, over the whole history.
+     */
+    private function lastIntangibleConclusion(): ?CarbonInterface
+    {
+        $at = ActivityStatusChange::query()
+            ->where('to_status', ActivityStatus::Done->value)
+            ->whereHas('activity', fn ($query) => $query
+                ->where('service_class', ServiceClass::Intangible->value))
+            ->max('changed_at');
+
+        return $at === null ? null : Carbon::parse($at);
+    }
+
+    /**
+     * The first status change the board ever recorded — the day it started
+     * running, and the only honest anchor for a board with no cut yet.
+     */
+    private function firstRecordedChange(): ?CarbonInterface
+    {
+        $at = ActivityStatusChange::query()->min('changed_at');
+
+        return $at === null ? null : Carbon::parse($at);
     }
 
     /**

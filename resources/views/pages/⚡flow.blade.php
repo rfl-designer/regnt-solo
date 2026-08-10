@@ -76,6 +76,7 @@ new class extends Component
         $agingItems = $metrics->agingItems();
         $lastCut = $metrics->lastCut();
         $liveBets = $metrics->liveBets();
+        $hunger = $metrics->intangibleStarvation();
         $clientWaits = $metrics->clientWaitRanking(30);
         $longestWait = $clientWaits->max('minutes') ?: 1;
     @endphp
@@ -117,6 +118,49 @@ new class extends Component
                 segue com a janela de risco configurada e nenhum card entra em alarme.
             </flux:text>
         @endif
+    </div>
+
+    {{-- Fome de Intangível (issue #153): sempre visível, mesmo saciada — a
+         classe que ninguém cobra só sobrevive se estiver sempre à vista. Âmbar
+         ao estourar o limiar, e a despensa vazia não cala o alerta, só troca o
+         remédio. --}}
+    <div
+        @class([
+            'rounded-xl border p-6',
+            'border-amber-500/40 bg-zinc-800/50' => $hunger['starving'],
+            'border-zinc-700 bg-zinc-900/50' => ! $hunger['starving'],
+        ])
+        data-test="intangible-card"
+    >
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <flux:icon name="sparkles" class="size-5 {{ $hunger['starving'] ? 'text-amber-400' : 'text-zinc-500' }}" />
+                <flux:heading size="lg">Intangível</flux:heading>
+            </div>
+
+            @if ($hunger['starving'])
+                <flux:badge size="sm" color="amber" data-test="intangible-starving">Fome de Intangível</flux:badge>
+            @else
+                <flux:badge size="sm" color="zinc" data-test="intangible-fed">Dentro do limiar</flux:badge>
+            @endif
+        </div>
+
+        <div class="mt-3 flex flex-wrap items-baseline gap-3">
+            <span class="text-3xl font-semibold {{ $hunger['starving'] ? 'text-amber-400' : 'text-zinc-300' }}">
+                {{ $hunger['label'] }}
+            </span>
+            <flux:text class="text-sm">limiar de {{ $hunger['threshold'] }} dias</flux:text>
+        </div>
+
+        <flux:text class="mt-3 text-sm">
+            O relógio conta desde a última entrada em Feito de um item Intangível — puxar sem concluir não zera.
+            @if ($hunger['starving'] && $hunger['ready_count'] === 0)
+                Não há nenhum Intangível em Pronto: o remédio é criar ou promover um, no Backlog ou nas Ideias.
+            @elseif ($hunger['starving'])
+                {{ $hunger['ready_count'] }} {{ $hunger['ready_count'] === 1 ? 'Intangível espera' : 'Intangíveis esperam' }}
+                em Pronto — concluir um é o que mata a fome.
+            @endif
+        </flux:text>
     </div>
 
     <div class="grid gap-6 lg:grid-cols-3">

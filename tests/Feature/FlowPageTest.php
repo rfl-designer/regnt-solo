@@ -207,8 +207,11 @@ test('the aging list costs the same whether it holds 3 items or 30', function ()
     // which reads every live bet's history in a single eager load rather
     // than one query per bet. Like every other read here it is a fixed
     // number of queries — which is what the equality above is guarding.
+    // Issue #153 adds the last one: the fome de Intangível asks the history
+    // for the last conclusion of that class, once, regardless of how much is
+    // on the board.
     expect($many)->toBe($few)
-        ->and($few)->toBeLessThanOrEqual(6);
+        ->and($few)->toBeLessThanOrEqual(7);
 });
 
 test('without a usable baseline the page raises no alarm at all', function () {

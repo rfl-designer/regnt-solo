@@ -394,6 +394,21 @@ A classe que ninguém cobra só sobrevive se o quadro cobrar por ela. A fome é 
 - **MCP**: `get-pull-queue` publica `context.intangible_hunger` (`days`, `threshold_days`, `starving`, `anchor`, `last_completed_at`, `ready_in_pronto`, `label`). É contexto do **quadro**, não de uma posição — dispara mesmo com a fila sem Intangível. As instruções do servidor descrevem a fome, e um teste impede a divergência
 - **Testes**: `IntangibleStarvationTest` (métrica, puxada que não zera, limiar de config, partida a frio, corte que não zera, despensa), `IntangibleStarvationUiTest` (card do Fluxo e banner do ritual, incluindo a ausência de dispensa) e `Mcp/PullQueueToolTest` (costura MCP e instruções)
 
+## Painel de políticas explícitas (issue #154)
+
+O método escrito, colado no quadro que ele governa: botão "Políticas" no header do Kanban abrindo um `<flux:modal>` largo — **sem rota própria e sem item de sidebar**. Uma política lida longe do quadro vira documento, e documento é o que isto substitui. O conteúdo é híbrido, e a separação é o ponto:
+
+- **Mecânicas: renderizadas, nunca escritas** (`BoardPolicyService::mechanics()`). Limite de Fazendo (com a contagem atual), Emergência única (com quem segura a vaga), degraus da fila e janela de risco (com a fonte: SLE medida ou config) saem de `config/soloboard.php`, dos enums e do `PullQueueService` **a cada leitura**. Um "o limite é 2" escrito envelhece no dia em que a config muda; um renderizado não tem como. Somente leitura no painel — mudar o método continua sendo ato de config revisado
+- **A ordem de puxar sai de `PullQueueReason::rank()`**, não de uma lista digitada no serviço: um quarto degrau aparece no painel por existir
+- **Três seções humanas versionadas** (`PolicyKey`: `definition_of_done`, `definition_of_ready`, `working_agreements`), enum fixo de propósito — ler "a Definição de Feito mudou em 12/03" contra uma virada nas métricas de fluxo só funciona se o conjunto de perguntas for estável
+- **Tabela `policy_versions` append-only**, no espírito do `ActivityStatusChange`: `key`, `body` (markdown), `note` opcional ("por que mudou"), `created_at`. Vigente = **última linha por chave**, ordenada por `id` e não por `created_at` — duas versões salvas no mesmo segundo (um typo corrigido em seguida) ainda têm ordem inequívoca, e "vigente" não pode ser cara ou coroa. `PolicyVersion::record()` é a única escrita suportada e **sempre insere**; não existe update. A nota é opcional porque a v1 não tem versão anterior a explicar, e uma nota obrigatória só seria preenchida com ruído — nota em branco vira `null`
+- **O editor não pré-preenche a nota**: ela explica *esta* mudança, não a anterior
+- **Acordos de resposta em leitura**, lidos de `Client.response_agreement` e nunca copiados para cá — duplicar é como o quadro acabaria prometendo dois tempos de resposta diferentes. Ponto na cor do cliente + nome + texto, link "Editar em Clientes", e cutucada discreta "N clientes ativos sem acordo — definir"
+- **Seeder `PolicyVersionSeeder`**: grava a v1 das três seções com a nota **"Padrão inicial do método"**, e roda **em produção também** — painel vazio não é ponto de partida neutro, é quadro sem método escrito. Idempotente por chave: uma seção que já tem qualquer versão é deixada em paz, para que um re-seed nunca enterre o texto do usuário sob o padrão
+- **Sem acoplamento com a baseline**: salvar uma versão não dispara nem sugere corte. O `note` documenta; o corte segue gesto manual na página Fluxo
+- **MCP `get-board-policies`**: as mesmas três partes (`mechanics`, `sections`, `response_agreements` + `clients_without_agreement`). **Somente leitura nas três**, inclusive nas seções escritas: versionar é ato humano deliberado com nota, e um agente inserindo versões caladas transformaria o histórico em ruído exatamente onde está o valor dele. `body: null` diz "nunca escrita" — não string vazia. As instruções do servidor descrevem o painel, e um teste impede a divergência
+- **Testes**: `BoardPoliciesTest` (mecânicas saindo da config, append-only, seções independentes, seeder e re-seed, acordos), `BoardPoliciesPanelTest` (botão no Kanban, as três partes, editor que insere, histórico, cutucada) e `Mcp/BoardPoliciesToolTest` (costura MCP e instruções)
+
 ## Keyboard Shortcuts
 
 | Atalho   | Ação                        |
@@ -447,6 +462,7 @@ O SoloBoard expõe um MCP Server para integração com AI clients (Claude Code, 
   - `stop-timer` — Para timer com notas opcionais
   - `timer-status` — Mostra timer ativo (task ou feature)
   - `get-pull-queue` — Fila de puxar (Pronto em ordem, com o motivo de cada posição)
+  - `get-board-policies` — Políticas do quadro: mecânicas computadas, textos vigentes das três seções e acordos de resposta (leitura)
   - `get-ritual-status` — Estado do ritual matinal de hoje + snapshot do quadro (leitura)
   - `get-update-queue` — Fila de updates semanais por urgência + contagem de devidos (leitura)
   - `generate-client-update` — Gera e persiste o rascunho do update (mesma janela e template da UI; `force` para descartar edição manual)

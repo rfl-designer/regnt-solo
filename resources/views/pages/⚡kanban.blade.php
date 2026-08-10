@@ -444,6 +444,10 @@ new class extends Component
                 Atrasadas
             </flux:button>
 
+            {{-- The policy panel (issue #154): the method stays glued to
+                 the board it governs — no route, no sidebar item. --}}
+            <livewire:board-policies />
+
             {{-- Color legend --}}
             <x-color-legend />
         </div>

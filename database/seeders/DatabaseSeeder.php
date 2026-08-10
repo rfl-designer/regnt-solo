@@ -35,6 +35,10 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make(config('solo.user_password', 'password')),
         ]);
 
+        // As políticas escritas são método, não dado de demonstração:
+        // rodam também em produção (issue #154).
+        $this->call(PolicyVersionSeeder::class);
+
         // se APP_ENV=production não cria entidades
         if (config('app.env') !== 'production') {
             $projects = $this->createProjects();

@@ -9,6 +9,7 @@ use App\Models\MorningRitual;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\ClientUpdateService;
+use Illuminate\Support\Facades\Http;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 
@@ -333,6 +334,189 @@ test('escolher um cliente carrega o rascunho dele no editor', function () {
         ->call('select', 'acme')
         ->assertSet('client', 'acme')
         ->assertSet('content', 'Rascunho da Acme');
+});
+
+/**
+ * Refinar com AI (issue #151): a AI é revisora de texto do rascunho, atrás da
+ * feature flag, e nunca escreve direto no editor.
+ */
+function updatesPageAiEnabled(): void
+{
+    config([
+        'soloboard.ai_enabled' => true,
+        'soloboard.ai_api_key' => 'test-key',
+        'soloboard.ai_model' => 'claude-sonnet-4-20250514',
+    ]);
+}
+
+test('sem a flag de AI a página não oferece refinar, e o fluxo determinístico segue inteiro', function () {
+    config(['soloboard.ai_enabled' => false, 'soloboard.ai_api_key' => 'test-key']);
+
+    [$client] = updatesPageClient(['slug' => 'acme']);
+    app(ClientUpdateService::class)->generate($client);
+
+    Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->assertDontSee('Refinar com AI')
+        ->assertDontSeeHtml('data-test="refine-update-with-ai"')
+        // A barra determinística continua completa: regerar, copiar, enviar.
+        ->assertSeeHtml('data-test="regenerate-update"')
+        ->assertSeeHtml('data-test="copy-update"')
+        ->assertSeeHtml('data-test="mark-update-sent"')
+        ->assertSeeHtml('data-test="update-editor"')
+        // Chamado direto, sem flag, o método não faz nada.
+        ->call('refineWithAi')
+        ->assertSet('showAiRefinement', false);
+
+    Http::assertNothingSent();
+});
+
+test('sem chave configurada o botão de refinar também não aparece', function () {
+    config(['soloboard.ai_enabled' => true, 'soloboard.ai_api_key' => null]);
+
+    [$client] = updatesPageClient(['slug' => 'acme']);
+    app(ClientUpdateService::class)->generate($client);
+
+    Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->assertDontSeeHtml('data-test="refine-update-with-ai"');
+});
+
+test('com a flag ligada o botão aparece sobre um rascunho aberto', function () {
+    updatesPageAiEnabled();
+
+    [$client] = updatesPageClient(['slug' => 'acme']);
+    app(ClientUpdateService::class)->generate($client);
+
+    Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->assertSee('Refinar com AI')
+        ->assertSeeHtml('data-test="refine-update-with-ai"');
+});
+
+test('refinar abre o preview e não toca no editor até o Aplicar', function () {
+    updatesPageAiEnabled();
+
+    [$client] = updatesPageClient(['slug' => 'acme']);
+    app(ClientUpdateService::class)->generate($client);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'content' => [['type' => 'text', 'text' => 'Texto refinado pela AI.']],
+        ]),
+    ]);
+
+    $component = Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->set('content', 'Texto escrito na mão.')
+        ->call('refineWithAi')
+        ->assertSet('showAiRefinement', true)
+        ->assertSet('aiRefinement', 'Texto refinado pela AI.')
+        // O editor continua com o que o humano escreveu.
+        ->assertSet('content', 'Texto escrito na mão.')
+        ->assertSee('Texto refinado pela AI.');
+
+    expect($client->fresh()->draftUpdate()->content)->toBe('Texto escrito na mão.');
+
+    $component->call('applyAiRefinement')
+        ->assertSet('content', 'Texto refinado pela AI.')
+        ->assertSet('showAiRefinement', false)
+        ->assertSet('aiRefinement', '');
+
+    // Aplicar substitui o conteúdo do editor e o autosave segue: já está gravado.
+    expect($client->fresh()->draftUpdate()->content)->toBe('Texto refinado pela AI.');
+
+    Http::assertSentCount(1);
+});
+
+test('descartar o refinamento não altera nada', function () {
+    updatesPageAiEnabled();
+
+    [$client] = updatesPageClient(['slug' => 'acme']);
+    app(ClientUpdateService::class)->generate($client);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'content' => [['type' => 'text', 'text' => 'Texto refinado pela AI.']],
+        ]),
+    ]);
+
+    Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->set('content', 'Texto escrito na mão.')
+        ->call('refineWithAi')
+        ->assertSet('showAiRefinement', true)
+        ->call('discardAiRefinement')
+        ->assertSet('showAiRefinement', false)
+        ->assertSet('aiRefinement', '')
+        ->assertSet('content', 'Texto escrito na mão.');
+
+    expect($client->fresh()->draftUpdate()->content)->toBe('Texto escrito na mão.');
+});
+
+test('erro da API degrada com toast amigável e o rascunho fica intacto', function () {
+    updatesPageAiEnabled();
+
+    [$client] = updatesPageClient(['slug' => 'acme']);
+    app(ClientUpdateService::class)->generate($client);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response(['error' => 'server_error'], 500),
+    ]);
+
+    Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->set('content', 'Texto escrito na mão.')
+        ->call('refineWithAi')
+        ->assertSuccessful()
+        ->assertSet('showAiRefinement', false)
+        ->assertSet('aiRefinement', '')
+        ->assertSet('content', 'Texto escrito na mão.')
+        ->assertDispatched('toast-show', function (string $name, array $params): bool {
+            return ($params['slots']['heading'] ?? null) === 'Não foi possível refinar';
+        });
+
+    expect($client->fresh()->draftUpdate()->content)->toBe('Texto escrito na mão.');
+});
+
+test('refinar respeita o limite de uma chamada por minuto', function () {
+    updatesPageAiEnabled();
+
+    [$client] = updatesPageClient(['slug' => 'acme']);
+    app(ClientUpdateService::class)->generate($client);
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'content' => [['type' => 'text', 'text' => 'Texto refinado pela AI.']],
+        ]),
+    ]);
+
+    Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->call('refineWithAi')
+        ->assertSet('showAiRefinement', true);
+
+    Http::assertSentCount(1);
+
+    Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->call('refineWithAi')
+        ->assertSet('showAiRefinement', false)
+        ->assertDispatched('toast-show', function (string $name, array $params): bool {
+            return ($params['slots']['heading'] ?? null) === 'Aguarde';
+        });
+
+    Http::assertSentCount(1);
+
+    // Passado o minuto, a porta reabre.
+    $this->travel(61)->seconds();
+
+    Livewire::withQueryParams(['client' => 'acme'])
+        ->test('pages::updates')
+        ->call('refineWithAi')
+        ->assertSet('showAiRefinement', true);
+
+    Http::assertSentCount(2);
 });
 
 test('a página de clientes leva para o update do cliente', function () {

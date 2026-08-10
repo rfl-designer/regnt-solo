@@ -810,10 +810,15 @@ class FlowMetricsService
         $threshold = $this->intangibleStarvationDays();
         $lastCompletedAt = $this->lastIntangibleConclusion();
 
-        $anchoredAt = $lastCompletedAt ?? $this->lastCut()?->cut_at ?? $this->firstRecordedChange();
+        // O corte só é consultado na partida a frio, e uma vez só: a página
+        // do Fluxo lê esta métrica junto com todas as outras, e uma segunda
+        // chamada aqui seria mais uma query por render.
+        $cutAt = $lastCompletedAt === null ? $this->lastCut()?->cut_at : null;
+
+        $anchoredAt = $lastCompletedAt ?? $cutAt ?? $this->firstRecordedChange();
         $anchor = match (true) {
             $lastCompletedAt !== null => 'completion',
-            $this->lastCut() !== null => 'cut',
+            $cutAt !== null => 'cut',
             $anchoredAt !== null => 'board',
             default => 'none',
         };

@@ -408,6 +408,33 @@ new class extends Component
         return app(PullQueueService::class)->queue();
     }
 
+    /**
+     * A fome de Intangível deste passo (issue #153).
+     *
+     * O banner é um radar passivo: aparece só quando a fome estourou o
+     * limiar e não tem botão de dispensar — a fome só passa concluindo um
+     * Intangível, e um "ok, entendi" só ensinaria a fechar o aviso.
+     *
+     * @return array{days: float, days_label: string, threshold: int, starving: bool, anchor: string, last_completed_at: \Carbon\CarbonInterface|null, ready_count: int, label: string, headline: string|null}
+     */
+    #[Computed]
+    public function intangibleHunger(): array
+    {
+        return $this->flow->intangibleStarvation();
+    }
+
+    /**
+     * O atalho do banner: os Intangíveis que já estão em Pronto, prontos
+     * para serem puxados daqui mesmo, sem caçá-los na fila.
+     *
+     * @return \Illuminate\Support\Collection<int, Activity>
+     */
+    #[Computed]
+    public function hungerShortcut(): \Illuminate\Support\Collection
+    {
+        return $this->flow->readyIntangibles();
+    }
+
     public function wipLimit(): int
     {
         return (int) config('soloboard.wip_limit_doing', 2);
@@ -454,7 +481,10 @@ new class extends Component
             return;
         }
 
-        unset($this->pullQueue, $this->doingItems);
+        // A fome não muda ao puxar — só concluir a mata —, mas a despensa
+        // sim: o Intangível que acabou de sair de Pronto não pode continuar
+        // no atalho do banner.
+        unset($this->pullQueue, $this->doingItems, $this->intangibleHunger, $this->hungerShortcut);
         $this->dispatch('task-updated');
 
         Flux::toast(variant: 'success', heading: 'Puxada para Fazendo', text: $activity->title);
@@ -750,6 +780,77 @@ new class extends Component
 
         {{-- Passo 5 — Puxar até encher o WIP --}}
         @if ($step === 5)
+            {{-- Fome de Intangível (issue #153): âmbar, sem dispensa, e com o
+                 atalho para o remédio. Sem nada em Pronto o alerta continua —
+                 só muda de "puxe um" para "crie ou promova um". --}}
+            @if ($this->intangibleHunger['starving'])
+                @php $hunger = $this->intangibleHunger; @endphp
+
+                <div
+                    class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4"
+                    data-test="ritual-intangible-banner"
+                >
+                    <div class="flex items-start gap-3">
+                        <flux:icon name="sparkles" class="mt-0.5 size-5 shrink-0 text-amber-400" />
+                        <div class="flex min-w-0 flex-1 flex-col gap-2">
+                            <span class="text-sm font-medium text-amber-300">{{ $hunger['headline'] }}</span>
+
+                            @if ($this->hungerShortcut->isEmpty())
+                                <flux:text class="text-sm text-zinc-400" data-test="ritual-intangible-empty">
+                                    E não há nenhum Intangível em Pronto. O remédio não é puxar: é criar ou promover
+                                    trabalho dessa classe.
+                                </flux:text>
+
+                                <div class="flex flex-wrap gap-2">
+                                    <flux:button
+                                        size="xs"
+                                        variant="ghost"
+                                        icon="rectangle-stack"
+                                        :href="route('kanban')"
+                                        wire:navigate
+                                        data-test="ritual-intangible-backlog"
+                                    >Ver Backlog</flux:button>
+                                    <flux:button
+                                        size="xs"
+                                        variant="ghost"
+                                        icon="light-bulb"
+                                        :href="route('ideas')"
+                                        wire:navigate
+                                        data-test="ritual-intangible-ideas"
+                                    >Ver Ideias</flux:button>
+                                </div>
+                            @else
+                                <flux:text class="text-sm text-zinc-400">
+                                    Concluir um Intangível é o que mata a fome. Estes já estão em Pronto:
+                                </flux:text>
+
+                                <div class="flex flex-col gap-1.5">
+                                    @foreach ($this->hungerShortcut as $intangible)
+                                        <div
+                                            wire:key="hunger-{{ $intangible->id }}"
+                                            class="flex items-center gap-3"
+                                            data-test="ritual-intangible-shortcut"
+                                        >
+                                            <span class="min-w-0 flex-1 truncate text-sm text-zinc-200">
+                                                {{ $intangible->title }}
+                                            </span>
+                                            <flux:button
+                                                wire:click="pullItem({{ $intangible->id }})"
+                                                size="xs"
+                                                variant="primary"
+                                                icon="arrow-right-circle"
+                                            >
+                                                Puxar
+                                            </flux:button>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             <flux:text class="text-sm text-zinc-400">
                 A fila diz a ordem e o motivo. Puxar é decisão sua — qualquer card pode ser puxado.
             </flux:text>

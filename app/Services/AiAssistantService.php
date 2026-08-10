@@ -65,6 +65,32 @@ class AiAssistantService
     }
 
     /**
+     * Refine the wording of a client update draft without touching its facts.
+     *
+     * Here the AI is a copy editor, never a writer: it may rework tone,
+     * fluency, concision and the transitions between sentences, and nothing
+     * else. Adding, removing or altering an item, a state, a date or a
+     * commitment is out of contract — and so is summarising or reordering the
+     * blocks the deterministic generator produced.
+     *
+     * Returns an empty string whenever the refinement cannot be trusted — AI
+     * off, empty draft, API failure or an empty answer — so the caller simply
+     * keeps the draft it already had.
+     */
+    public function refineUpdate(string $draft): string
+    {
+        if (! $this->isEnabled() || trim($draft) === '') {
+            return '';
+        }
+
+        $prompts = $this->buildRefineUpdatePrompt($draft);
+
+        $response = $this->callAnthropic($prompts['system'], $prompts['user']);
+
+        return $this->parseTextResponse($response);
+    }
+
+    /**
      * Call the Anthropic API with the given prompts.
      *
      * @return array<string, mixed>
@@ -148,6 +174,50 @@ class AiAssistantService
         $userMessage = 'Here is my weekly productivity data: '.json_encode($weeklyData, JSON_THROW_ON_ERROR)."\n\nDetect patterns and provide actionable insights. Return only a JSON array.";
 
         return ['system' => $systemPrompt, 'user' => $userMessage];
+    }
+
+    /**
+     * Build system and user prompts for refining a client update draft.
+     *
+     * The system prompt is deliberately not built on top of
+     * {@see BASE_SYSTEM_PROMPT}: this is the one call that must answer with
+     * prose instead of JSON, and the coach persona would invite exactly the
+     * suggestions the copy editor contract forbids.
+     *
+     * @return array{system: string, user: string}
+     */
+    private function buildRefineUpdatePrompt(string $draft): array
+    {
+        $systemPrompt = <<<'PROMPT'
+            You are a copy editor for the weekly client update of a solo developer, written in Brazilian Portuguese. You are not a writer: you never decide what the update says, only how it reads.
+
+            You may only improve tone, fluency, concision and the transitions between sentences.
+
+            Hard rules — breaking any of them makes your answer useless:
+            - Never add, remove or alter any item, state, date, number, name or commitment. Every fact in the draft must survive untouched, and no fact may appear that was not already there.
+            - Never summarise, merge or drop content, and never reorder the blocks, their headings or the items inside them.
+            - Keep the structure and the Markdown of the draft, which has to degrade well in any channel (WhatsApp, e-mail, Slack): short paragraphs and simple lists, no tables, no headings the draft does not already use.
+            - Keep the tone Brazilian Portuguese, professional and close — the voice of someone who works with the client, neither corporate nor casual.
+            - The draft may carry manual edits by the developer. Treat them like the rest: polish the wording, keep the meaning.
+
+            Answer with the refined update text only. No preamble, no explanation, no code fences.
+            PROMPT;
+
+        $userMessage = "Refine este rascunho de update semanal:\n\n".$draft;
+
+        return ['system' => $systemPrompt, 'user' => $userMessage];
+    }
+
+    /**
+     * Extract the plain text of the Anthropic API response content.
+     *
+     * @param  array<string, mixed>  $response
+     */
+    private function parseTextResponse(array $response): string
+    {
+        $content = $response['content'][0]['text'] ?? '';
+
+        return is_string($content) ? trim($content) : '';
     }
 
     /**

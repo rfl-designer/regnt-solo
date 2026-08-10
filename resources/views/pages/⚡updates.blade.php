@@ -2,11 +2,13 @@
 
 use App\Models\Client;
 use App\Models\ClientUpdate;
+use App\Services\AiAssistantService;
 use App\Services\ClientUpdateQueueEntry;
 use App\Services\ClientUpdateService;
 use App\Exceptions\UpdateAlreadySentException;
 use App\Exceptions\UpdateDraftHasManualEditsException;
 use Flux\Flux;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
@@ -54,6 +56,17 @@ new class extends Component
      */
     #[Locked]
     public ?int $regenerateConfirmedFor = null;
+
+    /**
+     * O texto que a AI devolveu, esperando Aplicar ou Descartar.
+     *
+     * `#[Locked]` porque é ele que "Aplicar" joga por cima do editor: o
+     * preview é o que a API respondeu, não o que o browser mandar.
+     */
+    #[Locked]
+    public string $aiRefinement = '';
+
+    public bool $showAiRefinement = false;
 
     /**
      * Quantos envios o histórico mostra. Cresce só por `loadMoreHistory()` —
@@ -263,6 +276,98 @@ new class extends Component
     }
 
     /**
+     * A AI é opcional: sem a flag e sem chave, a página inteira é a mesma —
+     * o fluxo determinístico não depende dela em nenhum ponto.
+     */
+    public function isAiEnabled(): bool
+    {
+        return app(AiAssistantService::class)->isEnabled();
+    }
+
+    /**
+     * Refina o rascunho com a AI — e não escreve nada no editor.
+     *
+     * O resultado vai para o preview, que é onde o humano decide. É a mesma
+     * separação de "Copiar" e "Marcar como enviado": a máquina propõe o
+     * texto, quem troca o rascunho é o clique em Aplicar.
+     */
+    public function refineWithAi(): void
+    {
+        if (! $this->isAiEnabled() || $this->draft === null) {
+            return;
+        }
+
+        $cacheKey = 'ai_refine_update_'.(auth()->id() ?? 'guest');
+
+        if (Cache::has($cacheKey)) {
+            Flux::toast(variant: 'warning', heading: 'Aguarde', text: 'Aguarde 1 minuto antes de pedir outro refinamento.');
+
+            return;
+        }
+
+        // O texto na tela pode estar à frente do banco (o blur ainda não
+        // aconteceu), e é ele — com as edições à mão — que a AI revisa.
+        $this->persistDraft();
+
+        if (trim($this->content) === '') {
+            return;
+        }
+
+        try {
+            $refined = app(AiAssistantService::class)->refineUpdate($this->content);
+
+            Cache::put($cacheKey, true, now()->addMinute());
+        } catch (\Throwable) {
+            $refined = '';
+        }
+
+        if ($refined === '') {
+            Flux::toast(
+                variant: 'danger',
+                heading: 'Não foi possível refinar',
+                text: 'O rascunho continua exatamente como estava. Tente de novo em instantes.',
+            );
+
+            return;
+        }
+
+        $this->aiRefinement = $refined;
+        $this->showAiRefinement = true;
+    }
+
+    /**
+     * Troca o rascunho pelo texto refinado. O autosave segue daqui: o
+     * conteúdo é gravado na hora, como qualquer edição.
+     */
+    public function applyAiRefinement(): void
+    {
+        if ($this->aiRefinement === '' || $this->draft === null) {
+            return;
+        }
+
+        $this->content = $this->aiRefinement;
+        $this->persistDraft();
+
+        $this->dismissAiRefinement();
+
+        Flux::toast(variant: 'success', heading: 'Refinamento aplicado', text: 'O editor já está com o texto novo.');
+    }
+
+    /**
+     * Descartar não toca em nada — o preview some e o rascunho fica.
+     */
+    public function discardAiRefinement(): void
+    {
+        $this->dismissAiRefinement();
+    }
+
+    private function dismissAiRefinement(): void
+    {
+        $this->aiRefinement = '';
+        $this->showAiRefinement = false;
+    }
+
+    /**
      * Autosave do editor.
      */
     public function updatedContent(): void
@@ -294,6 +399,10 @@ new class extends Component
         $this->regenerateConfirmedFor = null;
         $this->historyLimit = 12;
         $this->content = $this->draft?->content ?? '';
+
+        // Um preview pertence ao rascunho que o gerou: trocar de cliente o
+        // descarta em vez de oferecê-lo por engano no rascunho do outro.
+        $this->dismissAiRefinement();
     }
 
     private function refreshClientState(): void
@@ -449,6 +558,24 @@ new class extends Component
 
                         <div class="flex flex-wrap items-center gap-2">
                             @if ($this->draft)
+                                {{-- A AI entra aqui como revisora de texto, e
+                                     só com a flag ligada: sem ela, esta barra
+                                     é a mesma de antes e o fluxo
+                                     determinístico continua inteiro. --}}
+                                @if ($this->isAiEnabled())
+                                    <flux:button
+                                        wire:click="refineWithAi"
+                                        wire:loading.attr="disabled"
+                                        wire:target="refineWithAi"
+                                        size="sm"
+                                        variant="ghost"
+                                        icon="sparkles"
+                                        data-test="refine-update-with-ai"
+                                    >
+                                        <span wire:loading.remove wire:target="refineWithAi">Refinar com AI</span>
+                                        <span wire:loading wire:target="refineWithAi">Refinando...</span>
+                                    </flux:button>
+                                @endif
                                 <flux:button wire:click="requestRegenerate" size="sm" variant="ghost" icon="arrow-path" data-test="regenerate-update">
                                     Regenerar
                                 </flux:button>
@@ -542,6 +669,34 @@ new class extends Component
             @endif
         </div>
     </div>
+
+    {{-- Preview do refinamento: a AI propõe, o editor só muda no Aplicar --}}
+    @if ($this->isAiEnabled())
+        <flux:modal wire:model.self="showAiRefinement" class="md:w-[38rem]">
+            <div class="space-y-4">
+                <div>
+                    <flux:heading size="lg">Refinado com AI</flux:heading>
+                    <flux:text class="mt-1">
+                        Mesmos itens, mesmas datas, mesma ordem — mudou só o jeito de dizer. Nada foi escrito no editor ainda.
+                    </flux:text>
+                </div>
+
+                <pre
+                    class="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg border border-zinc-700 bg-zinc-800 p-3 font-mono text-xs text-zinc-300"
+                    data-test="ai-refinement-preview"
+                >{{ $aiRefinement }}</pre>
+
+                <div class="flex justify-end gap-2">
+                    <flux:button variant="ghost" wire:click="discardAiRefinement" data-test="discard-ai-refinement">
+                        Descartar
+                    </flux:button>
+                    <flux:button variant="primary" wire:click="applyAiRefinement" data-test="apply-ai-refinement">
+                        Aplicar
+                    </flux:button>
+                </div>
+            </div>
+        </flux:modal>
+    @endif
 
     {{-- Confirmação de descarte: só aparece quando há edição manual a perder --}}
     <flux:modal wire:model.self="showRegenerateConfirm" class="md:w-96">

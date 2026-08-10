@@ -379,6 +379,21 @@ O apetite escolhido no shaping vira orçamento vigiado. **Nada de novo é gravad
 - **Kanban intocado**: nenhum alerta de apetite nos cards. O estouro é assunto da aposta, não da fatia
 - **Testes**: `AppetiteGuardTest` (janela, parada na validação, reabertura, limiares, excedente, sem apetite, ordenação das apostas), `AppetiteGuardUiTest` (modal e página Fluxo), `ShapingPageTest` (revisão de escopo) e `Mcp/EpicToolsTest` + `Mcp/ProjectContextAppetiteTest` (costura MCP)
 
+## Fome de Intangível (issue #153)
+
+A classe que ninguém cobra só sobrevive se o quadro cobrar por ela. A fome é medida, não configurada por sensação, e **nada é gravado**: sai do `activity_status_changes` como todo o resto do Fluxo Solo.
+
+- **A métrica é conclusão, não puxada**: dias desde a **última entrada em Feito** de um item classe `intangible`. Puxar sem concluir **não zera** — Intangível só paga quando termina, e um contador satisfeito por começar seria calado para sempre por um item parado em Fazendo
+- **Limiar em config**: `soloboard.intangible_starvation_days`, default **14**, ao lado do WIP limit, da janela de risco e dos dials da SLE. Sem UI para editar, pelo mesmo motivo deles
+- **Serviço `FlowMetricsService::intangibleStarvation()`**: devolve `days`, `days_label`, `threshold`, `starving`, `anchor`, `last_completed_at`, `ready_count`, `label` e `headline`. `readyIntangibles()` é o atalho — os Intangíveis em Pronto, mais velhos primeiro
+- **Partida a frio ancora no corte**: sem nenhuma conclusão Intangível no histórico, o relógio conta do `BaselineCut` vigente (`anchor = cut`) e o alerta **dispara** — "nunca concluí um Intangível" é a fome máxima, não ausência de dado. Sem corte nenhum, ancora na primeira mudança de status já registrada (`board`); um quadro sem histórico algum não tem relógio e fica calado (`none`)
+- **Um corte não zera a fome**: uma conclusão anterior ao corte continua contando (`anchor = completion`). O corte redefine a população da SLE, não desfaz o refactor — reancorar no corte esconderia meses de fome
+- **Despensa vazia não cala**: `ready_count = 0` não suprime o alerta, só troca o remédio de "puxe um" para "crie ou promova um". Suprimir daria ao quadro um jeito de ficar quieto nunca criando trabalho dessa classe
+- **Página Fluxo**: card "Intangível" **sempre visível** (mesmo saciado, com badge "Dentro do limiar"), âmbar ao estourar. Custo: uma leitura do histórico, fixa — o teto do guard de queries da página subiu de 6 para 7
+- **Ritual matinal, passo 5**: banner âmbar **sem botão de dispensar** — a fome só passa concluindo. Com Intangíveis em Pronto, cada um vem com "Puxar" ali mesmo (`pullItem`); sem nenhum, a mensagem muda para "E não há nenhum Intangível em Pronto" e os atalhos apontam para Backlog e Ideias
+- **MCP**: `get-pull-queue` publica `context.intangible_hunger` (`days`, `threshold_days`, `starving`, `anchor`, `last_completed_at`, `ready_in_pronto`, `label`). É contexto do **quadro**, não de uma posição — dispara mesmo com a fila sem Intangível. As instruções do servidor descrevem a fome, e um teste impede a divergência
+- **Testes**: `IntangibleStarvationTest` (métrica, puxada que não zera, limiar de config, partida a frio, corte que não zera, despensa), `IntangibleStarvationUiTest` (card do Fluxo e banner do ritual, incluindo a ausência de dispensa) e `Mcp/PullQueueToolTest` (costura MCP e instruções)
+
 ## Keyboard Shortcuts
 
 | Atalho   | Ação                        |

@@ -333,7 +333,7 @@ new class extends Component
 
                             @if ($appetite['level'] === 'exceeded')
                                 <p class="mt-2 text-xs text-red-300" data-test="bet-banner-{{ $epic->id }}">
-                                    Apetite estourado ({{ $appetite['over_label'] }}) — corte escopo ou mate a aposta.
+                                    {{ $appetite['headline'] }} — corte escopo ou mate a aposta.
                                 </p>
                             @endif
                         @endif

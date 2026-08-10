@@ -159,7 +159,31 @@ test('o excedente é explícito quando o apetite estoura', function () {
     expect($consumption['level'])->toBe('exceeded')
         ->and($consumption['over_days'])->toEqualWithDelta(3.0, 0.01)
         ->and($consumption['over_label'])->toBe('+3d')
+        ->and($consumption['headline'])->toBe('Apetite estourado (+3d)')
         ->and($consumption['label'])->toBe('13 de 10 dias');
+});
+
+test('no apetite exato o vermelho fica, mas não há excedente para anunciar', function () {
+    $epic = liveBet(appetiteDays: 10, days: 10);
+
+    $consumption = appetiteFlow()->appetiteConsumption($epic);
+
+    // O orçamento acabou — a cor continua a mesma —, mas "+0d" seria anunciar
+    // um estouro que não existe.
+    expect($consumption['level'])->toBe('exceeded')
+        ->and($consumption['over_days'])->toEqualWithDelta(0.0, 0.001)
+        ->and($consumption['over_label'])->toBeNull()
+        ->and($consumption['headline'])->toBe('Apetite no limite')
+        ->and($consumption['label'])->toBe('10 de 10 dias');
+});
+
+test('o menor excedente possível já aparece como excedente', function () {
+    $epic = liveBet(appetiteDays: 10, days: 10.02);
+
+    $consumption = appetiteFlow()->appetiteConsumption($epic);
+
+    expect($consumption['over_label'])->toBe('+0,1d')
+        ->and($consumption['headline'])->toBe('Apetite estourado (+0,1d)');
 });
 
 test('sem apetite a guarda fica silenciosa', function () {

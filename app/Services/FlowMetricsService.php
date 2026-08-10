@@ -636,7 +636,7 @@ class FlowMetricsService
      * shows it without a bar and without an alarm. Comparing against a budget
      * nobody chose would be inventing the budget.
      *
-     * @return array{appetite_days: int|null, consumed_days: float, ratio: float|null, over_days: float|null, over_label: string|null, level: string, open: bool, window_start: CarbonInterface, window_end: CarbonInterface, label: string}|null
+     * @return array{appetite_days: int|null, consumed_days: float, ratio: float|null, over_days: float|null, over_label: string|null, headline: string|null, level: string, open: bool, window_start: CarbonInterface, window_end: CarbonInterface, label: string}|null
      */
     public function appetiteConsumption(Activity $epic): ?array
     {
@@ -684,12 +684,26 @@ class FlowMetricsService
 
         $over = max(0.0, $consumed - $appetite);
 
+        // Exatamente no limite não há excedente para mostrar: `+0d` seria um
+        // estouro que não existe. O vermelho continua nos 100% — o orçamento
+        // acabou —, mas a frase muda de "estourado" para "no limite". Qualquer
+        // excedente positivo, por menor que seja, arredonda para cima e vira
+        // pelo menos `+0,1d`, então este ramo só pega o zero exato.
+        $overLabel = ($level === 'exceeded' && $over > 0)
+            ? '+'.$this->formatDays($over, roundUp: true).'d'
+            : null;
+
         return [
             'appetite_days' => $appetite,
             'consumed_days' => $consumed,
             'ratio' => $ratio,
             'over_days' => $over,
-            'over_label' => $level === 'exceeded' ? '+'.$this->formatDays($over, roundUp: true).'d' : null,
+            'over_label' => $overLabel,
+            'headline' => match (true) {
+                $level !== 'exceeded' => null,
+                $overLabel !== null => "Apetite estourado ({$overLabel})",
+                default => 'Apetite no limite',
+            },
             'level' => $level,
             'open' => $open,
             'window_start' => $start,
@@ -715,7 +729,7 @@ class FlowMetricsService
      * they have nothing to be ranked by, and putting them anywhere in the
      * middle would suggest they do.
      *
-     * @return Collection<int, array{epic: Activity, consumption: array{appetite_days: int|null, consumed_days: float, ratio: float|null, over_days: float|null, over_label: string|null, level: string, open: bool, window_start: CarbonInterface, window_end: CarbonInterface, label: string}}>
+     * @return Collection<int, array{epic: Activity, consumption: array{appetite_days: int|null, consumed_days: float, ratio: float|null, over_days: float|null, over_label: string|null, headline: string|null, level: string, open: bool, window_start: CarbonInterface, window_end: CarbonInterface, label: string}}>
      */
     public function liveBets(): Collection
     {

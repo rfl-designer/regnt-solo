@@ -89,6 +89,24 @@ test('o modal avisa o estouro com o excedente e o atalho para o shaping', functi
         ->assertSee(route('epic-shaping', $epic->id));
 });
 
+test('no apetite exato o modal alerta sem inventar excedente', function () {
+    $epic = uiBet(appetiteDays: 7, days: 7);
+
+    Livewire::test('feature-modal')
+        ->call('open', $epic->id)
+        ->assertSee('Apetite no limite — corte escopo ou mate a aposta', escape: false)
+        ->assertDontSee('(+0d)')
+        ->assertSee('Revisar escopo');
+});
+
+test('no apetite exato a página Fluxo diz o mesmo', function () {
+    uiBet(appetiteDays: 7, days: 7, attributes: ['title' => 'Aposta no fio']);
+
+    Livewire::test('pages::flow')
+        ->assertSee('Apetite no limite — corte escopo ou mate a aposta', escape: false)
+        ->assertDontSee('(+0d)');
+});
+
 test('sem apetite o modal não mostra barra nem alarme', function () {
     $epic = uiBet(appetiteDays: null, days: 40);
 

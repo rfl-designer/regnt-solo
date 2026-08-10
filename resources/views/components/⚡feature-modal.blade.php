@@ -174,7 +174,7 @@ new class extends Component
      * daqui, a lista da página Fluxo e o que o MCP publica são a mesma conta,
      * então não podem discordar.
      *
-     * @return array{appetite_days: int|null, consumed_days: float, ratio: float|null, over_days: float|null, over_label: string|null, level: string, open: bool, window_start: \Carbon\CarbonInterface, window_end: \Carbon\CarbonInterface, label: string}|null
+     * @return array{appetite_days: int|null, consumed_days: float, ratio: float|null, over_days: float|null, over_label: string|null, headline: string|null, level: string, open: bool, window_start: \Carbon\CarbonInterface, window_end: \Carbon\CarbonInterface, label: string}|null
      */
     #[Computed]
     public function appetiteConsumption(): ?array
@@ -678,7 +678,7 @@ new class extends Component
                                     <div class="flex items-center gap-2">
                                         <flux:icon name="exclamation-triangle" class="size-4 shrink-0 text-red-400" />
                                         <span class="text-sm text-red-200">
-                                            Apetite estourado ({{ $appetite['over_label'] }}) — corte escopo ou mate a aposta.
+                                            {{ $appetite['headline'] }} — corte escopo ou mate a aposta.
                                         </span>
                                     </div>
                                     <flux:button

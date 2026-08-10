@@ -363,6 +363,21 @@ Botão "✨ Refinar com AI" no editor do rascunho, atrás da mesma feature flag 
 - **Rate limit de 1 chamada/minuto** via `Cache::add()` **antes** da chamada — `has` + `put` deixa dois cliques simultâneos passarem juntos. O preço explícito: uma falha da API também consome o minuto, porque é o pedido que se limita
 - **Testes**: `AiAssistantTest` (contrato do prompt com API mockada, delimitação, truncamento, degradação) e `UpdatesPageTest` (flag, preview, aplicar/descartar, rascunho mudado ou recriado, erro, truncamento, rate limit e sua aquisição antes da chamada)
 
+## Guarda de apetite estourado (issue #152)
+
+O apetite escolhido no shaping vira orçamento vigiado. **Nada de novo é gravado**: o consumo é derivado do histórico de status, como todo o resto do Fluxo Solo — não há coluna de "dias gastos", e não deve haver.
+
+- **A janela é a mesma da eficiência de fluxo**: `spec_aprovada` → `spec_validada`, correndo até **agora** enquanto a validação não vem. É o período em que a aposta é um compromisso vivo, que é justamente para o que o apetite é orçamento. Uma spec reaberta depois de validada volta a consumir sozinha, porque `Activity::specStage()` lê a ordem dos eventos, não quais datas existem
+- **Serviço `FlowMetricsService::appetiteConsumption()`**: devolve `appetite_days`, `consumed_days`, `ratio`, `over_days`, `over_label` (`+3d`), `level`, `open` e `label` (`"9 de 14 dias"`). Retorna **null sem aprovação** — sem janela não há aposta correndo, e um zero leria como "nada gasto"
+- **Limiares compartilhados com o aging**: âmbar em `sle_attention_percent` (80%), vermelho em 100%. Uma segunda escala faria o quadro alarmar atraso de um jeito e estouro de outro. O número da barra é arredondado *para longe* do limiar (`formatDays($days, roundUp:)`, o mesmo do aging), então texto e cor nunca se contradizem
+- **Sem apetite é estado, não zero**: `level = no_appetite` — sem barra, sem alerta, em toda superfície. Comparar contra um orçamento que ninguém escolheu seria inventar o orçamento
+- **Modal do Épico**: barra de consumo junto da timeline da Spec; ao estourar, banner "Apetite estourado (+Nd) — corte escopo ou mate a aposta" com atalho "Revisar escopo"
+- **Página Fluxo**: seção "Apostas em andamento" (`FlowMetricsService::liveBets()` — specs nos estágios `aprovada` e `entregue`), estouradas no topo, depois por fração do apetite, e as sem apetite no fim. Custo fixo: uma consulta com o histórico em eager load, não uma por aposta
+- **Página de shaping aceita Épico** (`Activity::scopeShapeable()`, rota `epic-shaping` em `epics/{draft}/shaping`): as mesmas 5 seções, porque cortar escopo é dar forma de novo. O rodapé troca promover/adiar por "Voltar ao quadro", e `promote()` recusa um Épico mesmo por chamada forjada (`#[Locked] $isEpic`)
+- **MCP**: `list-epics` publica `appetite_days`, `appetite_consumed_days` e `appetite_status` (`null` enquanto não há aposta); `get-project-context` publica `appetite` por Épico (`days`, `consumed_days`, `status`, com `not_started` por extenso) e `null` no que não é aposta. As instruções do servidor descrevem a guarda — o agente lê elas antes da descrição da tool
+- **Kanban intocado**: nenhum alerta de apetite nos cards. O estouro é assunto da aposta, não da fatia
+- **Testes**: `AppetiteGuardTest` (janela, parada na validação, reabertura, limiares, excedente, sem apetite, ordenação das apostas), `AppetiteGuardUiTest` (modal e página Fluxo), `ShapingPageTest` (revisão de escopo) e `Mcp/EpicToolsTest` + `Mcp/ProjectContextAppetiteTest` (costura MCP)
+
 ## Keyboard Shortcuts
 
 | Atalho   | Ação                        |

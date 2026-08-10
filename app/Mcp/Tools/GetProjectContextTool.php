@@ -19,7 +19,7 @@ class GetProjectContextTool extends Tool
 {
     protected string $name = 'get-project-context';
 
-    protected string $description = 'Gets complete project context including all documents and active tasks. Use this to understand a project before starting work. Every active epic also carries its apetite guard: appetite.days (the budget chosen in shaping, in calendar days), appetite.consumed_days (calendar days from spec approval to validation, or to now while the bet is live) and appetite.status (ok, warning at 80% of the budget, exceeded at 100%, no_appetite when no budget was chosen, or not_started while the spec has never been approved).';
+    protected string $description = 'Gets complete project context including all documents and active tasks. Use this to understand a project before starting work. Every active epic also carries its apetite guard: appetite.days (the budget chosen in shaping, in calendar days), appetite.consumed_days (calendar days from spec approval to validation, or to now while the bet is live) and appetite.status (ok, warning at 80% of the budget, exceeded at 100%, or no_appetite when no budget was chosen). appetite.status and appetite.consumed_days are null while the spec has never been approved — there is no bet running to measure, the same contract list-epics publishes.';
 
     /**
      * Handle the tool request.
@@ -114,10 +114,13 @@ class GetProjectContextTool extends Tool
      * o que não é uma aposta — uma Issue não tem apetite, e publicar um campo
      * vazio nela sugeriria que deveria ter.
      *
-     * `not_started` é dito por extenso em vez de virar null: o épico existe e
-     * tem (ou não) um orçamento, só ainda não há janela para medir.
+     * Sem aprovação o `status` é null, exatamente como em `list-epics`: são
+     * quatro estados publicados (ok, warning, exceeded, no_appetite) e um
+     * quinto valor aqui faria as duas costuras MCP discordarem sobre o mesmo
+     * estado — e quebraria quem valida o enum. A ausência de janela já está
+     * dita por `consumed_days: null`.
      *
-     * @return array{days: int|null, consumed_days: float|null, status: string}|null
+     * @return array{days: int|null, consumed_days: float|null, status: string|null}|null
      */
     private function appetite(Activity $activity, FlowMetricsService $metrics): ?array
     {
@@ -131,7 +134,7 @@ class GetProjectContextTool extends Tool
             return [
                 'days' => ($activity->appetite_days !== null && $activity->appetite_days >= 1) ? (int) $activity->appetite_days : null,
                 'consumed_days' => null,
-                'status' => 'not_started',
+                'status' => null,
             ];
         }
 

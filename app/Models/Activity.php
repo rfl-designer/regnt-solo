@@ -566,6 +566,22 @@ class Activity extends Model
     }
 
     /**
+     * Scope to what the shaping page may write: an Ideia being given form, and
+     * an Épico being revised (issue #152).
+     *
+     * The Épico is in here because a bet whose apetite estourou is cut with the
+     * same five sections it was shaped with — "revisar escopo" is shaping done
+     * a second time, not a different form. What stays out is everything that is
+     * not a bet: Issues and Tasks have no dor, no apetite and no no-gos, and
+     * pointing the page at one would let an autosave overwrite a card's
+     * description with an esboço.
+     */
+    public function scopeShapeable(Builder $query): void
+    {
+        $query->whereIn('type', [ActivityType::Draft, ActivityType::Epic]);
+    }
+
+    /**
      * Scope to actionable leaf items: issues plus atomic epics (epics without children).
      */
     public function scopeLeaf(Builder $query): void

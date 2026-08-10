@@ -100,4 +100,26 @@ return [
     'sle_percentile' => (int) env('SOLOBOARD_SLE_PERCENTILE', 85),
     'sle_minimum_sample' => (int) env('SOLOBOARD_SLE_MINIMUM_SAMPLE', 30),
     'sle_attention_percent' => (int) env('SOLOBOARD_SLE_ATTENTION_PERCENT', 80),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Intangible hunger, in days (issue #153)
+    |--------------------------------------------------------------------------
+    |
+    | How long the board may go without *concluding* an item classified as
+    | Intangível before it says so. Intangível is the class that never
+    | screams — refactors, tooling, documentation, the work nobody is
+    | waiting on — so the only thing that keeps it alive is a measurement
+    | that gets louder on its own.
+    |
+    | The clock is the days since the last entry into Feito of an
+    | Intangível. Pulling one without finishing it does not reset it: the
+    | class only pays off when it is done, and a "started" counter would be
+    | satisfied by an item parked in Fazendo forever.
+    |
+    | Config-only, like the WIP limit, the risk window and the SLE dials:
+    | 14 days is a calibration of the method, not a preference to click.
+    |
+    */
+    'intangible_starvation_days' => (int) env('SOLOBOARD_INTANGIBLE_STARVATION_DAYS', 14),
 ];

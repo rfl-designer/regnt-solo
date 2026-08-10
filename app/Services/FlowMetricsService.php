@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Enums\ActivityStatus;
+use App\Enums\ServiceClass;
 use App\Models\Activity;
 use App\Models\ActivityStatusChange;
 use App\Models\BaselineCut;
 use App\Models\Client;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -754,6 +756,142 @@ class FlowMetricsService
             ])
             ->map(fn (array $row): array => ['epic' => $row['epic'], 'consumption' => $row['consumption']])
             ->values();
+    }
+
+    /**
+     * How many days without concluding an Intangível the board tolerates
+     * before it says so.
+     */
+    public function intangibleStarvationDays(): int
+    {
+        return (int) config('soloboard.intangible_starvation_days', 14);
+    }
+
+    /**
+     * The intangible hunger: how long the board has gone without *finishing*
+     * an item classified as Intangível (issue #153).
+     *
+     * ## The clock is a conclusion, not a pull
+     *
+     * The last entry into Feito of an Intangível, read from
+     * {@see ActivityStatusChange} like every other metric here. Pulling one
+     * into Fazendo does not reset it, on purpose: Intangível is the class
+     * that only pays off when it *lands*, and a counter satisfied by
+     * starting would be silenced forever by an item parked in Fazendo.
+     *
+     * The last conclusion counts even when it happened before the current
+     * baseline cut. A cut redefines the population the SLE is measured over;
+     * it does not un-happen a refactor, and re-anchoring on the cut would
+     * quietly reset the hunger of a board that has been starving for months.
+     *
+     * ## Cold start is maximum hunger, not missing data
+     *
+     * With no Intangível conclusion in the history at all, the clock anchors
+     * on the current {@see BaselineCut} — "nenhuma conclusão desde o corte,
+     * há X dias" — and the alert fires normally. "Nunca concluí um
+     * Intangível" is the hungriest the board can be; treating it as absence
+     * of data would make the alarm impossible to trigger for the one user
+     * who most needs it. A board with no cut yet anchors on the first status
+     * change it ever recorded, which is the day it started running; a board
+     * with no history at all has no clock and stays silent.
+     *
+     * ## An empty pantry does not silence it
+     *
+     * `ready_count` reports how many Intangíveis are sitting in Pronto, and
+     * zero is *not* a reason to suppress the alert — it only changes the
+     * remedy from "puxe um" to "crie ou promova um". Suppressing it would
+     * hand the board a way to stay quiet by never creating this class of
+     * work at all.
+     *
+     * @return array{days: float, days_label: string, threshold: int, starving: bool, anchor: string, last_completed_at: CarbonInterface|null, ready_count: int, label: string, headline: string|null}
+     */
+    public function intangibleStarvation(): array
+    {
+        $threshold = $this->intangibleStarvationDays();
+        $lastCompletedAt = $this->lastIntangibleConclusion();
+
+        $anchoredAt = $lastCompletedAt ?? $this->lastCut()?->cut_at ?? $this->firstRecordedChange();
+        $anchor = match (true) {
+            $lastCompletedAt !== null => 'completion',
+            $this->lastCut() !== null => 'cut',
+            $anchoredAt !== null => 'board',
+            default => 'none',
+        };
+
+        $days = $anchoredAt === null ? 0.0 : max(0.0, $anchoredAt->floatDiffInDays(now()));
+        $starving = $anchor !== 'none' && $days >= $threshold;
+        $daysLabel = $this->formatDays($days, roundUp: $starving);
+
+        $readyCount = Activity::query()
+            ->leaf()
+            ->where('status', ActivityStatus::Todo)
+            ->where('service_class', ServiceClass::Intangible->value)
+            ->count();
+
+        $label = match ($anchor) {
+            'completion' => "última conclusão há {$daysLabel} dias",
+            'cut' => "nenhuma conclusão desde o corte, há {$daysLabel} dias",
+            'board' => "nenhuma conclusão registrada, há {$daysLabel} dias",
+            default => 'nenhuma conclusão e nenhum histórico ainda',
+        };
+
+        return [
+            'days' => $days,
+            'days_label' => $daysLabel,
+            'threshold' => $threshold,
+            'starving' => $starving,
+            'anchor' => $anchor,
+            'last_completed_at' => $lastCompletedAt,
+            'ready_count' => $readyCount,
+            'label' => $label,
+            'headline' => $starving
+                ? "Fome de Intangível: {$label}"
+                : null,
+        ];
+    }
+
+    /**
+     * Every Intangível sitting in Pronto, in the order the pull queue would
+     * read them — oldest in Pronto first. The shortcut the ritual's banner
+     * offers, so the remedy is one click from the alert.
+     *
+     * @return Collection<int, Activity>
+     */
+    public function readyIntangibles(): Collection
+    {
+        return Activity::query()
+            ->leaf()
+            ->where('status', ActivityStatus::Todo)
+            ->where('service_class', ServiceClass::Intangible->value)
+            ->with(['project', 'client'])
+            ->get()
+            ->sortBy(fn (Activity $activity): string => (string) $activity->created_at)
+            ->values();
+    }
+
+    /**
+     * When an Intangível last entered Feito, over the whole history.
+     */
+    private function lastIntangibleConclusion(): ?CarbonInterface
+    {
+        $at = ActivityStatusChange::query()
+            ->where('to_status', ActivityStatus::Done->value)
+            ->whereHas('activity', fn ($query) => $query
+                ->where('service_class', ServiceClass::Intangible->value))
+            ->max('changed_at');
+
+        return $at === null ? null : Carbon::parse($at);
+    }
+
+    /**
+     * The first status change the board ever recorded — the day it started
+     * running, and the only honest anchor for a board with no cut yet.
+     */
+    private function firstRecordedChange(): ?CarbonInterface
+    {
+        $at = ActivityStatusChange::query()->min('changed_at');
+
+        return $at === null ? null : Carbon::parse($at);
     }
 
     /**

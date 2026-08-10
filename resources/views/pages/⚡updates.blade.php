@@ -66,6 +66,23 @@ new class extends Component
     #[Locked]
     public string $aiRefinement = '';
 
+    /**
+     * A que rascunho o preview pertence: o id e o hash do texto que foi
+     * mandado para a AI.
+     *
+     * Um refinamento só vale para o rascunho que o gerou, do jeito que ele
+     * estava. Entre pedir e clicar em Aplicar, o rascunho pode ter sido
+     * enviado e recriado, ou editado noutra aba (ou por uma tool de MCP) — e
+     * aplicar um texto velho por cima disso apagaria trabalho de alguém. Os
+     * dois valores são `#[Locked]` pela mesma razão que `$aiRefinement`: são
+     * eles que autorizam a escrita, e o browser não os alcança.
+     */
+    #[Locked]
+    public ?int $aiRefinementFor = null;
+
+    #[Locked]
+    public string $aiRefinementSourceHash = '';
+
     public bool $showAiRefinement = false;
 
     /**
@@ -297,14 +314,6 @@ new class extends Component
             return;
         }
 
-        $cacheKey = 'ai_refine_update_'.(auth()->id() ?? 'guest');
-
-        if (Cache::has($cacheKey)) {
-            Flux::toast(variant: 'warning', heading: 'Aguarde', text: 'Aguarde 1 minuto antes de pedir outro refinamento.');
-
-            return;
-        }
-
         // O texto na tela pode estar à frente do banco (o blur ainda não
         // aconteceu), e é ele — com as edições à mão — que a AI revisa.
         $this->persistDraft();
@@ -313,10 +322,20 @@ new class extends Component
             return;
         }
 
+        // `add` e não `has` + `put`: a janela é tomada num passo só, antes da
+        // chamada. Checar e depois gravar deixa dois cliques simultâneos
+        // passarem pela porta juntos. O preço é que uma falha da API também
+        // consome o minuto — o pedido saiu, e é o pedido que se limita.
+        $cacheKey = 'ai_refine_update_'.(auth()->id() ?? 'guest');
+
+        if (! Cache::add($cacheKey, true, now()->addMinute())) {
+            Flux::toast(variant: 'warning', heading: 'Aguarde', text: 'Aguarde 1 minuto antes de pedir outro refinamento.');
+
+            return;
+        }
+
         try {
             $refined = app(AiAssistantService::class)->refineUpdate($this->content);
-
-            Cache::put($cacheKey, true, now()->addMinute());
         } catch (\Throwable) {
             $refined = '';
         }
@@ -332,16 +351,39 @@ new class extends Component
         }
 
         $this->aiRefinement = $refined;
+        $this->aiRefinementFor = $this->draft?->id;
+        $this->aiRefinementSourceHash = $this->hashDraftContent($this->content);
         $this->showAiRefinement = true;
     }
 
     /**
      * Troca o rascunho pelo texto refinado. O autosave segue daqui: o
      * conteúdo é gravado na hora, como qualquer edição.
+     *
+     * Antes de escrever, confere se o rascunho ainda é o que foi refinado —
+     * mesmo id, mesmo texto. Se mudou, o preview é passado: descarta e avisa,
+     * em vez de sobrescrever o que estiver lá agora.
      */
     public function applyAiRefinement(): void
     {
-        if ($this->aiRefinement === '' || $this->draft === null) {
+        if ($this->aiRefinement === '') {
+            return;
+        }
+
+        $draft = $this->draft;
+
+        if ($draft === null
+            || $draft->id !== $this->aiRefinementFor
+            || $this->hashDraftContent($draft->content) !== $this->aiRefinementSourceHash
+        ) {
+            $this->dismissAiRefinement();
+
+            Flux::toast(
+                variant: 'warning',
+                heading: 'Refinamento descartado',
+                text: 'O rascunho mudou depois do refinamento. Peça outro para não escrever por cima do texto atual.',
+            );
+
             return;
         }
 
@@ -364,7 +406,14 @@ new class extends Component
     private function dismissAiRefinement(): void
     {
         $this->aiRefinement = '';
+        $this->aiRefinementFor = null;
+        $this->aiRefinementSourceHash = '';
         $this->showAiRefinement = false;
+    }
+
+    private function hashDraftContent(string $content): string
+    {
+        return hash('sha256', $content);
     }
 
     /**

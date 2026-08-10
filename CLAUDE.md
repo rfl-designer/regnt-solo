@@ -356,11 +356,12 @@ Um cliente também entra na fila quando o quadro produz notícia que não espera
 Botão "✨ Refinar com AI" no editor do rascunho, atrás da mesma feature flag do Epic 16 (`ai_enabled` + chave). **A AI é copy editor, não redatora**: reescreve tom, fluidez, concisão e transições do rascunho atual — incluindo as edições feitas à mão —, e nada mais.
 
 - **Contrato duro no prompt** (`AiAssistantService::buildRefineUpdatePrompt()`): proibido adicionar, remover ou alterar item, estado, data, número, nome ou compromisso; proibido resumir, fundir ou reordenar blocos; formatação que degrada bem em qualquer canal (WhatsApp, e-mail, Slack); tom fixo PT-BR profissional-próximo. A resposta é o texto refinado e mais nada — é a única chamada de AI que **não** responde JSON, e por isso o prompt não é montado sobre `BASE_SYSTEM_PROMPT` (a persona de coach convidaria exatamente as sugestões que o contrato proíbe)
+- **O rascunho vai delimitado**: o texto segue entre marcas `<draft_update>`, e o system prompt declara que o que está lá dentro é conteúdo literal, nunca instrução — o rascunho passa pela mão do usuário e não pode virar prompt
 - **Nunca escreve direto no editor**: o resultado abre num modal de preview. "Aplicar" substitui o conteúdo do editor (o autosave segue daí); "Descartar" não altera nada. `$aiRefinement` é `#[Locked]` — o preview é o que a API respondeu, não o que o browser mandar
-- **Trocar de cliente descarta o preview**: um refinamento pertence ao rascunho que o gerou
-- **Degradação graciosa**: erro da API ou resposta vazia vira toast amigável e o rascunho fica intacto — sem flag, a barra é a mesma de antes e o fluxo determinístico continua inteiro
-- **Rate limit de 1 chamada/minuto**, no mesmo padrão de cache do "Analisar pendentes" do Inbox
-- **Testes**: `AiAssistantTest` (contrato do prompt com API mockada, degradação) e `UpdatesPageTest` (flag, preview, aplicar/descartar, erro, rate limit)
+- **O preview é preso ao rascunho que o gerou**: `$aiRefinementFor` (id) e `$aiRefinementSourceHash` (sha256 do texto enviado), ambos `#[Locked]`. "Aplicar" confere os dois contra o rascunho atual; se o rascunho foi editado noutra aba ou por MCP, ou foi enviado e recriado, o preview é descartado com toast em vez de escrever por cima. Trocar de cliente descarta pela mesma razão
+- **Degradação graciosa**: erro da API, resposta vazia ou resposta truncada vira toast amigável e o rascunho fica intacto — `parseTextResponse()` só aceita `stop_reason === 'end_turn'`, porque um texto cortado no `max_tokens` chegaria sem o fim do rascunho e aplicá-lo apagaria itens. Sem flag, a barra é a mesma de antes e o fluxo determinístico continua inteiro
+- **Rate limit de 1 chamada/minuto** via `Cache::add()` **antes** da chamada — `has` + `put` deixa dois cliques simultâneos passarem juntos. O preço explícito: uma falha da API também consome o minuto, porque é o pedido que se limita
+- **Testes**: `AiAssistantTest` (contrato do prompt com API mockada, delimitação, truncamento, degradação) e `UpdatesPageTest` (flag, preview, aplicar/descartar, rascunho mudado ou recriado, erro, truncamento, rate limit e sua aquisição antes da chamada)
 
 ## Keyboard Shortcuts
 

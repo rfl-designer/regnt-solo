@@ -261,6 +261,20 @@ test('a cold start is published as starving, anchored on the cut, with an empty 
     Carbon::setTestNow();
 });
 
+test('a cold start starves over MCP even when the cut is younger than the threshold', function () {
+    Carbon::setTestNow('2026-08-10 12:00:00');
+    onlyPullQueueCutAt('2026-08-10 08:00');
+
+    $hunger = pullQueuePayload()['context']['intangible_hunger'];
+
+    expect($hunger['starving'])->toBeTrue()
+        ->and($hunger['anchor'])->toBe('cut')
+        ->and($hunger['last_completed_at'])->toBeNull()
+        ->and($hunger['label'])->toBe('nenhuma conclusão desde o corte, feito hoje');
+
+    Carbon::setTestNow();
+});
+
 test('the server instructions describe the intangible hunger, so an agent reads it before the tool', function () {
     $instructions = (new ReflectionClass(SoloBoardServer::class))
         ->getDefaultProperties()['instructions'];

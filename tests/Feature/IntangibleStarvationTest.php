@@ -14,7 +14,9 @@ use Carbon\Carbon;
  * Intangível — entrada em Feito, lida do histórico de status como todas as
  * outras métricas de fluxo. Puxar não zera; só concluir zera. Sem nenhuma
  * conclusão no histórico o relógio ancora no corte vigente da baseline, e o
- * alerta dispara: "nunca concluí um Intangível" é a fome máxima.
+ * alerta dispara independentemente do limiar — inclusive num corte de hoje:
+ * "nunca concluí um Intangível" é a fome máxima, e o limiar só serve para
+ * envelhecer uma conclusão de verdade.
  */
 
 /**
@@ -173,6 +175,43 @@ test('a cold start anchors on the current baseline cut and fires', function () {
         ->and($hunger['days'])->toEqualWithDelta(40.0, 0.01)
         ->and($hunger['starving'])->toBeTrue()
         ->and($hunger['label'])->toBe('nenhuma conclusão desde o corte, há 40 dias');
+});
+
+test('a cold start fires even when the cut is younger than the threshold', function () {
+    // O limiar mede a idade de uma conclusão; na partida a frio não há
+    // conclusão nenhuma para envelhecer. Um corte de três dias não pode
+    // comprar onze dias de silêncio.
+    onlyCutAt('2026-08-07 12:00');
+
+    expect(starvation())
+        ->anchor->toBe('cut')
+        ->days->toEqualWithDelta(3.0, 0.01)
+        ->starving->toBeTrue()
+        ->label->toBe('nenhuma conclusão desde o corte, há 3 dias')
+        ->headline->toBe('Fome de Intangível: nenhuma conclusão desde o corte, há 3 dias');
+});
+
+test('a cut made today already reports the hunger, in words that fit a zero-day clock', function () {
+    onlyCutAt('2026-08-10 08:00');
+
+    expect(starvation())
+        ->anchor->toBe('cut')
+        ->starving->toBeTrue()
+        ->label->toBe('nenhuma conclusão desde o corte, feito hoje');
+});
+
+test('a board that started today with no cut also starves', function () {
+    onlyCutAt(null);
+
+    withStarvationHistory(
+        Activity::factory()->issue()->todo()->create(),
+        [[ActivityStatus::Todo, '2026-08-10 09:00']],
+    );
+
+    expect(starvation())
+        ->anchor->toBe('board')
+        ->starving->toBeTrue()
+        ->label->toBe('nenhuma conclusão registrada desde que o quadro começou, hoje');
 });
 
 test('a cold start on a board with no cut anchors on the first recorded change', function () {

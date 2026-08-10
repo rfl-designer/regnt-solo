@@ -788,12 +788,17 @@ class FlowMetricsService
      *
      * With no Intangível conclusion in the history at all, the clock anchors
      * on the current {@see BaselineCut} — "nenhuma conclusão desde o corte,
-     * há X dias" — and the alert fires normally. "Nunca concluí um
-     * Intangível" is the hungriest the board can be; treating it as absence
-     * of data would make the alarm impossible to trigger for the one user
-     * who most needs it. A board with no cut yet anchors on the first status
-     * change it ever recorded, which is the day it started running; a board
-     * with no history at all has no clock and stays silent.
+     * há X dias" — and the alert fires *regardless of the threshold*, even on
+     * a cut made today. "Nunca concluí um Intangível" is the hungriest the
+     * board can be; the threshold measures the age of a real conclusion, and
+     * there is none to age. Gating the cold start on it would buy a
+     * freshly-cut board two silent weeks precisely while it has never
+     * concluded one. The days reported still come from the cut, so the card
+     * says how long the board has been watched — but they decide nothing.
+     *
+     * A board with no cut yet anchors on the first status change it ever
+     * recorded, which is the day it started running, and starves the same
+     * way; a board with no history at all has no clock and stays silent.
      *
      * ## An empty pantry does not silence it
      *
@@ -824,8 +829,18 @@ class FlowMetricsService
         };
 
         $days = $anchoredAt === null ? 0.0 : max(0.0, $anchoredAt->floatDiffInDays(now()));
-        $starving = $anchor !== 'none' && $days >= $threshold;
+
+        // O limiar mede a idade de uma conclusão real. Na partida a frio não
+        // há o que medir — a idade exibida é a do corte, que só diz desde
+        // quando o quadro está sendo observado — e o alerta dispara de
+        // qualquer jeito, inclusive num corte feito hoje. Se dependesse do
+        // limiar, um quadro recém-cortado passaria duas semanas em silêncio
+        // justamente enquanto nunca concluiu um Intangível.
+        $coldStart = $anchor === 'cut' || $anchor === 'board';
+        $starving = $coldStart || ($anchor === 'completion' && $days >= $threshold);
+
         $daysLabel = $this->formatDays($days, roundUp: $starving);
+        $sameDay = $days < 1.0;
 
         $readyCount = Activity::query()
             ->leaf()
@@ -835,8 +850,12 @@ class FlowMetricsService
 
         $label = match ($anchor) {
             'completion' => "última conclusão há {$daysLabel} dias",
-            'cut' => "nenhuma conclusão desde o corte, há {$daysLabel} dias",
-            'board' => "nenhuma conclusão registrada, há {$daysLabel} dias",
+            'cut' => $sameDay
+                ? 'nenhuma conclusão desde o corte, feito hoje'
+                : "nenhuma conclusão desde o corte, há {$daysLabel} dias",
+            'board' => $sameDay
+                ? 'nenhuma conclusão registrada desde que o quadro começou, hoje'
+                : "nenhuma conclusão registrada, há {$daysLabel} dias",
             default => 'nenhuma conclusão e nenhum histórico ainda',
         };
 

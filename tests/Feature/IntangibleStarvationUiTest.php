@@ -118,6 +118,16 @@ test('the Intangível card states the cold start anchored on the cut', function 
         ->assertSeeHtml('data-test="intangible-starving"');
 });
 
+test('the Intangível card is already amber on a board cut today', function () {
+    BaselineCut::factory()->create(['cut_at' => Carbon::parse('2026-08-10 08:00')]);
+
+    Livewire::test('pages::flow')
+        ->assertSee('nenhuma conclusão desde o corte, feito hoje')
+        ->assertSeeHtml('data-test="intangible-starving"')
+        ->assertSeeHtml('border-amber-500/40')
+        ->assertDontSeeHtml('data-test="intangible-fed"');
+});
+
 // ── Ritual matinal, passo 5 ──────────────────────────────────────────────
 
 test('the pull step shows no banner while the hunger is fed', function () {
@@ -181,6 +191,16 @@ test('with nothing Intangível in Pronto the banner still fires and points to Ba
         ->assertSeeHtml('data-test="ritual-intangible-backlog"')
         ->assertSeeHtml('data-test="ritual-intangible-ideas"')
         ->assertDontSeeHtml('data-test="ritual-intangible-shortcut"');
+});
+
+test('the ritual banner fires on a board cut today, before any threshold could elapse', function () {
+    BaselineCut::factory()->create(['cut_at' => Carbon::parse('2026-08-10 08:00')]);
+
+    Livewire::test('pages::morning-ritual')
+        ->set('step', 5)
+        ->assertSeeHtml('data-test="ritual-intangible-banner"')
+        ->assertSee('Fome de Intangível: nenhuma conclusão desde o corte, feito hoje')
+        ->assertSeeHtml('data-test="ritual-intangible-empty"');
 });
 
 test('the banner belongs to the pull step only', function () {

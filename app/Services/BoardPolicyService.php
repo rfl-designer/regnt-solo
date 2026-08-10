@@ -148,9 +148,15 @@ class BoardPolicyService
      */
     public function sections(): array
     {
+        // Contado no banco, não em memória: a tabela é append-only, então
+        // hidratar o log inteiro para produzir três números cresceria sem
+        // teto justamente com o uso.
         $counts = PolicyVersion::query()
-            ->get(['id', 'key'])
-            ->countBy(fn (PolicyVersion $version): string => $version->key->value);
+            ->toBase()
+            ->select('key')
+            ->selectRaw('count(*) as aggregate')
+            ->groupBy('key')
+            ->pluck('aggregate', 'key');
 
         return collect(PolicyKey::cases())
             ->map(fn (PolicyKey $key): array => [
@@ -167,6 +173,10 @@ class BoardPolicyService
     /**
      * The response agreements of the active clients, read-only.
      *
+     * Blank is measured after `trim`: an agreement made of spaces reads as
+     * an empty line in the panel while silently escaping the nudge, which
+     * is the worst of the two states.
+     *
      * @return Collection<int, Client>
      */
     public function responseAgreements(): Collection
@@ -174,7 +184,7 @@ class BoardPolicyService
         return Client::query()
             ->active()
             ->whereNotNull('response_agreement')
-            ->where('response_agreement', '!=', '')
+            ->whereRaw("trim(response_agreement) <> ''")
             ->orderBy('name')
             ->get();
     }
@@ -188,7 +198,7 @@ class BoardPolicyService
     {
         return Client::query()
             ->active()
-            ->where(fn ($query) => $query->whereNull('response_agreement')->orWhere('response_agreement', ''))
+            ->where(fn ($query) => $query->whereNull('response_agreement')->orWhereRaw("trim(response_agreement) = ''"))
             ->orderBy('name')
             ->get();
     }

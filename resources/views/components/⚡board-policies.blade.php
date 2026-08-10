@@ -4,7 +4,6 @@ use App\Enums\PolicyKey;
 use App\Models\PolicyVersion;
 use App\Services\BoardPolicyService;
 use Flux\Flux;
-use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -94,7 +93,14 @@ new class extends Component
      */
     public function edit(string $key): void
     {
-        $policyKey = PolicyKey::from($key);
+        // tryFrom, não from: o argumento de uma ação Livewire vem do
+        // browser e não é coberto por #[Locked]. Uma chave forjada é
+        // recusada em silêncio, não vira 500 no log.
+        $policyKey = PolicyKey::tryFrom($key);
+
+        if ($policyKey === null) {
+            return;
+        }
 
         $this->editingKey = $policyKey->value;
         $this->historyKey = null;
@@ -110,7 +116,13 @@ new class extends Component
      */
     public function save(): void
     {
-        $key = PolicyKey::from($this->editingKey ?? '');
+        $key = $this->editingKey === null ? null : PolicyKey::tryFrom($this->editingKey);
+
+        // Sem editor aberto não há o que salvar — uma chamada forjada a
+        // save() sai por aqui em vez de estourar convertendo a chave.
+        if ($key === null) {
+            return;
+        }
 
         $this->validate([
             'body' => ['required', 'string'],
@@ -136,7 +148,13 @@ new class extends Component
 
     public function toggleHistory(string $key): void
     {
-        $key = PolicyKey::from($key)->value;
+        $policyKey = PolicyKey::tryFrom($key);
+
+        if ($policyKey === null) {
+            return;
+        }
+
+        $key = $policyKey->value;
 
         $this->historyKey = $this->historyKey === $key ? null : $key;
         $this->editingKey = null;
@@ -292,8 +310,11 @@ new class extends Component
                                 </div>
                             </div>
                         @elseif ($version)
+                            {{-- Markdown::render, não Str::markdown: o corpo é
+                                 texto do usuário e o CommonMark padrão deixaria
+                                 passar HTML cru e link javascript:. --}}
                             <div class="markdown-viewer mt-3 text-sm text-zinc-300">
-                                {!! Str::markdown($version->body) !!}
+                                {!! \App\Support\Markdown::render($version->body) !!}
                             </div>
 
                             <p class="mt-2 text-xs text-zinc-500">

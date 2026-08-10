@@ -3,19 +3,30 @@
 namespace App\Models;
 
 use App\Enums\PolicyKey;
+use App\Models\Builders\PolicyVersionBuilder;
 use Database\Factories\PolicyVersionFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use RuntimeException;
 
 /**
  * One written version of one board policy (issue #154).
  *
- * Append-only by construction: {@see record()} is the only supported way
- * to change a policy and it always inserts. The version in force is the
- * last row for the key ({@see current()}), so the history is complete by
- * default rather than by anyone remembering to keep it.
+ * Append-only **by refusal**, not by convention: {@see record()} is the
+ * only supported way to change a policy and it always inserts, and every
+ * other route out — saving a loaded row, deleting it, or a mass
+ * update/delete through the query builder — throws. The value of this
+ * table is that the previous text is still readable; a single forgotten
+ * `update()` anywhere would quietly destroy exactly that.
+ *
+ * The refusal covers Eloquent, which is how the application writes. A raw
+ * `DB::table('policy_versions')` still bypasses it — nothing short of a
+ * database grant closes that, and no code here takes that route.
+ *
+ * The version in force is the last row for the key ({@see current()}).
  */
 class PolicyVersion extends Model
 {
@@ -39,6 +50,30 @@ class PolicyVersion extends Model
         return [
             'key' => PolicyKey::class,
         ];
+    }
+
+    /**
+     * Refuse the writes that would rewrite history, at the one point every
+     * loaded-model route passes through.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (): void {
+            throw new RuntimeException('O histórico de políticas é append-only: use PolicyVersion::record() para escrever uma versão nova.');
+        });
+
+        static::deleting(function (): void {
+            throw new RuntimeException('O histórico de políticas é append-only: uma versão registrada não é apagada.');
+        });
+    }
+
+    /**
+     * @param  QueryBuilder  $query
+     * @return PolicyVersionBuilder<self>
+     */
+    public function newEloquentBuilder($query): PolicyVersionBuilder
+    {
+        return new PolicyVersionBuilder($query);
     }
 
     /**

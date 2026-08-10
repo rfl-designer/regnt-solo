@@ -112,7 +112,9 @@ new class extends Component
             'update_day' => $this->updateDay,
             'update_time' => $this->updateTime ?: null,
             'channel' => $this->channel,
-            'response_agreement' => $this->responseAgreement ?: null,
+            // Acordo em branco é ausência de acordo: sem o trim, um texto só
+            // de espaços some do quadro sem entrar na cutucada (issue #154).
+            'response_agreement' => trim($this->responseAgreement) ?: null,
             'notes' => $this->notes ?: null,
         ];
 

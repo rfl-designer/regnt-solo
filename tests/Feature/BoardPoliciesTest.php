@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\PolicyVersion;
 use App\Services\BoardPolicyService;
 use Database\Seeders\PolicyVersionSeeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * As políticas do quadro (issue #154): as mecânicas derivadas do estado
@@ -149,4 +150,64 @@ test('a cutucada conta só os clientes ativos sem acordo', function () {
     Client::factory()->create(['is_active' => false, 'response_agreement' => null]);
 
     expect(policies()->clientsWithoutAgreement())->toHaveCount(2);
+});
+
+/**
+ * Regressões do review do #154.
+ */
+test('uma versão registrada não pode ser sobrescrita nem apagada', function () {
+    $version = PolicyVersion::record(PolicyKey::DefinitionOfDone, 'v1', 'Padrão inicial do método');
+
+    // Update pela instância.
+    expect(fn () => $version->update(['body' => 'sobrescrita']))
+        ->toThrow(RuntimeException::class);
+
+    // save() sobre uma instância existente é a mesma porta.
+    $version->body = 'sobrescrita';
+    expect(fn () => $version->save())->toThrow(RuntimeException::class);
+
+    // Delete pela instância e em massa.
+    expect(fn () => $version->fresh()->delete())->toThrow(RuntimeException::class);
+    expect(fn () => PolicyVersion::query()->forKey(PolicyKey::DefinitionOfDone)->delete())
+        ->toThrow(RuntimeException::class);
+
+    // Update em massa não passa nem pelos eventos do model.
+    expect(fn () => PolicyVersion::query()->forKey(PolicyKey::DefinitionOfDone)->update(['body' => 'sobrescrita']))
+        ->toThrow(RuntimeException::class);
+
+    $current = PolicyVersion::current(PolicyKey::DefinitionOfDone);
+
+    expect(PolicyVersion::query()->count())->toBe(1)
+        ->and($current->body)->toBe('v1')
+        ->and($current->id)->toBe($version->id);
+});
+
+test('a contagem de versões é agregada no banco, não hidratando o histórico', function () {
+    foreach (range(1, 12) as $i) {
+        PolicyVersion::record(PolicyKey::DefinitionOfDone, "v{$i}");
+    }
+
+    $queries = [];
+    DB::listen(function ($query) use (&$queries) {
+        if (str_contains($query->sql, 'policy_versions')) {
+            $queries[] = $query->sql;
+        }
+    });
+
+    $sections = collect(policies()->sections())->keyBy(fn (array $s): string => $s['key']->value);
+
+    expect($sections['definition_of_done']['versions_count'])->toBe(12);
+
+    // Toda leitura da tabela ou é agregada, ou é a vigente (limit 1).
+    foreach ($queries as $sql) {
+        expect(str_contains($sql, 'count(*)') || str_contains($sql, 'limit 1'))
+            ->toBeTrue("Consulta hidratando o histórico inteiro: {$sql}");
+    }
+});
+
+test('acordo de resposta só com espaços conta como ausente', function () {
+    Client::factory()->create(['name' => 'Só espaços', 'is_active' => true, 'response_agreement' => '   ']);
+
+    expect(policies()->responseAgreements())->toHaveCount(0)
+        ->and(policies()->clientsWithoutAgreement()->pluck('name')->all())->toBe(['Só espaços']);
 });

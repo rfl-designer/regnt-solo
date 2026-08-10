@@ -146,3 +146,41 @@ test('sem cliente pendente a cutucada some', function () {
         ->call('open')
         ->assertDontSeeHtml('data-test="policy-agreement-nudge"');
 });
+
+/**
+ * Regressões do review do #154.
+ */
+test('o corpo da política é renderizado sem HTML cru nem link inseguro', function () {
+    PolicyVersion::record(
+        PolicyKey::DefinitionOfDone,
+        "<script>alert(1)</script>\n\n<img src=x onerror=\"alert(document.domain)\">",
+    );
+
+    // Link inseguro num corpo puramente markdown: outro caminho do helper.
+    PolicyVersion::record(PolicyKey::DefinitionOfReady, '[clique](javascript:alert(1))');
+
+    $html = Livewire::test('board-policies')->call('open')->html();
+
+    expect($html)
+        ->not->toContain('<script>alert(1)</script>')
+        ->not->toContain('onerror')
+        ->not->toContain('href="javascript:');
+});
+
+test('chave inválida numa ação é recusada em silêncio, não em 500', function () {
+    $component = Livewire::test('board-policies')
+        ->call('open')
+        ->call('edit', 'invalid')
+        ->assertOk();
+
+    expect($component->instance()->editingKey)->toBeNull();
+
+    $component->call('toggleHistory', 'invalid')->assertOk();
+
+    expect($component->instance()->historyKey)->toBeNull();
+
+    // save() sem editor aberto não converte chave nenhuma.
+    $component->call('save')->assertOk();
+
+    expect(PolicyVersion::query()->count())->toBe(0);
+});
